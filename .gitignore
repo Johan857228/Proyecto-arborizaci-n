@@ -4,6 +4,7 @@ __pycache__/
 *.pyc
 backend/.env
 backend/*.db
+backend/data/
 
 # --- Frontend (React) ---
 node_modules/

@@ -1,0 +1,39 @@
+# Proxy HTTPS del Inventario Arbóreo Escolar.
+# Lo usan los perfiles "https" y "presentacion" de docker-compose.yml.
+#
+# El GPS del navegador solo funciona en páginas servidas por HTTPS (o en localhost).
+# Por eso el frontend y la API se publican juntos, en la misma dirección:
+#   {API_PREFIX}/*   -> backend (FastAPI)
+#   todo lo demás    -> frontend compilado (frontend/dist, generado con npm run build)
+
+(frontend) {
+	handle {
+		root * /srv/frontend
+		try_files {path} /index.html
+		file_server
+	}
+}
+
+# Acceso directo con HTTPS (perfil "https"):
+#   SITE_ADDRESS=localhost       certificado local de Caddy, solo para este computador
+#   SITE_ADDRESS=midominio.com   certificado real de Let's Encrypt (servidor con puertos 80 y 443 abiertos)
+{$SITE_ADDRESS:localhost} {
+	encode zstd gzip
+	handle {$API_PREFIX:/api}/* {
+		reverse_proxy backend:8000
+	}
+	import frontend
+}
+
+# Entrada interna para el túnel de Cloudflare (perfil "presentacion").
+# El túnel entrega HTTPS al público; aquí llega en HTTP por la red interna de Docker,
+# así que se le avisa al backend que la conexión original fue segura.
+:8080 {
+	encode zstd gzip
+	handle {$API_PREFIX:/api}/* {
+		reverse_proxy backend:8000 {
+			header_up X-Forwarded-Proto https
+		}
+	}
+	import frontend
+}
