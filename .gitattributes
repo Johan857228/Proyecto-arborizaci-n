@@ -1,0 +1,8 @@
+# Archivos que se leen dentro de contenedores Linux: siempre con finales de línea LF,
+# aunque el repositorio se clone en Windows.
+Dockerfile text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+Caddyfile text eol=lf
+.env.example text eol=lf
+*.sh text eol=lf

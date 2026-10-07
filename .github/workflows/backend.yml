@@ -1,0 +1,101 @@
+# Pruebas del backend en cada Pull Request y en cada cambio a main.
+# Si algún paso falla, el PR muestra la cruz roja y no se debería integrar.
+
+name: Backend
+
+on:
+  pull_request:
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend.yml"
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend.yml"
+
+jobs:
+  pruebas:
+    name: Pruebas con PostgreSQL
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: arborizacion_pruebas
+          POSTGRES_USER: pruebas
+          POSTGRES_PASSWORD: pruebas
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pruebas -d arborizacion_pruebas"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql+psycopg://pruebas:pruebas@localhost:5432/arborizacion_pruebas
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
+      - name: Instalar dependencias
+        run: pip install -r requirements-dev.txt
+      - name: Estilo (ruff)
+        run: |
+          ruff check app seeds tests
+          ruff format --check app seeds tests
+      - name: Pruebas unitarias, de integración y de API
+        run: pytest --cov --cov-report=term-missing
+      - name: Cobertura mínima de validaciones y cálculos (70 %)
+        run: pytest tests/unit --cov=app.domain --cov=app.infrastructure.calculations --cov-branch --cov-fail-under=70
+
+  contenedores:
+    name: Docker Compose y HTTPS
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - name: Preparar un .env de prueba
+        run: |
+          cp .env.example .env
+          sed -i 's/^POSTGRES_PASSWORD=$/POSTGRES_PASSWORD=clave-ci/' .env
+          sed -i 's/^ADMIN_EMAIL=$/ADMIN_EMAIL=admin@ci.co/' .env
+          sed -i 's/^ADMIN_PASSWORD=$/ADMIN_PASSWORD=clave-ci-123/' .env
+      - name: Validar docker-compose.yml
+        run: docker compose --profile presentacion config --quiet
+      - name: Validar el Caddyfile
+        run: >-
+          docker run --rm -e SITE_ADDRESS=localhost -e API_PREFIX=/api
+          -v "$PWD/deploy/Caddyfile:/etc/caddy/Caddyfile:ro"
+          caddy:2.11-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+      - name: Levantar backend y PostgreSQL
+        run: docker compose up -d --build --wait --wait-timeout 180
+      - name: Probar la API dentro de Docker
+        run: |
+          curl --fail --silent --show-error http://localhost:8000/api/salud
+          curl --fail --silent --show-error -X POST http://localhost:8000/api/auth/login \
+            -d "username=admin@ci.co" -d "password=clave-ci-123" | grep -q access_token
+      - name: Probar el proxy HTTPS
+        run: |
+          mkdir -p ../frontend/dist
+          echo '<h1>frontend de prueba</h1>' > ../frontend/dist/index.html
+          docker compose --profile https up -d --wait --wait-timeout 120
+          # Caddy tarda un momento en crear su certificado local: se reintenta unos segundos.
+          curl --fail --silent --show-error --insecure --retry 10 --retry-delay 2 --retry-all-errors https://localhost/api/salud
+          curl --fail --silent --show-error --insecure https://localhost/ | grep -q "frontend de prueba"
+          curl --fail --silent --show-error --insecure https://localhost/arboles/IE001-0001 | grep -q "frontend de prueba"
+      - name: Registros de los contenedores
+        if: failure()
+        run: docker compose --profile https logs

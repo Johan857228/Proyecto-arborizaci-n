@@ -1,0 +1,96 @@
+# Entorno del backend: API + PostgreSQL.
+#
+#   docker compose up --build -d     levanta todo (API en http://localhost:8000/api/docs)
+#   docker compose ps                estado de los servicios
+#   docker compose logs -f backend   ver los mensajes del backend
+#   docker compose down              detiene todo (los datos se conservan en los volúmenes)
+#
+# Antes de la primera vez: copiar .env.example como .env y completar POSTGRES_PASSWORD.
+
+name: arborizacion
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-arborizacion}
+      POSTGRES_USER: ${POSTGRES_USER:-arborizacion}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Falta POSTGRES_PASSWORD en backend/.env (copia .env.example como .env)}
+    volumes:
+      - datos_postgres:/var/lib/postgresql/data
+    ports:
+      # Solo accesible desde este computador (para pgAdmin, DBeaver o el backend corriendo sin Docker).
+      - "127.0.0.1:${DB_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  backend:
+    build: .
+    image: arborizacion-backend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # Dentro de Docker la base se llama "db". Estos valores reemplazan a los del .env.
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+      DATABASE_URL: ""
+      STORAGE_PATH: /datos/fotos
+    volumes:
+      - datos_fotos:/datos/fotos
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000${API_PREFIX:-/api}/salud', timeout=8)"]
+      interval: 10s
+      timeout: 10s
+      retries: 6
+      start_period: 15s
+
+  # ---------------------------------------------------------------
+  # HTTPS (opcional). El GPS del navegador exige HTTPS.
+  #   docker compose --profile https up -d          https://localhost o tu dominio
+  #   docker compose --profile presentacion up -d   enlace HTTPS público para celulares
+  # ---------------------------------------------------------------
+  proxy:
+    image: caddy:2.11-alpine
+    profiles: ["https", "presentacion"]
+    restart: unless-stopped
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-localhost}
+      API_PREFIX: ${API_PREFIX:-/api}
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+      - "${HTTPS_PORT:-443}:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../frontend/dist:/srv/frontend:ro
+      - caddy_datos:/data
+      - caddy_config:/config
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  # Túnel rápido de Cloudflare: publica el proxy en https://<algo>.trycloudflare.com con
+  # certificado válido, sin dominio ni cuenta. El enlace cambia cada vez que se inicia;
+  # se ve con: docker compose logs tunel
+  tunel:
+    image: cloudflare/cloudflared:2026.10.0
+    profiles: ["presentacion"]
+    restart: unless-stopped
+    command: tunnel --no-autoupdate --url http://proxy:8080
+    depends_on:
+      - proxy
+
+volumes:
+  datos_postgres:
+  datos_fotos:
+  caddy_datos:
+  caddy_config:
