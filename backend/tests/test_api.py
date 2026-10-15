@@ -255,3 +255,42 @@ def test_catalogos_publicos(entorno):
     r = cliente.get("/catalogos")
     assert r.status_code == 200
     assert r.json()["especies"][0]["nombre_comun"] == "Mango"
+
+
+# ------------------------------- CORS -------------------------------
+def _preflight(origen):
+    return TestClient(main.app).options(
+        "/arboles",
+        headers={
+            "Origin": origen,
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "authorization,content-type",
+        },
+    )
+
+
+@pytest.mark.parametrize(
+    "origen",
+    [
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "http://localhost:5174",     # otro puerto
+        "http://127.0.0.1:5173",     # 127.0.0.1 es un origen distinto a localhost
+        "http://localhost",
+    ],
+)
+def test_cors_permite_localhost_en_cualquier_puerto(origen):
+    r = _preflight(origen)
+    assert r.status_code == 200
+    assert r.headers["access-control-allow-origin"] == origen
+
+
+def test_cors_rechaza_origen_desconocido():
+    r = _preflight("https://sitio-ajeno.com")
+    assert r.status_code == 400
+    assert "access-control-allow-origin" not in r.headers
+
+
+def test_cors_respuesta_normal_lleva_el_encabezado():
+    r = TestClient(main.app).get("/salud", headers={"Origin": "http://localhost:5173"})
+    assert r.headers["access-control-allow-origin"] == "http://localhost:5173"

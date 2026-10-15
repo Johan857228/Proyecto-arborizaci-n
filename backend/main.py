@@ -49,12 +49,21 @@ app = FastAPI(
     description="Backend del inventario arbóreo: registro de árboles, fotos, cálculos y estadísticas.",
 )
 
-# CORS: qué direcciones del frontend pueden llamar a esta API (separadas por coma en .env)
-origenes = os.environ.get("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000").split(",")
+# CORS: qué páginas web (orígenes) tienen permiso para llamar a esta API desde el navegador.
+#   - Un origen es esquema + host + puerto, p. ej. http://localhost:5173
+#     (http://127.0.0.1:5173 es OTRO origen distinto).
+#   - Por defecto se permite cualquier puerto de localhost y 127.0.0.1 (desarrollo).
+#   - CORS_ORIGINS (en .env, separados por coma) agrega otros: la dirección real del frontend
+#     desplegado o la IP de un compañero. Con CORS_ORIGINS=* se permite cualquier origen.
+#   - Al cambiar el .env hay que REINICIAR uvicorn (--reload solo vigila archivos .py).
+REGEX_ORIGENES_LOCALES = r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"
+origenes = [o.strip().rstrip("/") for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()]
+permitir_todos = "*" in origenes
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[o.strip() for o in origenes if o.strip()],
-    allow_credentials=True,
+    allow_origins=["*"] if permitir_todos else origenes,
+    allow_origin_regex=None if permitir_todos else REGEX_ORIGENES_LOCALES,
+    allow_credentials=False,  # se usa token en el encabezado Authorization, no cookies
     allow_methods=["*"],
     allow_headers=["*"],
 )
