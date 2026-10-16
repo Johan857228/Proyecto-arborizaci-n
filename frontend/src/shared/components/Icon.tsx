@@ -55,6 +55,7 @@ const icons = {
   settings: { ios: 'gearshape.fill', material: 'settings' },
   users: { ios: 'person.2.fill', material: 'group' },
   person: { ios: 'person.crop.circle.fill', material: 'account_circle' },
+  sparkle: { ios: 'sparkles', material: 'auto_awesome' },
 } satisfies Record<string, { ios: SFSymbol; material: AndroidSymbol }>;
 
 export type IconName = keyof typeof icons;

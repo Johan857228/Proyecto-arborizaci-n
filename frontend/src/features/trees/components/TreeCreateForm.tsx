@@ -10,6 +10,7 @@ import type { ArbolCrear, FotoLocal } from '@/features/trees/types';
 import { useIsWide } from '@/hooks/use-is-wide';
 import { ObservationPicker } from '@/features/trees/components/ObservationPicker';
 import { BioticAgentsFields } from '@/features/inspections/components/BioticAgentsFields';
+import { AISuggestionsCard } from '@/features/ia/components/AISuggestionsCard';
 import {
   Field,
   Heading,
@@ -273,6 +274,12 @@ export function TreeCreateForm({ catalogs, submitting, submitError, onCancel, on
               ))}
             </View>
           ) : null}
+          <AISuggestionsCard
+            catalogs={catalogs}
+            fotoGeneral={fotoGeneral}
+            fotoDetalle={fotoDetalle}
+            onApply={form.applySuggestion}
+          />
         </Section>
 
         <Section step={3} icon="ruler" title="Especie y medidas" description="Medidas tomadas en campo, en centímetros y metros. Máximos: tronco 500 cm (5 m), altura 25 m y copa 40 m.">
