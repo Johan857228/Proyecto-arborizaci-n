@@ -103,10 +103,12 @@ export default function TreeListScreen() {
               Consulta los registros institucionales y filtra por estado, institución, especie o zona.
             </Text>
           </View>
-          <PrimaryButton
-            title="＋ Registrar árbol"
-            onPress={() => router.push('/(app)/trees/new' as Href)}
-          />
+          <View style={styles.headerAction}>
+            <PrimaryButton
+              title="＋ Registrar árbol"
+              onPress={() => router.push('/(app)/trees/new' as Href)}
+            />
+          </View>
         </View>
 
         <View style={styles.summary}>
@@ -136,25 +138,31 @@ export default function TreeListScreen() {
         />
 
         <View style={styles.filters}>
-          <SelectField
-            label="Institución"
-            value={institution ?? TODAS}
-            options={institutionOptions}
-            onChange={(value) => setInstitution(value === TODAS ? undefined : value)}
-            error={catalogs.error ? getApiErrorMessage(catalogs.error) : undefined}
-          />
-          <SelectField
-            label="Especie"
-            value={species ?? TODAS}
-            options={speciesOptions}
-            onChange={(value) => setSpecies(value === TODAS ? undefined : value)}
-          />
-          <SelectField
-            label="Zona"
-            value={zone ?? TODAS}
-            options={zoneOptions}
-            onChange={(value) => setZone(value === TODAS || !isZona(value) ? undefined : value)}
-          />
+          <View style={styles.filter}>
+            <SelectField
+              label="Institución"
+              value={institution ?? TODAS}
+              options={institutionOptions}
+              onChange={(value) => setInstitution(value === TODAS ? undefined : value)}
+              error={catalogs.error ? getApiErrorMessage(catalogs.error) : undefined}
+            />
+          </View>
+          <View style={styles.filter}>
+            <SelectField
+              label="Especie"
+              value={species ?? TODAS}
+              options={speciesOptions}
+              onChange={(value) => setSpecies(value === TODAS ? undefined : value)}
+            />
+          </View>
+          <View style={styles.filter}>
+            <SelectField
+              label="Zona"
+              value={zone ?? TODAS}
+              options={zoneOptions}
+              onChange={(value) => setZone(value === TODAS || !isZona(value) ? undefined : value)}
+            />
+          </View>
         </View>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.stateFilters}>
@@ -261,8 +269,10 @@ export default function TreeListScreen() {
 
 const styles = StyleSheet.create({
   content: { padding: 20, paddingBottom: 40, width: '100%', maxWidth: 850, alignSelf: 'center', gap: 14 },
-  header: { gap: 16 },
-  heading: { gap: 6 },
+  // Con espacio, el botón queda a la derecha del título; en teléfonos baja y ocupa todo el ancho.
+  header: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-end', gap: 16 },
+  heading: { flexGrow: 3, flexShrink: 1, flexBasis: 360, gap: 6 },
+  headerAction: { flexGrow: 1, flexBasis: 200 },
   eyebrow: { color: palette.forest, fontSize: 11, fontWeight: '900', letterSpacing: 1.4 },
   title: { color: palette.ink, fontSize: 28, fontWeight: '900' },
   subtitle: { color: palette.muted, fontSize: 14, lineHeight: 20 },
@@ -272,7 +282,8 @@ const styles = StyleSheet.create({
   refreshButton: { paddingHorizontal: 13, paddingVertical: 10, borderRadius: 7, backgroundColor: '#FFFFFF' },
   refreshText: { color: palette.forest, fontSize: 12, fontWeight: '800' },
   search: { minHeight: 48, paddingHorizontal: 14, borderWidth: 1, borderColor: palette.line, borderRadius: 8, backgroundColor: palette.paper, color: palette.ink, fontSize: 15 },
-  filters: { gap: 2 },
+  filters: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 12 },
+  filter: { flexGrow: 1, flexBasis: 220 },
   stateFilters: { gap: 8, paddingBottom: 4 },
   stateFilter: { paddingHorizontal: 14, paddingVertical: 9, borderRadius: 20, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.paper },
   stateFilterSelected: { borderColor: palette.forest, backgroundColor: palette.forest },
