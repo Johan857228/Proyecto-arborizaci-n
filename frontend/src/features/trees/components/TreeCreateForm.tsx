@@ -1,13 +1,15 @@
-import { Controller } from 'react-hook-form';
+import { useState } from 'react';
+import { Controller, useController, useWatch } from 'react-hook-form';
 import { Image } from 'expo-image';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { palette } from '@/config/constants';
+import { fonts, layout, palette } from '@/config/constants';
 import { useTreeCreateForm } from '@/features/trees/hooks/useTreeCreateForm';
 import type { Catalogos } from '@/features/catalogs/types';
 import type { ArbolCrear, FotoLocal } from '@/features/trees/types';
+import { useIsWide } from '@/hooks/use-is-wide';
+import { ObservationPicker } from '@/features/trees/components/ObservationPicker';
 import {
-  ChoiceChip,
   Field,
   Heading,
   InlineMessage,
@@ -15,8 +17,10 @@ import {
   Screen,
   Section,
   SelectField,
-  Surface,
 } from '@/shared/components/FormControls';
+import { Icon } from '@/shared/components/Icon';
+import { parseDecimal, sanitizeDecimal } from '@/shared/utils/forms';
+import { DISTANCIA_INSTITUCION_MAX_KM, PRECISION_GPS_MAX_M, distanceKm } from '@/shared/utils/geo';
 
 interface Props {
   catalogs: Catalogos;
@@ -36,25 +40,82 @@ const interferencias = [
   'Otra infraestructura',
 ] as const;
 
+function PhotoSlot({
+  title,
+  caption,
+  photo,
+  disabled = false,
+  onPick,
+  onRemove,
+}: {
+  title: string;
+  caption: string;
+  photo?: FotoLocal;
+  disabled?: boolean;
+  onPick: () => void;
+  onRemove?: () => void;
+}) {
+  if (photo) {
+    return (
+      <View style={styles.slotFilled}>
+        <Image source={{ uri: photo.uri }} style={styles.slotImage} contentFit="cover" />
+        <View style={styles.slotFooter}>
+          <View style={styles.slotFooterText}>
+            <Text style={styles.slotTitle}>{title}</Text>
+            <Text style={styles.slotCaption} numberOfLines={1}>{photo.name}</Text>
+          </View>
+          <Pressable accessibilityRole="button" accessibilityLabel={`Cambiar ${title}`} onPress={onPick} style={styles.slotAction}>
+            <Icon name="refresh" size={16} color={palette.forest} />
+          </Pressable>
+          {onRemove ? (
+            <Pressable accessibilityRole="button" accessibilityLabel={`Quitar ${title}`} onPress={onRemove} style={styles.slotAction}>
+              <Icon name="close" size={16} color={palette.red} />
+            </Pressable>
+          ) : null}
+        </View>
+      </View>
+    );
+  }
+  return (
+    <Pressable
+      accessibilityRole="button"
+      disabled={disabled}
+      onPress={onPick}
+      style={({ pressed }) => [styles.slotEmpty, disabled && styles.slotDisabled, pressed && styles.pressed]}
+    >
+      <View style={styles.slotIcon}><Icon name="addPhoto" size={24} color={palette.forest} /></View>
+      <Text style={styles.slotTitle}>{title}</Text>
+      <Text style={styles.slotCaption}>{caption}</Text>
+    </Pressable>
+  );
+}
+
 export function TreeCreateForm({ catalogs, submitting, submitError, onCancel, onSubmit }: Props) {
+  const isWide = useIsWide();
   const form = useTreeCreateForm(catalogs, onSubmit);
+  // Solo se muestra el prefijo; el número lo asigna la base de datos para que dos equipos no repitan código.
+  const institucionId = useWatch({ control: form.control, name: 'institucion_id' });
+  const institucion = catalogs.instituciones.find((item) => item.id === institucionId);
+  const prefijo = institucion?.prefijo;
+  // Avisos (no bloquean): precisión baja del GPS o punto lejos de la institución elegida.
+  const ubicacion = form.gps.location;
+  const precisionBaja = ubicacion?.accuracy != null && ubicacion.accuracy > PRECISION_GPS_MAX_M;
+  const distancia = ubicacion && institucion ? distanceKm(ubicacion, institucion) : null;
+  const fotoGeneral = form.photos.find((photo) => photo.tipo === 'completo');
+  const fotoDetalle = form.photos.find((photo) => photo.tipo === 'detalle');
+  const adicionales = form.photos.filter((photo) => photo.tipo === 'adicional');
 
   return (
     <Screen>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.backAction}>
-          <PrimaryButton title="Volver al inventario" onPress={onCancel} variant="secondary" />
+          <PrimaryButton title="Inventario" icon="back" variant="ghost" compact onPress={onCancel} />
         </View>
-        <Heading
-          subtitle="Registra el árbol con ubicación, medidas, observaciones y evidencia fotográfica."
-        >
-          Registro de árbol
+        <Heading subtitle="Registra el árbol con ubicación, medidas, observaciones y evidencia fotográfica.">
+          Registrar árbol
         </Heading>
-        <Text style={styles.helper}>
-          El código institucional se asigna automáticamente al guardar. No lo escribas ni lo modifiques.
-        </Text>
 
-        <Section title="Identificación y ubicación">
+        <Section step={1} icon="location" title="Identificación y ubicación" description="Institución, zona del campus y coordenadas GPS.">
           <View style={styles.row}>
             <View style={styles.cell}>
               <Controller
@@ -90,6 +151,14 @@ export function TreeCreateForm({ catalogs, submitting, submitError, onCancel, on
               />
             </View>
           </View>
+          <View style={styles.codePreview} accessible accessibilityLabel={prefijo ? `Código del árbol: ${prefijo} seguido del número que asigna el sistema` : 'Código del árbol: selecciona una institución'}>
+            <View style={styles.codeIcon}><Icon name="lock" size={18} color={palette.forestDark} /></View>
+            <View style={styles.codeText}>
+              <Text style={styles.codeLabel}>Código del árbol (no editable)</Text>
+              <Text style={styles.codeValue}>{prefijo ? `${prefijo}-····` : 'Selecciona una institución'}</Text>
+              <Text style={styles.codeCaption}>Se asigna al guardar: prefijo de la institución más el número del árbol en esa institución.</Text>
+            </View>
+          </View>
           {form.zonaActual === 'Otra' ? (
             <Controller
               name="zona_otra"
@@ -97,6 +166,7 @@ export function TreeCreateForm({ catalogs, submitting, submitError, onCancel, on
               render={({ field, fieldState }) => (
                 <Field
                   label="Especifica la zona"
+                  maxLength={120}
                   value={field.value}
                   onChangeText={field.onChange}
                   onBlur={field.onBlur}
@@ -105,19 +175,45 @@ export function TreeCreateForm({ catalogs, submitting, submitError, onCancel, on
               )}
             />
           ) : null}
-          <PrimaryButton
-            title={form.gps.loading ? 'Obteniendo ubicación…' : 'Capturar ubicación GPS'}
-            onPress={() => void form.updateLocation()}
-            loading={form.gps.loading}
-            variant="secondary"
-          />
           {form.gps.location ? (
-            <Text style={styles.helper}>
-              {form.gps.location.lat.toFixed(6)}, {form.gps.location.lng.toFixed(6)}
-              {form.gps.location.accuracy == null
-                ? ''
-                : ` · precisión ${Math.round(form.gps.location.accuracy)} m`}
-            </Text>
+            <View style={styles.gpsCaptured}>
+              <View style={styles.gpsIcon}><Icon name="myLocation" size={20} color={palette.forest} /></View>
+              <View style={styles.gpsText}>
+                <Text style={styles.gpsTitle}>Ubicación capturada</Text>
+                <Text style={styles.gpsCoords}>
+                  {form.gps.location.lat.toFixed(6)}, {form.gps.location.lng.toFixed(6)}
+                  {form.gps.location.accuracy == null
+                    ? ''
+                    : ` · precisión ${Math.round(form.gps.location.accuracy)} m`}
+                </Text>
+              </View>
+              <PrimaryButton
+                title="Actualizar"
+                icon="refresh"
+                variant="ghost"
+                compact
+                loading={form.gps.loading}
+                onPress={() => void form.updateLocation()}
+              />
+            </View>
+          ) : (
+            <PrimaryButton
+              title={form.gps.loading ? 'Obteniendo ubicación…' : 'Capturar ubicación GPS'}
+              icon="myLocation"
+              onPress={() => void form.updateLocation()}
+              loading={form.gps.loading}
+              variant="secondary"
+            />
+          )}
+          {precisionBaja && ubicacion?.accuracy != null ? (
+            <InlineMessage tone="warning">
+              Precisión baja del GPS (±{Math.round(ubicacion.accuracy)} m). Si puedes, acércate a un lugar despejado y vuelve a capturar.
+            </InlineMessage>
+          ) : null}
+          {distancia != null && distancia > DISTANCIA_INSTITUCION_MAX_KM && institucion ? (
+            <InlineMessage tone="warning">
+              La ubicación está a {distancia.toFixed(1)} km de {institucion.nombre_corto}. Verifica que la institución seleccionada sea la correcta.
+            </InlineMessage>
           ) : null}
           {form.gps.error ? <InlineMessage>{form.gps.error}</InlineMessage> : null}
           {form.errors.gps_confirmado?.message ? (
@@ -125,52 +221,60 @@ export function TreeCreateForm({ catalogs, submitting, submitError, onCancel, on
           ) : null}
         </Section>
 
-        <Section title="Fotografías">
-          <Text style={styles.helper}>
-            La fotografía general es obligatoria. Puedes agregar una de detalle y hasta tres
-            adicionales.
-          </Text>
-          <View style={styles.photoActions}>
+        <Section
+          step={2}
+          icon="camera"
+          title="Fotografías"
+          description="La foto general es obligatoria. Puedes agregar una de detalle y hasta tres adicionales."
+        >
+          <View style={styles.photoGrid}>
             <View style={styles.cell}>
-              <PrimaryButton
-                title={form.photos.some((photo) => photo.tipo === 'completo') ? 'Cambiar foto general' : 'Agregar foto general'}
-                onPress={() => void form.pickPhoto('completo')}
-                variant="secondary"
+              <PhotoSlot
+                title="Vista general"
+                caption="Obligatoria"
+                photo={fotoGeneral}
+                onPick={() => void form.pickPhoto('completo')}
+                onRemove={fotoGeneral ? () => form.removePhoto(fotoGeneral) : undefined}
               />
             </View>
             <View style={styles.cell}>
-              <PrimaryButton
-                title={form.photos.some((photo) => photo.tipo === 'detalle') ? 'Cambiar foto de detalle' : 'Agregar foto de detalle'}
-                onPress={() => void form.pickPhoto('detalle')}
-                variant="secondary"
+              <PhotoSlot
+                title="Detalle"
+                caption="Opcional"
+                photo={fotoDetalle}
+                onPick={() => void form.pickPhoto('detalle')}
+                onRemove={fotoDetalle ? () => form.removePhoto(fotoDetalle) : undefined}
               />
             </View>
             <View style={styles.cell}>
-              <PrimaryButton
-                title={`Agregar foto adicional (${form.photos.filter((photo) => photo.tipo === 'adicional').length}/3)`}
-                onPress={() => void form.pickPhoto('adicional')}
-                disabled={form.photos.filter((photo) => photo.tipo === 'adicional').length >= 3}
-                variant="secondary"
+              <PhotoSlot
+                title={`Adicionales (${adicionales.length}/3)`}
+                caption={adicionales.length >= 3 ? 'Límite alcanzado' : 'Opcional'}
+                disabled={adicionales.length >= 3}
+                onPick={() => void form.pickPhoto('adicional')}
               />
             </View>
           </View>
-          {form.photos.map((photo) => (
-            <Surface key={`${photo.tipo}-${photo.uri}`}>
-              <View style={styles.photoRow}>
-                <Image source={{ uri: photo.uri }} style={styles.thumbnail} contentFit="cover" />
-                <View style={styles.photoDescription}>
-                  <Text style={styles.photoTitle}>{photoLabel(photo.tipo)}</Text>
-                  <Text style={styles.helper} numberOfLines={1}>{photo.name}</Text>
-                  <Text style={styles.remove} onPress={() => form.removePhoto(photo)}>
-                    Quitar foto
-                  </Text>
+          {adicionales.length > 0 ? (
+            <View style={styles.extraPhotos}>
+              {adicionales.map((photo) => (
+                <View key={photo.uri} style={styles.extraPhoto}>
+                  <Image source={{ uri: photo.uri }} style={styles.extraImage} contentFit="cover" />
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Quitar foto adicional"
+                    onPress={() => form.removePhoto(photo)}
+                    style={styles.extraRemove}
+                  >
+                    <Icon name="close" size={14} color={palette.paper} />
+                  </Pressable>
                 </View>
-              </View>
-            </Surface>
-          ))}
+              ))}
+            </View>
+          ) : null}
         </Section>
 
-        <Section title="Especie y medidas">
+        <Section step={3} icon="ruler" title="Especie y medidas" description="Medidas tomadas en campo, en centímetros y metros. Máximos: tronco 500 cm (5 m), altura 25 m y copa 40 m.">
           <Controller
             name="especie_id"
             control={form.control}
@@ -189,13 +293,13 @@ export function TreeCreateForm({ catalogs, submitting, submitError, onCancel, on
           />
           <View style={styles.row}>
             <View style={styles.cell}>
-              <NumericField control={form.control} name="dap_cm" label="Diámetro del tronco (cm)" error={form.errors.dap_cm?.message} />
+              <NumericField control={form.control} name="dap_cm" label="Diámetro del tronco (cm)" hint="Máximo 500 cm (5 m)" error={form.errors.dap_cm?.message} />
             </View>
             <View style={styles.cell}>
-              <NumericField control={form.control} name="altura_m" label="Altura (m)" error={form.errors.altura_m?.message} />
+              <NumericField control={form.control} name="altura_m" label="Altura (m)" hint="Máximo 25 m" error={form.errors.altura_m?.message} />
             </View>
             <View style={styles.cell}>
-              <NumericField control={form.control} name="copa_m" label="Diámetro de copa (m)" error={form.errors.copa_m?.message} />
+              <NumericField control={form.control} name="copa_m" label="Diámetro de copa (m)" hint="Máximo 40 m" error={form.errors.copa_m?.message} />
             </View>
           </View>
           <Controller
@@ -213,7 +317,7 @@ export function TreeCreateForm({ catalogs, submitting, submitError, onCancel, on
           />
         </Section>
 
-        <Section title="Interferencias y observaciones">
+        <Section step={4} icon="leaf" title="Interferencias y observaciones" description="Infraestructura afectada y estado fitosanitario del árbol.">
           <Controller
             name="interferencia"
             control={form.control}
@@ -234,6 +338,7 @@ export function TreeCreateForm({ catalogs, submitting, submitError, onCancel, on
               render={({ field, fieldState }) => (
                 <Field
                   label="Describe la interferencia"
+                  maxLength={120}
                   value={field.value}
                   onChangeText={field.onChange}
                   onBlur={field.onBlur}
@@ -242,29 +347,31 @@ export function TreeCreateForm({ catalogs, submitting, submitError, onCancel, on
               )}
             />
           ) : null}
-          <Text style={styles.label}>Observaciones fitosanitarias</Text>
-          {form.errors.observaciones?.message ? (
-            <InlineMessage>{form.errors.observaciones.message}</InlineMessage>
-          ) : null}
-          <View style={styles.chips}>
-            {catalogs.observaciones.map((observation) => (
-              <ChoiceChip
-                key={observation.codigo}
-                label={observation.etiqueta}
-                selected={form.observacionesActuales.includes(observation.codigo)}
-                onPress={() => form.toggleObservation(observation.codigo)}
-              />
-            ))}
-          </View>
+          <View style={styles.divider} />
+          <ObservationPicker
+            observaciones={catalogs.observaciones}
+            selected={form.observacionesActuales}
+            error={form.errors.observaciones?.message}
+            onToggle={form.toggleObservation}
+            onClear={form.clearObservations}
+          />
         </Section>
 
         {form.formError ? <InlineMessage>{form.formError}</InlineMessage> : null}
         {submitError ? <InlineMessage>{submitError}</InlineMessage> : null}
-        <PrimaryButton
-          title="Guardar árbol"
-          loading={submitting}
-          onPress={() => void form.submit()}
-        />
+        <View style={[styles.actions, isWide && styles.actionsWide]}>
+          <View style={isWide ? styles.actionWide : undefined}>
+            <PrimaryButton title="Cancelar" variant="secondary" onPress={onCancel} />
+          </View>
+          <View style={isWide ? styles.actionWide : undefined}>
+            <PrimaryButton
+              title="Guardar árbol"
+              icon="check"
+              loading={submitting}
+              onPress={() => void form.submit()}
+            />
+          </View>
+        </View>
       </ScrollView>
     </Screen>
   );
@@ -275,49 +382,71 @@ function NumericField({
   name,
   label,
   error,
+  hint,
 }: {
   control: ReturnType<typeof useTreeCreateForm>['control'];
   name: 'dap_cm' | 'altura_m' | 'copa_m';
   label: string;
   error?: string;
+  hint?: string;
 }) {
+  const { field } = useController({ name, control });
+  // El texto escrito vive solo en el campo; al formulario llega el número ya validado (o nada si está vacío).
+  const [text, setText] = useState(field.value == null ? '' : String(field.value));
   return (
-    <Controller
-      name={name}
-      control={control}
-      render={({ field }) => (
-        <Field
-          label={label}
-          value={field.value == null ? '' : String(field.value)}
-          onChangeText={(text) => field.onChange(text.trim() === '' ? undefined : Number(text))}
-          onBlur={field.onBlur}
-          keyboardType="decimal-pad"
-          error={error}
-        />
-      )}
+    <Field
+      label={label}
+      value={text}
+      onChangeText={(input) => {
+        const clean = sanitizeDecimal(input);
+        setText(clean);
+        field.onChange(parseDecimal(clean));
+      }}
+      onBlur={field.onBlur}
+      keyboardType="decimal-pad"
+      inputMode="decimal"
+      placeholder="0"
+      hint={hint}
+      error={error}
     />
   );
 }
 
-function photoLabel(tipo: FotoLocal['tipo']) {
-  if (tipo === 'completo') return 'Vista general';
-  if (tipo === 'detalle') return 'Detalle';
-  return 'Foto adicional';
-}
-
 const styles = StyleSheet.create({
-  content: { width: '100%', maxWidth: 720, alignSelf: 'center', padding: 20, paddingBottom: 40, gap: 16 },
-  helper: { color: palette.muted, fontSize: 13, lineHeight: 19 },
-  backAction: { alignSelf: 'flex-start' },
+  content: { width: '100%', maxWidth: layout.formWidth, alignSelf: 'center', padding: 20, paddingTop: 16, paddingBottom: 40, gap: 18 },
+  backAction: { alignSelf: 'flex-start', marginLeft: -8 },
   // Campos relacionados lado a lado cuando hay espacio; en teléfonos se apilan.
   row: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 12 },
-  cell: { flexGrow: 1, flexBasis: 200 },
-  photoActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  photoRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  thumbnail: { width: 76, height: 76, borderRadius: 8, backgroundColor: palette.line },
-  photoDescription: { flex: 1, gap: 5 },
-  photoTitle: { color: palette.ink, fontWeight: '800' },
-  remove: { color: palette.red, fontSize: 13, fontWeight: '700', paddingTop: 3 },
-  label: { color: palette.ink, fontSize: 14, fontWeight: '700' },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  cell: { flexGrow: 1, flexBasis: 180 },
+  codePreview: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 14, borderWidth: 1, borderStyle: 'dashed', borderColor: '#C9D6C4', backgroundColor: palette.canvas },
+  codeIcon: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 12, backgroundColor: palette.forestSoft },
+  codeText: { flex: 1, minWidth: 0, gap: 2 },
+  codeLabel: { color: palette.muted, fontSize: 12, fontFamily: fonts.semiBold },
+  codeValue: { color: palette.forestDark, fontSize: 20, fontFamily: fonts.extraBold, letterSpacing: 1 },
+  codeCaption: { color: palette.muted, fontSize: 12, lineHeight: 17 },
+  gpsCaptured: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 12, backgroundColor: palette.forestSoft },
+  gpsIcon: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 20, backgroundColor: palette.paper },
+  gpsText: { flex: 1, minWidth: 0 },
+  gpsTitle: { color: palette.forestDark, fontSize: 14, fontFamily: fonts.bold },
+  gpsCoords: { marginTop: 2, color: palette.muted, fontSize: 13 },
+  photoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  slotEmpty: { minHeight: 150, alignItems: 'center', justifyContent: 'center', gap: 6, padding: 16, borderRadius: 14, borderWidth: 1.5, borderStyle: 'dashed', borderColor: '#B9CDBF', backgroundColor: '#F8FBF8' },
+  slotDisabled: { opacity: 0.5 },
+  slotIcon: { width: 46, height: 46, marginBottom: 4, alignItems: 'center', justifyContent: 'center', borderRadius: 14, backgroundColor: palette.forestSoft },
+  slotFilled: { overflow: 'hidden', borderRadius: 14, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.paper },
+  slotImage: { width: '100%', height: 120, backgroundColor: palette.line },
+  slotFooter: { flexDirection: 'row', alignItems: 'center', gap: 6, padding: 10 },
+  slotFooterText: { flex: 1, minWidth: 0 },
+  slotAction: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 10, backgroundColor: palette.canvas },
+  slotTitle: { color: palette.ink, fontSize: 14, fontFamily: fonts.bold, textAlign: 'center' },
+  slotCaption: { color: palette.muted, fontSize: 12 },
+  extraPhotos: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  extraPhoto: { width: 84, height: 84, overflow: 'hidden', borderRadius: 12 },
+  extraImage: { width: '100%', height: '100%' },
+  extraRemove: { position: 'absolute', top: 6, right: 6, width: 24, height: 24, alignItems: 'center', justifyContent: 'center', borderRadius: 12, backgroundColor: 'rgba(15, 42, 33, 0.7)' },
+  divider: { height: 1, backgroundColor: palette.line },
+  pressed: { opacity: 0.8 },
+  actions: { gap: 10 },
+  actionsWide: { flexDirection: 'row', justifyContent: 'flex-end' },
+  actionWide: { minWidth: 180 },
 });

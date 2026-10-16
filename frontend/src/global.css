@@ -7,3 +7,20 @@
   --font-rounded: 'SF Pro Rounded', 'Hiragino Maru Gothic ProN', Meiryo, 'MS PGothic', sans-serif;
   --font-serif: Georgia, 'Times New Roman', serif;
 }
+
+/* Foco (solo web): anillo verde de la marca al navegar con teclado y sin contorno al hacer clic.
+   Los campos de texto ya muestran su propio borde verde al enfocarse. */
+:focus {
+  outline: none;
+}
+:focus-visible {
+  outline: 2px solid #1b6b4a;
+  outline-offset: 2px;
+}
+input:focus-visible,
+textarea:focus-visible {
+  outline: none;
+}
+select:focus-visible {
+  outline-offset: -2px;
+}

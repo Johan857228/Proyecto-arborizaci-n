@@ -1,7 +1,8 @@
 import { z } from 'zod';
 
 export const loginSchema = z.object({
-  email: z.email('Escribe un correo válido.'),
+  // Se quitan espacios al inicio o al final (comunes al pegar el correo) antes de validarlo.
+  email: z.string().trim().toLowerCase().pipe(z.email('Escribe un correo válido.')),
   password: z.string().min(1, 'Escribe tu contraseña.'),
 });
 

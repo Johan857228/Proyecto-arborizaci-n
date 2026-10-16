@@ -10,14 +10,18 @@ import {
 interface AuthState {
   session: Session | null;
   hydrated: boolean;
+  /** true cuando la sesión terminó porque el servidor rechazó el token (expiró). */
+  sessionExpired: boolean;
   hydrate: () => Promise<void>;
   setSession: (session: Session) => Promise<void>;
   signOut: () => Promise<void>;
+  expire: () => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
   session: null,
   hydrated: false,
+  sessionExpired: false,
   hydrate: async () => {
     try {
       set({ session: await readStoredSession(), hydrated: true });
@@ -27,10 +31,14 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
   setSession: async (session) => {
     await writeStoredSession(session);
-    set({ session, hydrated: true });
+    set({ session, hydrated: true, sessionExpired: false });
   },
   signOut: async () => {
     await clearStoredSession();
-    set({ session: null, hydrated: true });
+    set({ session: null, hydrated: true, sessionExpired: false });
+  },
+  expire: async () => {
+    await clearStoredSession();
+    set({ session: null, hydrated: true, sessionExpired: true });
   },
 }));

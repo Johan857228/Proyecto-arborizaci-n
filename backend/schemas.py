@@ -4,9 +4,23 @@ Las reglas replican las restricciones (CHECK) de la base de datos, para que el
 usuario reciba el error ANTES de llegar a Supabase, con un mensaje claro.
 """
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, StringConstraints, field_validator, model_validator
+
+# Límites del formulario (el frontend usa los mismos en src/features/trees/schemas.ts)
+DAP_MAX_CM = 500       # 5 m de diámetro de tronco
+ALTURA_MAX_M = 25
+COPA_MAX_M = 40
+TEXTO_OTRA_MIN = 3
+TEXTO_OTRA_MAX = 120
+MAX_OBSERVACIONES = 50
+
+# Rectángulo que contiene a Colombia continental e insular (San Andrés incluido)
+LAT_MIN, LAT_MAX = -4.3, 13.5
+LNG_MIN, LNG_MAX = -82.0, -66.8
+
+CodigoObservacion = Annotated[str, StringConstraints(min_length=1, max_length=40)]
 
 Zona = Literal["Patio central", "Entrada principal", "Zona deportiva", "Bloques académicos", "Otra"]
 Etapa = Literal["Plántula", "Juvenil", "Adulto", "Senescente"]
@@ -23,8 +37,13 @@ TipoFoto = Literal["completo", "detalle", "adicional"]
 
 # ------------------------------- Autenticación -------------------------------
 class LoginIn(BaseModel):
-    email: str = Field(min_length=3)
-    password: str = Field(min_length=1)
+    email: str = Field(max_length=254, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+    password: str = Field(min_length=1, max_length=128)
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def _normalizar_email(cls, v):
+        return v.strip().lower() if isinstance(v, str) else v
 
 
 class SesionOut(BaseModel):
@@ -69,26 +88,30 @@ class Catalogos(BaseModel):
 class ArbolCrear(BaseModel):
     """Lo que envía el formulario del frontend (pasos 1, 3 y 4 del prototipo)."""
 
-    institucion_id: str
+    institucion_id: str = Field(min_length=1, max_length=64)
     zona: Zona
-    zona_otra: str | None = None
-    lat: float = Field(ge=-90, le=90)
-    lng: float = Field(ge=-180, le=180)
-    especie_id: int
-    dap_cm: float = Field(gt=0, description="Diámetro a la altura del pecho, en cm")
-    altura_m: float = Field(gt=0, le=25, description="Altura total, máximo 25 m")
-    copa_m: float = Field(gt=0, description="Diámetro de copa, en m")
+    zona_otra: str | None = Field(default=None, min_length=TEXTO_OTRA_MIN, max_length=TEXTO_OTRA_MAX)
+    lat: float = Field(ge=LAT_MIN, le=LAT_MAX, description="Latitud dentro de Colombia")
+    lng: float = Field(ge=LNG_MIN, le=LNG_MAX, description="Longitud dentro de Colombia")
+    especie_id: int = Field(gt=0)
+    dap_cm: float = Field(gt=0, le=DAP_MAX_CM, description="Diámetro a la altura del pecho, máximo 500 cm")
+    altura_m: float = Field(gt=0, le=ALTURA_MAX_M, description="Altura total, máximo 25 m")
+    copa_m: float = Field(gt=0, le=COPA_MAX_M, description="Diámetro de copa, máximo 40 m")
     etapa: Etapa
     interferencia: Interferencia
-    interferencia_otra: str | None = None
-    observaciones: list[str] = Field(
-        default_factory=list, description="Códigos de las casillas marcadas, p. ej. f_manchas"
+    interferencia_otra: str | None = Field(default=None, min_length=TEXTO_OTRA_MIN, max_length=TEXTO_OTRA_MAX)
+    observaciones: list[CodigoObservacion] = Field(
+        default_factory=list,
+        max_length=MAX_OBSERVACIONES,
+        description="Códigos de las casillas marcadas, p. ej. f_manchas",
     )
 
-    @field_validator("zona_otra", "interferencia_otra")
+    # mode="before": se limpian los espacios ANTES de medir el largo del texto
+    @field_validator("zona_otra", "interferencia_otra", mode="before")
     @classmethod
-    def _limpiar_texto(cls, v: str | None) -> str | None:
-        v = v.strip() if v else v
+    def _limpiar_texto(cls, v):
+        if isinstance(v, str):
+            v = v.strip()
         return v or None
 
     @model_validator(mode="after")

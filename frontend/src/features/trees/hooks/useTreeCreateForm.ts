@@ -11,6 +11,8 @@ import type { ArbolCrear, FotoLocal } from '@/features/trees/types';
 
 const MAX_FOTO_BYTES = 5 * 1024 * 1024;
 
+const EXTENSIONES_FOTO: Record<FotoLocal['mimeType'], string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
+
 function isAllowedPhotoType(value: string | null | undefined): value is FotoLocal['mimeType'] {
   return value === 'image/jpeg' || value === 'image/png' || value === 'image/webp';
 }
@@ -70,7 +72,7 @@ export function useTreeCreateForm(
           return [...current, {
             tipo,
             uri: asset.uri,
-            name: asset.fileName ?? `${tipo}-${Date.now()}.jpg`,
+            name: asset.fileName ?? `${tipo}-${Date.now()}.${EXTENSIONES_FOTO[mimeType]}`,
             mimeType,
             sizeBytes,
           }];
@@ -80,7 +82,7 @@ export function useTreeCreateForm(
           {
             tipo,
             uri: asset.uri,
-            name: asset.fileName ?? `${tipo}-${Date.now()}.jpg`,
+            name: asset.fileName ?? `${tipo}-${Date.now()}.${EXTENSIONES_FOTO[mimeType]}`,
             mimeType,
             sizeBytes,
           },
@@ -122,6 +124,10 @@ export function useTreeCreateForm(
       ? observacionesActuales.filter((value) => value !== code)
       : [...observacionesActuales, code];
     setValue('observaciones', updated, { shouldValidate: true });
+  }
+
+  function clearObservations() {
+    setValue('observaciones', [], { shouldValidate: true });
   }
 
   function removePhoto(photoToRemove: FotoLocal) {
@@ -172,6 +178,7 @@ export function useTreeCreateForm(
     removePhoto,
     updateLocation,
     toggleObservation,
+    clearObservations,
     submit,
   };
 }
