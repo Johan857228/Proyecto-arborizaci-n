@@ -63,6 +63,31 @@ def test_login_ok(monkeypatch):
     assert r.json()["user_id"] == "u1"
 
 
+@pytest.mark.parametrize("email", ["sin-arroba", "a@b", "a b@c.co", "x" * 250 + "@b.co"])
+def test_login_rechaza_correo_mal_escrito(email):
+    r = TestClient(main.app).post("/auth/login", json={"email": email, "password": "x"})
+    assert r.status_code == 422
+
+
+def test_login_normaliza_el_correo(monkeypatch):
+    enviados = []
+
+    class AnonBueno:
+        class auth:
+            @staticmethod
+            def sign_in_with_password(datos):
+                enviados.append(datos)
+                return SimpleNamespace(
+                    session=SimpleNamespace(access_token="tok", refresh_token=None, expires_in=3600),
+                    user=SimpleNamespace(id="u1", email="docente@colegio.edu.co"),
+                )
+
+    monkeypatch.setattr(db, "nuevo_cliente_anon", lambda: AnonBueno)
+    r = TestClient(main.app).post("/auth/login", json={"email": "  Docente@Colegio.edu.co ", "password": "x"})
+    assert r.status_code == 200
+    assert enviados[0]["email"] == "docente@colegio.edu.co"
+
+
 # ------------------------------- Crear árbol (validación) -------------------------------
 @pytest.mark.parametrize(
     "cambio",
@@ -76,12 +101,37 @@ def test_login_ok(monkeypatch):
         {"interferencia": "Otra infraestructura"},           # falta interferencia_otra
         {"lat": 200},
         {"zona": "Cancha inventada"},
+        {"dap_cm": 500.1},                                   # tronco de más de 5 m
+        {"copa_m": 41},
+        {"lat": 40.4168, "lng": -3.7038},                    # Madrid: fuera de Colombia
+        {"lat": 0, "lng": 0},
+        {"zona": "Otra", "zona_otra": "ab"},                 # muy corto
+        {"zona": "Otra", "zona_otra": "x" * 121},            # muy largo
+        {"zona": "Otra", "zona_otra": "    "},               # solo espacios
+        {"interferencia": "Otra infraestructura", "interferencia_otra": "x" * 121},
+        {"observaciones": [f"c{i}" for i in range(51)]},
+        {"observaciones": [""]},
+        {"especie_id": 0},
+        {"institucion_id": ""},
     ],
 )
 def test_crear_arbol_rechaza_datos_invalidos(entorno, cambio):
     cliente, _, _ = entorno
     r = cliente.post("/arboles", json={**CUERPO_ARBOL, **cambio})
     assert r.status_code == 422
+
+
+def test_crear_arbol_acepta_los_valores_limite(entorno):
+    cliente, _, _ = entorno
+    limites = {"dap_cm": 500, "altura_m": 25, "copa_m": 40, "zona": "Otra", "zona_otra": "abc"}
+    assert cliente.post("/arboles", json={**CUERPO_ARBOL, **limites}).status_code == 201
+
+
+def test_crear_arbol_guarda_el_texto_otra_sin_espacios(entorno):
+    cliente, _, registro = entorno
+    cliente.post("/arboles", json={**CUERPO_ARBOL, "zona": "Otra", "zona_otra": "  Huerta  "})
+    insert = next(a for t, m, a, k in registro if t == "arboles" and m == "insert")[0]
+    assert insert["zona_otra"] == "Huerta"
 
 
 def test_crear_arbol_ok(entorno):
@@ -130,6 +180,20 @@ def test_listar_rechaza_estado_invalido(entorno):
     cliente, _, _ = entorno
     assert cliente.get("/arboles?estado=azul").status_code == 422
     assert cliente.get("/arboles?limite=1000").status_code == 422
+
+
+def test_listar_filtra_solo_zonas_del_catalogo(entorno):
+    cliente, _, registro = entorno
+    assert cliente.get("/arboles?zona=Cancha inventada").status_code == 422
+    assert cliente.get("/arboles?zona=Zona deportiva").status_code == 200
+    assert ("arboles_resumen", "eq", ("zona", "Zona deportiva"), {}) in registro
+
+
+def test_listar_busca_la_especie_sin_comodines(entorno):
+    cliente, _, registro = entorno
+    assert cliente.get("/arboles", params={"especie": "  100%_ma*ngo "}).status_code == 200
+    assert ("arboles_resumen", "ilike", ("nombre_comun", r"%100\%\_mango%"), {}) in registro
+    assert cliente.get("/arboles", params={"especie": "x" * 61}).status_code == 422
 
 
 def test_detalle_arbol(entorno):
@@ -210,6 +274,28 @@ def test_foto_tipo_invalido(entorno):
 def test_foto_formato_invalido(entorno):
     cliente, _, _ = entorno
     assert _subir(cliente, archivo=("a.pdf", b"%PDF", "application/pdf")).status_code == 422
+
+
+def test_foto_con_contenido_que_no_es_imagen(entorno):
+    cliente, _, registro = entorno
+    falsa = ("virus.jpg", b"MZ\x90\x00 esto no es una imagen", "image/jpeg")
+    assert _subir(cliente, archivo=falsa).status_code == 422
+    assert not any(t == "storage" and m == "upload" for t, m, a, k in registro)
+
+
+@pytest.mark.parametrize(
+    "contenido, extension",
+    [
+        (b"\x89PNG\r\n\x1a\n" + b"datos", ".png"),
+        (b"RIFF\x10\x00\x00\x00WEBPVP8 ", ".webp"),
+    ],
+)
+def test_foto_se_guarda_con_su_formato_real(entorno, contenido, extension):
+    cliente, _, _ = entorno
+    # el navegador dice JPG, pero el contenido manda
+    r = _subir(cliente, archivo=("foto.jpg", contenido, "image/jpeg"))
+    assert r.status_code == 201
+    assert r.json()["storage_path"].endswith(extension)
 
 
 def test_foto_archivo_vacio(entorno):

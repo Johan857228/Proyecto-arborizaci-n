@@ -138,9 +138,13 @@ El cuerpo trae `detail` con el mensaje. Los errores que vienen de la base de dat
 
 ## Reglas de negocio implementadas
 
-- Altura máxima de 25 m; DAP y copa mayores que 0.
-- Si la zona o la interferencia es "Otra", el texto es obligatorio.
-- Una foto `completo`, una `detalle` y hasta 3 `adicional`; JPG, PNG o WebP; máximo 5 MB.
+- Medidas mayores que 0, con máximos: DAP 500 cm (5 m), altura 25 m y copa 40 m.
+- Coordenadas dentro de Colombia (latitud −4.3 a 13.5, longitud −82 a −66.8).
+- Si la zona o la interferencia es "Otra", el texto es obligatorio, de 3 a 120 caracteres (sin contar espacios al inicio o al final).
+- Hasta 50 observaciones por árbol.
+- El correo del login debe tener formato válido; se limpia de espacios y se pasa a minúsculas.
+- En `GET /arboles`, `zona` solo acepta las zonas del catálogo y `especie` se busca tal cual (`%`, `_` y `*` no son comodines).
+- Una foto `completo`, una `detalle` y hasta 3 `adicional`; JPG, PNG o WebP; máximo 5 MB. El formato se comprueba con los primeros bytes del archivo, no con lo que declara el navegador.
 - Solo quien registró un árbol puede subirle fotos (el RLS impide además editar árboles ajenos).
 - El código `IE001-0001` y el campo `registrado_por` los asigna la base de datos; el frontend nunca los envía.
 - Semáforo provisional: 0 observaciones = sano, 1–3 = riesgo, 4 o más = crítico (vive en la vista `arboles_resumen`).

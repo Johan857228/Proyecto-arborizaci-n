@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import type { Catalogos } from '@/features/catalogs/types';
+import { isInColombia } from '@/shared/utils/geo';
 
 // Medida numérica con mensajes en español: vacía ("Ingresa…") o con un valor que no es número.
 const medida = (mensajeVacio: string) =>
@@ -15,13 +16,13 @@ const arbolFieldsSchema = z.object({
     'Bloques académicos',
     'Otra',
   ]),
-  zona_otra: z.string().trim().max(120).optional(),
+  zona_otra: z.string().trim().max(120, 'Máximo 120 caracteres.').optional(),
   lat: z.number().min(-90).max(90),
   lng: z.number().min(-180).max(180),
   especie_id: z.number().int().positive('Selecciona una especie.'),
-  dap_cm: medida('Ingresa el diámetro del tronco.').gt(0, 'Debe ser mayor que cero.'),
+  dap_cm: medida('Ingresa el diámetro del tronco.').gt(0, 'Debe ser mayor que cero.').max(500, 'Máximo 500 cm (5 m).'),
   altura_m: medida('Ingresa la altura.').gt(0, 'Debe ser mayor que cero.').max(25, 'Máximo 25 m.'),
-  copa_m: medida('Ingresa el diámetro de copa.').gt(0, 'Debe ser mayor que cero.'),
+  copa_m: medida('Ingresa el diámetro de copa.').gt(0, 'Debe ser mayor que cero.').max(40, 'Máximo 40 m.'),
   etapa: z.enum(['Plántula', 'Juvenil', 'Adulto', 'Senescente']),
   interferencia: z.enum([
     'Ninguna',
@@ -30,7 +31,7 @@ const arbolFieldsSchema = z.object({
     'Cables eléctricos',
     'Otra infraestructura',
   ]),
-  interferencia_otra: z.string().trim().max(120).optional(),
+  interferencia_otra: z.string().trim().max(120, 'Máximo 120 caracteres.').optional(),
   observaciones: z.array(z.string().min(1)).max(50, 'Selecciona como máximo 50 observaciones.'),
 }).strict();
 
@@ -38,15 +39,18 @@ function validateTreeRules(
   value: z.infer<typeof arbolFieldsSchema>,
   ctx: z.RefinementCtx,
 ) {
-  if (value.zona === 'Otra' && !value.zona_otra?.trim()) {
-    ctx.addIssue({ code: 'custom', path: ['zona_otra'], message: 'Especifica la zona.' });
+  if (value.zona === 'Otra') {
+    const texto = value.zona_otra?.trim() ?? '';
+    if (!texto) ctx.addIssue({ code: 'custom', path: ['zona_otra'], message: 'Especifica la zona.' });
+    else if (texto.length < 3) ctx.addIssue({ code: 'custom', path: ['zona_otra'], message: 'Escribe al menos 3 caracteres.' });
   }
-  if (value.interferencia === 'Otra infraestructura' && !value.interferencia_otra?.trim()) {
-    ctx.addIssue({
-      code: 'custom',
-      path: ['interferencia_otra'],
-      message: 'Describe la infraestructura afectada.',
-    });
+  if (value.interferencia === 'Otra infraestructura') {
+    const texto = value.interferencia_otra?.trim() ?? '';
+    if (!texto) {
+      ctx.addIssue({ code: 'custom', path: ['interferencia_otra'], message: 'Describe la infraestructura afectada.' });
+    } else if (texto.length < 3) {
+      ctx.addIssue({ code: 'custom', path: ['interferencia_otra'], message: 'Escribe al menos 3 caracteres.' });
+    }
   }
   if (new Set(value.observaciones).size !== value.observaciones.length) {
     ctx.addIssue({
@@ -70,6 +74,12 @@ export const arbolCreateSchema = arbolFieldsSchema
         code: 'custom',
         path: ['gps_confirmado'],
         message: 'Captura la ubicación GPS.',
+      });
+    } else if (!isInColombia(value.lat, value.lng)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['gps_confirmado'],
+        message: 'La ubicación capturada está fuera de Colombia. Vuelve a capturarla en el campus.',
       });
     }
   });

@@ -2,6 +2,7 @@ import { create as createAxiosInstance, isAxiosError } from 'axios';
 
 import { API_BASE_URL } from '@/config/constants';
 import { readStoredSession } from '@/services/storage/sessionStorage';
+import { describeApiDetail } from '@/shared/utils/apiErrors';
 
 export const api = createAxiosInstance({
   baseURL: API_BASE_URL,
@@ -41,8 +42,10 @@ export function getApiErrorMessage(error: unknown) {
   if (error instanceof ApiContractError) {
     return error.message;
   }
-  if (isAxiosError<{ detail?: string }>(error)) {
-    return error.response?.data?.detail ?? 'No fue posible conectar con el servidor.';
+  if (isAxiosError<{ detail?: unknown }>(error)) {
+    // Sin respuesta: el servidor no está disponible o no hubo red.
+    if (!error.response) return 'No fue posible conectar con el servidor.';
+    return describeApiDetail(error.response.data?.detail) ?? 'Ocurrió un error en el servidor. Intenta de nuevo.';
   }
   return 'Ocurrió un error inesperado.';
 }

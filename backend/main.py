@@ -41,6 +41,7 @@ from schemas import (
     SesionOut,
     TipoFoto,
     TotalesAmbientales,
+    Zona,
 )
 
 app = FastAPI(
@@ -113,6 +114,23 @@ def _traer_todo(cliente, tabla: str, columnas: str, tam: int = 1000) -> list[dic
         if len(lote) < tam:
             return filas
         inicio += tam
+
+
+def _escapar_like(texto: str) -> str:
+    """Busca el texto tal cual: en LIKE, % y _ son comodines y PostgREST trata * como %."""
+    texto = texto.replace("*", "")
+    return texto.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def _tipo_real_imagen(contenido: bytes) -> str | None:
+    """Reconoce el formato por los primeros bytes del archivo (su firma), no por lo que dice el navegador."""
+    if contenido.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if contenido.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if contenido[:4] == b"RIFF" and contenido[8:12] == b"WEBP":
+        return "image/webp"
+    return None
 
 
 def _url_firmada(cliente, ruta: str, segundos: int = 3600) -> str | None:
@@ -204,10 +222,10 @@ def crear_arbol(datos: ArbolCrear, sesion: Sesion = Depends(usuario_actual)):
 
 @app.get("/arboles", response_model=list[ArbolResumen], tags=["Árboles"])
 def listar_arboles(
-    institucion_id: str | None = None,
+    institucion_id: str | None = Query(None, max_length=64),
     estado: Estado | None = None,
-    especie: str | None = Query(None, description="Texto contenido en el nombre común"),
-    zona: str | None = None,
+    especie: str | None = Query(None, max_length=60, description="Texto contenido en el nombre común"),
+    zona: Zona | None = None,
     limite: int = Query(50, ge=1, le=200),
     desplazamiento: int = Query(0, ge=0),
     sesion: Sesion = Depends(usuario_actual),
@@ -221,8 +239,8 @@ def listar_arboles(
         q = q.eq("estado", estado)
     if zona:
         q = q.eq("zona", zona)
-    if especie:
-        q = q.ilike("nombre_comun", f"%{especie}%")
+    if especie and especie.strip():
+        q = q.ilike("nombre_comun", f"%{_escapar_like(especie.strip())}%")
     return q.order("registrado_en", desc=True).range(desplazamiento, desplazamiento + limite - 1).execute().data
 
 
@@ -281,15 +299,20 @@ def subir_foto(
 ):
     """Sube una foto a Storage y registra su ruta. Solo quien registró el árbol puede hacerlo.
     Reglas: una foto 'completo', una 'detalle' y hasta 3 'adicional'. JPG, PNG o WebP, máx. 5 MB."""
-    extension = EXTENSIONES.get(archivo.content_type or "")
-    if extension is None:
+    if archivo.content_type not in EXTENSIONES:
         raise HTTPException(status_code=422, detail="Formato no permitido. Usa JPG, PNG o WebP.")
 
-    contenido = archivo.file.read()
+    contenido = archivo.file.read(MAX_FOTO_BYTES + 1)  # no se lee más de lo necesario para saber si se pasa
     if not contenido:
         raise HTTPException(status_code=422, detail="El archivo está vacío")
     if len(contenido) > MAX_FOTO_BYTES:
         raise HTTPException(status_code=413, detail="La foto supera el máximo de 5 MB")
+
+    # El tipo declarado lo pone el navegador y se puede falsificar: manda el contenido real.
+    tipo_real = _tipo_real_imagen(contenido)
+    if tipo_real is None:
+        raise HTTPException(status_code=422, detail="El archivo no es una imagen JPG, PNG o WebP válida.")
+    extension = EXTENSIONES[tipo_real]
 
     cliente = db.cliente_de_usuario(sesion.token)
 
@@ -307,7 +330,7 @@ def subir_foto(
             raise HTTPException(status_code=409, detail="Ya hay 3 fotos adicionales")
 
     ruta = f"{arbol_id}/{uuid.uuid4().hex}.{extension}"
-    cliente.storage.from_(BUCKET_FOTOS).upload(ruta, contenido, {"content-type": archivo.content_type})
+    cliente.storage.from_(BUCKET_FOTOS).upload(ruta, contenido, {"content-type": tipo_real})
 
     try:
         fila = cliente.table("arbol_fotos").insert({"arbol_id": str(arbol_id), "tipo": tipo, "storage_path": ruta}).execute().data[0]

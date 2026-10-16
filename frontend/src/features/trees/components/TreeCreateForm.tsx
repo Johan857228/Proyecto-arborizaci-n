@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Controller, useController } from 'react-hook-form';
+import { Controller, useController, useWatch } from 'react-hook-form';
 import { Image } from 'expo-image';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
@@ -20,6 +20,7 @@ import {
 } from '@/shared/components/FormControls';
 import { Icon } from '@/shared/components/Icon';
 import { parseDecimal, sanitizeDecimal } from '@/shared/utils/forms';
+import { DISTANCIA_INSTITUCION_MAX_KM, PRECISION_GPS_MAX_M, distanceKm } from '@/shared/utils/geo';
 
 interface Props {
   catalogs: Catalogos;
@@ -92,6 +93,14 @@ function PhotoSlot({
 export function TreeCreateForm({ catalogs, submitting, submitError, onCancel, onSubmit }: Props) {
   const isWide = useIsWide();
   const form = useTreeCreateForm(catalogs, onSubmit);
+  // Solo se muestra el prefijo; el número lo asigna la base de datos para que dos equipos no repitan código.
+  const institucionId = useWatch({ control: form.control, name: 'institucion_id' });
+  const institucion = catalogs.instituciones.find((item) => item.id === institucionId);
+  const prefijo = institucion?.prefijo;
+  // Avisos (no bloquean): precisión baja del GPS o punto lejos de la institución elegida.
+  const ubicacion = form.gps.location;
+  const precisionBaja = ubicacion?.accuracy != null && ubicacion.accuracy > PRECISION_GPS_MAX_M;
+  const distancia = ubicacion && institucion ? distanceKm(ubicacion, institucion) : null;
   const fotoGeneral = form.photos.find((photo) => photo.tipo === 'completo');
   const fotoDetalle = form.photos.find((photo) => photo.tipo === 'detalle');
   const adicionales = form.photos.filter((photo) => photo.tipo === 'adicional');
@@ -105,9 +114,6 @@ export function TreeCreateForm({ catalogs, submitting, submitError, onCancel, on
         <Heading subtitle="Registra el árbol con ubicación, medidas, observaciones y evidencia fotográfica.">
           Registrar árbol
         </Heading>
-        <InlineMessage tone="info">
-          El código institucional se asigna automáticamente al guardar. No lo escribas ni lo modifiques.
-        </InlineMessage>
 
         <Section step={1} icon="location" title="Identificación y ubicación" description="Institución, zona del campus y coordenadas GPS.">
           <View style={styles.row}>
@@ -145,6 +151,14 @@ export function TreeCreateForm({ catalogs, submitting, submitError, onCancel, on
               />
             </View>
           </View>
+          <View style={styles.codePreview} accessible accessibilityLabel={prefijo ? `Código del árbol: ${prefijo} seguido del número que asigna el sistema` : 'Código del árbol: selecciona una institución'}>
+            <View style={styles.codeIcon}><Icon name="lock" size={18} color={palette.forestDark} /></View>
+            <View style={styles.codeText}>
+              <Text style={styles.codeLabel}>Código del árbol (no editable)</Text>
+              <Text style={styles.codeValue}>{prefijo ? `${prefijo}-····` : 'Selecciona una institución'}</Text>
+              <Text style={styles.codeCaption}>Se asigna al guardar: prefijo de la institución más el número del árbol en esa institución.</Text>
+            </View>
+          </View>
           {form.zonaActual === 'Otra' ? (
             <Controller
               name="zona_otra"
@@ -152,6 +166,7 @@ export function TreeCreateForm({ catalogs, submitting, submitError, onCancel, on
               render={({ field, fieldState }) => (
                 <Field
                   label="Especifica la zona"
+                  maxLength={120}
                   value={field.value}
                   onChangeText={field.onChange}
                   onBlur={field.onBlur}
@@ -190,6 +205,16 @@ export function TreeCreateForm({ catalogs, submitting, submitError, onCancel, on
               variant="secondary"
             />
           )}
+          {precisionBaja && ubicacion?.accuracy != null ? (
+            <InlineMessage tone="warning">
+              Precisión baja del GPS (±{Math.round(ubicacion.accuracy)} m). Si puedes, acércate a un lugar despejado y vuelve a capturar.
+            </InlineMessage>
+          ) : null}
+          {distancia != null && distancia > DISTANCIA_INSTITUCION_MAX_KM && institucion ? (
+            <InlineMessage tone="warning">
+              La ubicación está a {distancia.toFixed(1)} km de {institucion.nombre_corto}. Verifica que la institución seleccionada sea la correcta.
+            </InlineMessage>
+          ) : null}
           {form.gps.error ? <InlineMessage>{form.gps.error}</InlineMessage> : null}
           {form.errors.gps_confirmado?.message ? (
             <InlineMessage>{form.errors.gps_confirmado.message}</InlineMessage>
@@ -249,7 +274,7 @@ export function TreeCreateForm({ catalogs, submitting, submitError, onCancel, on
           ) : null}
         </Section>
 
-        <Section step={3} icon="ruler" title="Especie y medidas" description="Medidas tomadas en campo, en centímetros y metros. La altura máxima permitida es 25 m.">
+        <Section step={3} icon="ruler" title="Especie y medidas" description="Medidas tomadas en campo, en centímetros y metros. Máximos: tronco 500 cm (5 m), altura 25 m y copa 40 m.">
           <Controller
             name="especie_id"
             control={form.control}
@@ -268,13 +293,13 @@ export function TreeCreateForm({ catalogs, submitting, submitError, onCancel, on
           />
           <View style={styles.row}>
             <View style={styles.cell}>
-              <NumericField control={form.control} name="dap_cm" label="Diámetro del tronco (cm)" error={form.errors.dap_cm?.message} />
+              <NumericField control={form.control} name="dap_cm" label="Diámetro del tronco (cm)" hint="Máximo 500 cm (5 m)" error={form.errors.dap_cm?.message} />
             </View>
             <View style={styles.cell}>
               <NumericField control={form.control} name="altura_m" label="Altura (m)" hint="Máximo 25 m" error={form.errors.altura_m?.message} />
             </View>
             <View style={styles.cell}>
-              <NumericField control={form.control} name="copa_m" label="Diámetro de copa (m)" error={form.errors.copa_m?.message} />
+              <NumericField control={form.control} name="copa_m" label="Diámetro de copa (m)" hint="Máximo 40 m" error={form.errors.copa_m?.message} />
             </View>
           </View>
           <Controller
@@ -313,6 +338,7 @@ export function TreeCreateForm({ catalogs, submitting, submitError, onCancel, on
               render={({ field, fieldState }) => (
                 <Field
                   label="Describe la interferencia"
+                  maxLength={120}
                   value={field.value}
                   onChangeText={field.onChange}
                   onBlur={field.onBlur}
@@ -392,6 +418,12 @@ const styles = StyleSheet.create({
   // Campos relacionados lado a lado cuando hay espacio; en teléfonos se apilan.
   row: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 12 },
   cell: { flexGrow: 1, flexBasis: 180 },
+  codePreview: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 14, borderWidth: 1, borderStyle: 'dashed', borderColor: '#C9D6C4', backgroundColor: palette.canvas },
+  codeIcon: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 12, backgroundColor: palette.forestSoft },
+  codeText: { flex: 1, minWidth: 0, gap: 2 },
+  codeLabel: { color: palette.muted, fontSize: 12, fontFamily: fonts.semiBold },
+  codeValue: { color: palette.forestDark, fontSize: 20, fontFamily: fonts.extraBold, letterSpacing: 1 },
+  codeCaption: { color: palette.muted, fontSize: 12, lineHeight: 17 },
   gpsCaptured: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 12, backgroundColor: palette.forestSoft },
   gpsIcon: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 20, backgroundColor: palette.paper },
   gpsText: { flex: 1, minWidth: 0 },
