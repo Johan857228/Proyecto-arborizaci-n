@@ -13,6 +13,7 @@ import { PrimaryButton, Screen } from '@/shared/components/FormControls';
 import { Icon } from '@/shared/components/Icon';
 
 interface Registered {
+  id: string;
   codigo: string;
   nombreComun: string;
   photoWarning?: string;
@@ -31,6 +32,7 @@ export default function NewTreeRoute() {
     try {
       const { tree, photoError } = await registerTree.submit(values, photos);
       setRegistered({
+        id: tree.id,
         codigo: tree.codigo,
         nombreComun: tree.nombre_comun,
         photoWarning: photoError
@@ -45,11 +47,14 @@ export default function NewTreeRoute() {
   if (registered) {
     return (
       <RegistrationSuccess
-        {...registered}
+        codigo={registered.codigo}
+        nombreComun={registered.nombreComun}
+        photoWarning={registered.photoWarning}
         onRegisterAnother={() => {
           setRegistered(undefined);
           setFormKey((key) => key + 1);
         }}
+        onViewTree={() => router.push(`/(app)/trees/${registered.id}` as Href)}
         onViewInventory={() => router.navigate('/(app)/trees' as Href)}
       />
     );

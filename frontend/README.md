@@ -41,21 +41,53 @@ de guardar es el devuelto por el servidor. Las fotografías se validan antes de
 crear el registro según los metadatos disponibles del selector y se envían por
 `POST /arboles/{id}/fotos`, donde el servidor vuelve a validar el archivo.
 
-La capa `TreesGateway` separa las pantallas del transporte HTTP para facilitar
-la adaptación a futuros contratos. El frontend no genera datos de ejemplo ni
-simula inspecciones históricas: esas funciones requieren que el backend publique
-sus contratos y endpoints antes de conectarlas.
+Al registrar un árbol el backend crea su primera inspección; después se abre su
+ficha con el estado actual, los cálculos ambientales, las recomendaciones, las
+intervenciones y el historial de inspecciones.
+
+## Módulos y pantallas
+
+Todas las respuestas del backend se validan con Zod antes de usarlas
+(`getValidado` / `enviarValidado` en `services/api/client.ts`).
+
+| Ruta | Módulo | Quién la ve |
+|---|---|---|
+| `/` | Inicio: estado del arbolado, revisión pendiente, puntos y accesos según el rol | Todos |
+| `/modules` | Todos los módulos agrupados (también en la barra de navegación) | Todos |
+| `/trees`, `/trees/new`, `/trees/[id]` | Inventario, registro y ficha del árbol | Todos |
+| `/trees/[id]/inspect`, `/inspections/[id]` | Inspección de seguimiento y su detalle | Todos |
+| `/review` | Revisión: confirmar o anular inspecciones pendientes | Docente, admin |
+| `/interventions`, `/trees/[id]/intervention` | Intervenciones y recomendaciones | Todos (registrar: docente, admin) |
+| `/courses`, `/courses/[id]` | Cursos, zonas asignadas, integrantes y avance | Todos (gestionar: docente, admin) |
+| `/budgets`, `/budgets/[id]` | Presupuestos por periodo y proyecciones | Docente, admin |
+| `/settings`, `/settings/method-new` | Parámetros, versiones del método y costos | Docente (consulta), admin |
+| `/progress` | Puntos, niveles, rachas, logros y rankings | Todos |
+| `/reports` | Indicadores de inventario, riesgo, cobertura, productividad e intervenciones | Todos |
+| `/goals` | Metas institucionales y su avance | Todos (registrar: admin) |
+| `/scenarios` | Escenarios presupuestales | Docente, admin |
+| `/users`, `/profile` | Usuarios y perfil propio | Docente/admin · todos |
+
+Los permisos de la interfaz solo ocultan lo que no corresponde: quien decide es
+el backend (y el RLS de Supabase). La lista de módulos y quién ve cada uno está en
+`features/modules/modulos.ts`; la usan el inicio, la pantalla `/modules` y la
+barra de navegación.
+
+Los formularios aplican los mismos límites que la API y la base de datos: las
+medidas y el GPS de la inspección de seguimiento siguen las reglas del registro
+del árbol, y los montos tienen el tope que acepta el backend. Si aun así la API
+rechaza un dato, `describeApiDetail` (`shared/utils/apiErrors.ts`) muestra en
+español qué campos revisar.
 
 ## Iniciar sesión
 
-El frontend no contiene usuarios ni contraseñas. En modo SQLite temporal, utiliza
-las credenciales de demostración configuradas por el backend (por defecto,
-`demo@arboles.local` / `demo123`); la pantalla las muestra solo cuando `/salud`
-informa que el almacenamiento es temporal. En modo Supabase utiliza las cuentas
-creadas por el equipo backend.
+El frontend no contiene usuarios ni contraseñas: usa las cuentas creadas en
+Supabase Auth. El rol, la institución y el curso de cada cuenta se ven en
+`/profile` y los asigna el administrador.
 
 La contraseña no se guarda. En web la sesión termina al cerrar la pestaña; en
-dispositivos móviles se usa el almacenamiento seguro del sistema.
+dispositivos móviles se usa el almacenamiento seguro del sistema. Cuando el
+token vence (una hora), la app lo renueva sola con `POST /auth/refresh`; si no
+puede, cierra la sesión y lo avisa en la pantalla de inicio.
 
 ## Validar cambios
 
@@ -71,5 +103,6 @@ junto al código que prueban. `npm run test:watch` las vuelve a ejecutar al guar
 En un clon nuevo, arranca Expo una vez (`npm run web`) antes de `npm run typecheck`:
 Expo genera `expo-env.d.ts` con los tipos de los archivos CSS (no se sube a Git).
 
-El modo SQLite y sus fotos son provisionales y pertenecen al backend. No uses la
-cuenta de demostración ni los datos locales para información real o producción.
+Si la carpeta del proyecto tiene paréntesis en el nombre (por ejemplo
+`Nueva carpeta (7)`), jest-expo y ESLint no resuelven bien las rutas en Windows:
+clona el proyecto en una carpeta sin paréntesis.

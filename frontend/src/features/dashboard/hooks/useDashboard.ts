@@ -7,8 +7,12 @@ export const dashboardKeys = {
   recentTrees: ['dashboard', 'recent-trees'] as const,
 };
 
+export function useStats() {
+  return useQuery({ queryKey: dashboardKeys.stats, queryFn: dashboardService.getStats });
+}
+
 export function useDashboard() {
-  const stats = useQuery({ queryKey: dashboardKeys.stats, queryFn: dashboardService.getStats });
+  const stats = useStats();
   const recentTrees = useQuery({
     queryKey: dashboardKeys.recentTrees,
     queryFn: dashboardService.getRecentTrees,

@@ -1,15 +1,21 @@
-import { api, ApiContractError } from '@/services/api/client';
+import { api, ApiContractError, getValidado } from '@/services/api/client';
 import type { ArbolResumen } from '@/shared/types/entities';
 import {
   arbolCreatePayloadSchema,
+  arbolDetalleSchema,
   arbolesResumenSchema,
   arbolResumenSchema,
+  calculosSchema,
+  type ArbolDetalle,
+  type Calculos,
 } from '@/features/trees/schemas';
 import type { ArbolCrear, PaginaInventario } from '@/features/trees/types';
 
 export interface TreesGateway {
   getAll(query: PaginaInventario): Promise<ArbolResumen[]>;
   create(payload: ArbolCrear): Promise<ArbolResumen>;
+  getById(id: string): Promise<ArbolDetalle>;
+  getCalculos(id: string): Promise<Calculos>;
 }
 
 const apiTreesGateway: TreesGateway = {
@@ -45,6 +51,10 @@ const apiTreesGateway: TreesGateway = {
     }
     return result.data;
   },
+
+  getById: (id) => getValidado(`/arboles/${id}`, arbolDetalleSchema),
+
+  getCalculos: (id) => getValidado(`/arboles/${id}/calculos`, calculosSchema),
 };
 
 export const treesService = apiTreesGateway;

@@ -10,12 +10,14 @@ import type { FiltrosInventario, Zona } from '@/features/trees/types';
 import { treesService } from '@/features/trees/services/treesService';
 import { useIsWide } from '@/hooks/use-is-wide';
 import { getApiErrorMessage } from '@/services/api/client';
+import { formatFecha } from '@/shared/format';
 import type { ArbolResumen, EstadoArbol } from '@/shared/types/entities';
 import { InlineMessage, PrimaryButton, Screen, SelectField } from '@/shared/components/FormControls';
 import { Grid } from '@/shared/components/Grid';
 import { Icon, type IconName } from '@/shared/components/Icon';
 import { FadeIn } from '@/shared/components/Motion';
 import { StatusBadge } from '@/shared/components/StatusBadge';
+import { RevisionBadge } from '@/shared/components/UI';
 import { gradient } from '@/shared/styles/gradient';
 
 const PAGE_SIZE = 50;
@@ -51,7 +53,12 @@ function Detail({ icon, label, value }: { icon: IconName; label: string; value: 
 
 function TreeCard({ tree }: { tree: ArbolResumen }) {
   return (
-    <View style={styles.treeCard}>
+    <Pressable
+      accessibilityRole="link"
+      accessibilityLabel={`Ver ficha de ${tree.codigo}`}
+      onPress={() => router.push(`/(app)/trees/${tree.id}` as Href)}
+      style={({ pressed }) => [styles.treeCard, pressed && styles.pressed]}
+    >
       <View style={styles.treeHeader}>
         <View style={[styles.treeIcon, gradient(gradients.lime)]}><Icon name="tree" size={22} color={palette.forestDark} /></View>
         <View style={styles.treeInfo}>
@@ -81,7 +88,14 @@ function TreeCard({ tree }: { tree: ArbolResumen }) {
           <Text style={styles.measureLabel}>Observaciones</Text>
         </View>
       </View>
-    </View>
+      {tree.ultima_inspeccion_en ? (
+        <View style={styles.inspection}>
+          <Icon name="calendar" size={14} color={palette.muted} />
+          <Text style={styles.inspectionText}>Última inspección: {formatFecha(tree.ultima_inspeccion_en)}</Text>
+          {tree.ultima_revision === 'pendiente' ? <RevisionBadge estado="pendiente" /> : null}
+        </View>
+      ) : null}
+    </Pressable>
   );
 }
 
@@ -157,6 +171,7 @@ export default function TreeListScreen() {
             <Text style={styles.title}>Inventario de árboles</Text>
             <Text style={styles.subtitle}>
               Consulta los registros institucionales y filtra por estado, institución, especie o zona.
+              Toca un árbol para ver su ficha, su historial de inspecciones y sus intervenciones.
             </Text>
           </View>
           <View style={styles.headerAction}>
@@ -373,4 +388,6 @@ const styles = StyleSheet.create({
   measure: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 12, backgroundColor: palette.canvas },
   measureValue: { color: palette.ink, fontSize: 15, fontFamily: fonts.extraBold },
   measureLabel: { marginTop: 2, color: palette.muted, fontSize: 11 },
+  inspection: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
+  inspectionText: { color: palette.muted, fontSize: 12 },
 });

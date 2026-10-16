@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import type { Catalogos } from '@/features/catalogs/types';
+import { textoOpcional } from '@/shared/validacion';
 import { isInColombia } from '@/shared/utils/geo';
 
 // Medida numérica con mensajes en español: vacía ("Ingresa…") o con un valor que no es número.
@@ -33,6 +34,9 @@ const arbolFieldsSchema = z.object({
   ]),
   interferencia_otra: z.string().trim().max(120, 'Máximo 120 caracteres.').optional(),
   observaciones: z.array(z.string().min(1)).max(50, 'Selecciona como máximo 50 observaciones.'),
+  // Se guardan en la primera inspección del árbol (la del registro).
+  precision_gps_m: z.number().min(0).max(10000).nullable().optional(),
+  notas: textoOpcional(1000),
 }).strict();
 
 function validateTreeRules(
@@ -137,9 +141,52 @@ export const arbolResumenSchema = z.object({
   registrado_en: z.string().min(1),
   n_observaciones: z.number().int().nonnegative(),
   estado: z.enum(['sano', 'riesgo', 'critico']),
+  // Desde la migración 001 la vista trae el resumen de la última inspección
+  especie_id: z.number().nullable().optional(),
+  registrado_por: z.string().nullable().optional(),
+  puntaje_riesgo: z.number().nullable().optional(),
+  ultima_inspeccion_id: z.string().nullable().optional(),
+  ultima_inspeccion_en: z.string().nullable().optional(),
+  ultima_revision: z.enum(['pendiente', 'confirmada', 'anulada']).nullable().optional(),
+  n_inspecciones: z.number().int().nullable().optional(),
 });
 
 export const arbolesResumenSchema = z.array(arbolResumenSchema);
+
+export const observacionOutSchema = z.object({
+  codigo: z.string().min(1),
+  grupo: z.string().min(1),
+  etiqueta: z.string().min(1),
+});
+
+export const fotoOutSchema = z.object({
+  id: z.string().min(1),
+  tipo: z.enum(['completo', 'detalle', 'adicional']),
+  url: z.string().nullable(),
+});
+
+export const arbolDetalleSchema = arbolResumenSchema.extend({
+  observaciones: z.array(observacionOutSchema),
+  fotos: z.array(fotoOutSchema),
+});
+export type ArbolDetalle = z.infer<typeof arbolDetalleSchema>;
+
+export const calculosSchema = z.object({
+  codigo: z.string(),
+  nombre_comun: z.string(),
+  dap_cm: z.number(),
+  altura_m: z.number(),
+  densidad_madera: z.number(),
+  biomasa_aerea_kg: z.number(),
+  biomasa_raiz_kg: z.number(),
+  biomasa_total_kg: z.number(),
+  carbono_kg: z.number(),
+  co2_kg: z.number(),
+  o2_kg: z.number(),
+  metodo: z.string(),
+  advertencia: z.string(),
+});
+export type Calculos = z.infer<typeof calculosSchema>;
 
 export const fotoLocalSchema = z.object({
   tipo: z.enum(['completo', 'detalle', 'adicional']),

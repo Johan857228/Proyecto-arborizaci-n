@@ -1,0 +1,9 @@
+# Vercel instala y construye por su cuenta: no se suben dependencias, compilados ni claves.
+node_modules
+.expo
+dist
+web-build
+ios
+android
+.env
+*.log

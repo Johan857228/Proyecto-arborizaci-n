@@ -37,6 +37,7 @@ export function Field({
     <View style={styles.fieldWrap}>
       <Text style={styles.label}>{label}</Text>
       <TextInput
+        accessibilityLabel={label}
         {...props}
         onFocus={(event) => {
           setFocused(true);

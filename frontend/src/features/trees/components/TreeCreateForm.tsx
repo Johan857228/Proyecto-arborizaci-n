@@ -111,7 +111,7 @@ export function TreeCreateForm({ catalogs, submitting, submitError, onCancel, on
         <View style={styles.backAction}>
           <PrimaryButton title="Inventario" icon="back" variant="ghost" compact onPress={onCancel} />
         </View>
-        <Heading subtitle="Registra el árbol con ubicación, medidas, observaciones y evidencia fotográfica.">
+        <Heading subtitle="Registra el árbol con ubicación, medidas, observaciones y evidencia fotográfica. Al guardar queda como su primera inspección, que revisará un docente.">
           Registrar árbol
         </Heading>
 
@@ -354,6 +354,23 @@ export function TreeCreateForm({ catalogs, submitting, submitError, onCancel, on
             error={form.errors.observaciones?.message}
             onToggle={form.toggleObservation}
             onClear={form.clearObservations}
+          />
+          <View style={styles.divider} />
+          <Controller
+            name="notas"
+            control={form.control}
+            render={({ field, fieldState }) => (
+              <Field
+                label="Notas de la inspección (opcional)"
+                maxLength={1000}
+                value={field.value ?? ''}
+                onChangeText={field.onChange}
+                onBlur={field.onBlur}
+                multiline
+                placeholder="Lo que observaste y no está en la lista"
+                error={fieldState.error?.message}
+              />
+            )}
           />
         </Section>
 

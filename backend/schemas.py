@@ -33,6 +33,11 @@ Interferencia = Literal[
 ]
 Estado = Literal["sano", "riesgo", "critico"]
 TipoFoto = Literal["completo", "detalle", "adicional"]
+EstadoRevision = Literal["pendiente", "confirmada", "anulada"]
+OrigenInspeccion = Literal["registro", "seguimiento"]
+Rol = Literal["administrador", "docente", "estudiante"]
+
+ZONAS: tuple[str, ...] = ("Patio central", "Entrada principal", "Zona deportiva", "Bloques académicos", "Otra")
 
 
 # ------------------------------- Autenticación -------------------------------
@@ -44,6 +49,10 @@ class LoginIn(BaseModel):
     @classmethod
     def _normalizar_email(cls, v):
         return v.strip().lower() if isinstance(v, str) else v
+
+
+class RefrescarIn(BaseModel):
+    refresh_token: str = Field(min_length=10)
 
 
 class SesionOut(BaseModel):
@@ -105,9 +114,13 @@ class ArbolCrear(BaseModel):
         max_length=MAX_OBSERVACIONES,
         description="Códigos de las casillas marcadas, p. ej. f_manchas",
     )
+    precision_gps_m: float | None = Field(
+        default=None, ge=0, le=10000, description="Precisión que reporta el GPS del dispositivo, en metros"
+    )
+    notas: str | None = Field(default=None, max_length=1000, description="Notas de la primera inspección")
 
     # mode="before": se limpian los espacios ANTES de medir el largo del texto
-    @field_validator("zona_otra", "interferencia_otra", mode="before")
+    @field_validator("zona_otra", "interferencia_otra", "notas", mode="before")
     @classmethod
     def _limpiar_texto(cls, v):
         if isinstance(v, str):
@@ -146,6 +159,14 @@ class ArbolResumen(BaseModel):
     registrado_en: datetime
     n_observaciones: int
     estado: Estado
+    # Columnas de la vista desde la migración 001 (opcionales para no romper datos anteriores)
+    especie_id: int | None = None
+    registrado_por: str | None = None
+    puntaje_riesgo: float | None = None
+    ultima_inspeccion_id: str | None = None
+    ultima_inspeccion_en: datetime | None = None
+    ultima_revision: EstadoRevision | None = None
+    n_inspecciones: int | None = None
 
 
 class ObservacionOut(BaseModel):
@@ -208,6 +229,7 @@ class TotalesAmbientales(BaseModel):
 
 class Estadisticas(BaseModel):
     total: int
+    inspecciones_pendientes: int = 0
     por_estado: dict[str, int]
     por_institucion: list[ConteoInstitucion]
     por_etapa: dict[str, int]

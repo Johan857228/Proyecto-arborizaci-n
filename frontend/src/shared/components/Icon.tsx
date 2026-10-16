@@ -39,6 +39,19 @@ const icons = {
   trending: { ios: 'chart.line.uptrend.xyaxis', material: 'trending_up' },
   pest: { ios: 'ant.fill', material: 'pest_control' },
   roots: { ios: 'leaf.arrow.triangle.circlepath', material: 'psychiatry' },
+  // Módulos
+  modules: { ios: 'square.grid.2x2.fill', material: 'apps' },
+  review: { ios: 'checkmark.seal.fill', material: 'fact_check' },
+  tools: { ios: 'wrench.and.screwdriver.fill', material: 'construction' },
+  school: { ios: 'graduationcap.fill', material: 'school' },
+  trophy: { ios: 'trophy.fill', material: 'emoji_events' },
+  chart: { ios: 'chart.bar.fill', material: 'bar_chart' },
+  flag: { ios: 'flag.fill', material: 'flag' },
+  wallet: { ios: 'banknote.fill', material: 'payments' },
+  tune: { ios: 'slider.horizontal.3', material: 'tune' },
+  settings: { ios: 'gearshape.fill', material: 'settings' },
+  users: { ios: 'person.2.fill', material: 'group' },
+  person: { ios: 'person.crop.circle.fill', material: 'account_circle' },
 } satisfies Record<string, { ios: SFSymbol; material: AndroidSymbol }>;
 
 export type IconName = keyof typeof icons;

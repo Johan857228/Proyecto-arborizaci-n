@@ -12,6 +12,7 @@ Cadena de cálculo:
     5. CO₂ equivalente (kg) ← carbono × 44/12
     6. O₂ (kg)              ← CO₂ × 32/44   (relación estequiométrica de la fotosíntesis)
 """
+import math
 
 # ----------------------------- Constantes ajustables -----------------------------
 # Densidad de la madera (g/cm³) cuando no se conoce la de la especie.
@@ -41,8 +42,8 @@ ADVERTENCIA = "Estimación aproximada. Confirmar las fórmulas con el docente."
 
 
 # ----------------------------------- Funciones -----------------------------------
-def densidad_madera(nombre_comun: str | None) -> float:
-    return DENSIDADES.get(nombre_comun or "", DENSIDAD_POR_DEFECTO)
+def densidad_madera(nombre_comun: str | None, por_defecto: float | None = None) -> float:
+    return DENSIDADES.get(nombre_comun or "", DENSIDAD_POR_DEFECTO if por_defecto is None else por_defecto)
 
 
 def biomasa_aerea_kg(dap_cm: float, altura_m: float, densidad: float) -> float:
@@ -50,13 +51,25 @@ def biomasa_aerea_kg(dap_cm: float, altura_m: float, densidad: float) -> float:
     return 0.0673 * (densidad * dap_cm**2 * altura_m) ** 0.976
 
 
-def calcular(dap_cm: float, altura_m: float, nombre_comun: str | None = None) -> dict:
-    """Devuelve todas las magnitudes (kg) redondeadas a 2 decimales."""
-    rho = densidad_madera(nombre_comun)
+def calcular(
+    dap_cm: float,
+    altura_m: float,
+    nombre_comun: str | None = None,
+    *,
+    densidad_defecto: float | None = None,
+    factor_raiz: float | None = None,
+    fraccion_carbono: float | None = None,
+) -> dict:
+    """Devuelve todas las magnitudes (kg) redondeadas a 2 decimales.
+
+    Las tres constantes opcionales vienen de la versión del método de cálculo
+    (tabla metodos_calculo); si no se envían se usan las de este archivo.
+    """
+    rho = densidad_madera(nombre_comun, densidad_defecto)
     aerea = biomasa_aerea_kg(dap_cm, altura_m, rho)
-    raiz = aerea * FACTOR_RAIZ
+    raiz = aerea * (FACTOR_RAIZ if factor_raiz is None else factor_raiz)
     total = aerea + raiz
-    carbono = total * FRACCION_CARBONO
+    carbono = total * (FRACCION_CARBONO if fraccion_carbono is None else fraccion_carbono)
     co2 = carbono * RAZON_CO2_CARBONO
     o2 = co2 * RAZON_O2_CO2
     return {
@@ -68,6 +81,11 @@ def calcular(dap_cm: float, altura_m: float, nombre_comun: str | None = None) ->
         "co2_kg": round(co2, 2),
         "o2_kg": round(o2, 2),
     }
+
+
+def area_copa_m2(copa_m: float) -> float:
+    """Área de la copa vista desde arriba, como un círculo de diámetro copa_m."""
+    return round(math.pi * (copa_m / 2) ** 2, 2)
 
 
 def estado_por_observaciones(n_observaciones: int) -> str:

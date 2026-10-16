@@ -7,6 +7,7 @@ import type { ArbolResumen } from '@/shared/types/entities';
 
 const estadisticasSchema = z.object({
   total: z.number().int().nonnegative(),
+  inspecciones_pendientes: z.number().int().nonnegative().optional(),
   por_estado: z.record(z.string(), z.number().int().nonnegative()),
   por_institucion: z.array(z.object({
     prefijo: z.string(),

@@ -40,6 +40,8 @@ export interface ArbolCrear {
   interferencia: Interferencia;
   interferencia_otra?: string | null;
   observaciones: string[];
+  precision_gps_m?: number | null;
+  notas?: string;
 }
 
 export interface FotoLocal {

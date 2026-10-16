@@ -1,11 +1,14 @@
 """API del Inventario Arbóreo Escolar (FastAPI + Supabase).
 
 Arquitectura:
-    React  →  FastAPI (este archivo)  →  Supabase (PostgreSQL + RLS + Storage)
+    React  →  FastAPI (este archivo y routers/)  →  Supabase (PostgreSQL + RLS + Storage)
 
 - Los datos del usuario se leen y escriben con SU token, así el RLS de Supabase
   decide qué puede ver y editar (ver db.py y auth.py).
-- La lógica (validaciones, biomasa, CO2, O2, estadísticas) vive aquí, en Python.
+- La lógica (validaciones, biomasa, CO2, O2, estadísticas, indicadores) vive en Python
+  (calculos.py y servicios/).
+- Las tablas de los módulos nuevos se crean con backend/sql/001_fase1_modulos.sql y
+  backend/sql/002_fase2_metas_escenarios.sql.
 
 Ejecutar:  uvicorn main:app --reload
 Docs:      http://127.0.0.1:8000/docs
@@ -19,11 +22,34 @@ from fastapi import Depends, FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from postgrest.exceptions import APIError
-from supabase_auth.errors import AuthApiError
+from supabase_auth.errors import AuthApiError, AuthError
 
-import calculos
+import datos
 import db
-from auth import Sesion, usuario_actual
+from auth import Perfil, Sesion, perfil_actual, usuario_actual
+from comun import (
+    BUCKET_FOTOS,
+    EXTENSIONES,
+    MAX_FOTOS_ADICIONALES,
+    escapar_like,
+    resumen_por_id,
+    tipo_real_imagen,
+    traer_todo,
+    url_firmada,
+)
+from routers import (
+    configuracion,
+    cursos,
+    escenarios,
+    gamificacion,
+    inspecciones,
+    intervenciones,
+    metas,
+    presupuestos,
+    reportes,
+    usuarios,
+)
+from routers.inspecciones import InspeccionCrear, registrar_inspeccion
 from schemas import (
     ArbolCrear,
     ArbolDetalle,
@@ -38,16 +64,22 @@ from schemas import (
     LoginIn,
     ObservacionOut,
     Promedios,
+    RefrescarIn,
     SesionOut,
     TipoFoto,
     TotalesAmbientales,
     Zona,
 )
+from servicios.calificacion import calcular_ambientales, descripcion_metodo
 
 app = FastAPI(
     title="Inventario Arbóreo Escolar API",
-    version="1.0.0",
-    description="Backend del inventario arbóreo: registro de árboles, fotos, cálculos y estadísticas.",
+    version="2.0.0",
+    description=(
+        "Backend del inventario arbóreo: árboles, inspecciones con historial y revisión, "
+        "intervenciones, cursos, presupuestos, configuración del método de cálculo, "
+        "gamificación, reportes, metas y escenarios presupuestales."
+    ),
 )
 
 # CORS: qué páginas web (orígenes) tienen permiso para llamar a esta API desde el navegador.
@@ -69,10 +101,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-BUCKET_FOTOS = "fotos-arboles"
 MAX_FOTO_BYTES = 5 * 1024 * 1024
-MAX_FOTOS_ADICIONALES = 3
-EXTENSIONES = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}
 
 
 # =============================== Manejo de errores ===============================
@@ -83,6 +112,8 @@ ERRORES_DB = {
     "23503": (422, "Referencia a un dato que no existe (institución, especie u observación)"),
     "23505": (409, "Ese registro ya existe (por ejemplo, ya hay una foto de ese tipo)"),
     "42501": (403, "No tienes permiso para esta operación"),
+    "42P01": (503, "Falta una tabla en la base de datos: aplica las migraciones de backend/sql"),
+    "PGRST205": (503, "Falta una tabla en la base de datos: aplica las migraciones de backend/sql"),
 }
 
 
@@ -90,55 +121,19 @@ ERRORES_DB = {
 async def manejar_error_db(request, exc: APIError):
     codigo = str(getattr(exc, "code", "") or "")
     estado, mensaje = ERRORES_DB.get(codigo, (500, "Error en la base de datos"))
+    tecnico = getattr(exc, "message", None)
+    # Los triggers de la migración 001 explican en el mensaje qué regla se rompió.
+    if codigo in ("23514", "42501") and tecnico and not tecnico.startswith(("new row", "permission denied")):
+        mensaje = tecnico
     return JSONResponse(
         status_code=estado,
-        content={"detail": mensaje, "codigo_db": codigo, "tecnico": getattr(exc, "message", None)},
+        content={"detail": mensaje, "codigo_db": codigo, "tecnico": tecnico},
     )
 
 
-# ================================== Utilidades ===================================
-def _resumen_por_id(cliente, arbol_id: str) -> dict:
-    filas = cliente.table("arboles_resumen").select("*").eq("id", arbol_id).execute().data
-    if not filas:
-        raise HTTPException(status_code=404, detail="Árbol no encontrado")
-    return filas[0]
-
-
-def _traer_todo(cliente, tabla: str, columnas: str, tam: int = 1000) -> list[dict]:
-    """PostgREST devuelve máximo 1000 filas por petición: se pide por páginas."""
-    filas: list[dict] = []
-    inicio = 0
-    while True:
-        lote = cliente.table(tabla).select(columnas).range(inicio, inicio + tam - 1).execute().data
-        filas.extend(lote)
-        if len(lote) < tam:
-            return filas
-        inicio += tam
-
-
-def _escapar_like(texto: str) -> str:
-    """Busca el texto tal cual: en LIKE, % y _ son comodines y PostgREST trata * como %."""
-    texto = texto.replace("*", "")
-    return texto.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-
-
-def _tipo_real_imagen(contenido: bytes) -> str | None:
-    """Reconoce el formato por los primeros bytes del archivo (su firma), no por lo que dice el navegador."""
-    if contenido.startswith(b"\xff\xd8\xff"):
-        return "image/jpeg"
-    if contenido.startswith(b"\x89PNG\r\n\x1a\n"):
-        return "image/png"
-    if contenido[:4] == b"RIFF" and contenido[8:12] == b"WEBP":
-        return "image/webp"
-    return None
-
-
-def _url_firmada(cliente, ruta: str, segundos: int = 3600) -> str | None:
-    try:
-        r = cliente.storage.from_(BUCKET_FOTOS).create_signed_url(ruta, segundos)
-        return r.get("signedURL") or r.get("signedUrl")
-    except Exception:
-        return None
+for modulo in (inspecciones, intervenciones, cursos, usuarios, presupuestos, configuracion,
+               gamificacion, reportes, metas, escenarios):
+    app.include_router(modulo.router)
 
 
 # ===================================== Salud =====================================
@@ -148,20 +143,9 @@ def salud():
 
 
 # ================================ Autenticación ==================================
-@app.post("/auth/login", response_model=SesionOut, tags=["Autenticación"])
-def login(datos: LoginIn):
-    """Inicia sesión y devuelve el token. El frontend lo envía luego como
-    `Authorization: Bearer <access_token>`."""
-    try:
-        res = db.nuevo_cliente_anon().auth.sign_in_with_password(
-            {"email": datos.email, "password": datos.password}
-        )
-    except AuthApiError:
-        raise HTTPException(status_code=401, detail="Correo o contraseña incorrectos")
-
-    if res.session is None or res.user is None:
+def _sesion(res) -> SesionOut:
+    if res is None or res.session is None or res.user is None:
         raise HTTPException(status_code=401, detail="No se pudo iniciar sesión")
-
     return SesionOut(
         access_token=res.session.access_token,
         refresh_token=res.session.refresh_token,
@@ -169,6 +153,29 @@ def login(datos: LoginIn):
         user_id=str(res.user.id),
         email=res.user.email,
     )
+
+
+@app.post("/auth/login", response_model=SesionOut, tags=["Autenticación"])
+def login(datos_login: LoginIn):
+    """Inicia sesión y devuelve el token. El frontend lo envía luego como
+    `Authorization: Bearer <access_token>`."""
+    try:
+        res = db.nuevo_cliente_anon().auth.sign_in_with_password(
+            {"email": datos_login.email, "password": datos_login.password}
+        )
+    except AuthApiError:
+        raise HTTPException(status_code=401, detail="Correo o contraseña incorrectos")
+    return _sesion(res)
+
+
+@app.post("/auth/refresh", response_model=SesionOut, tags=["Autenticación"])
+def refrescar(d: RefrescarIn):
+    """Cambia el refresh_token por una sesión nueva cuando el access_token expira (1 hora)."""
+    try:
+        res = db.nuevo_cliente_anon().auth.refresh_session(d.refresh_token)
+    except AuthError:  # token inválido, vencido o ya usado
+        raise HTTPException(status_code=401, detail="La sesión expiró. Inicia sesión de nuevo.")
+    return _sesion(res)
 
 
 # ================================== Catálogos ====================================
@@ -190,34 +197,54 @@ def catalogos():
 
 # ==================================== Árboles ====================================
 @app.post("/arboles", response_model=ArbolResumen, status_code=201, tags=["Árboles"])
-def crear_arbol(datos: ArbolCrear, sesion: Sesion = Depends(usuario_actual)):
-    """Registra un árbol con sus observaciones. El código (IE001-0001) y el
-    usuario que lo registra los asigna la base de datos."""
-    cliente = db.cliente_de_usuario(sesion.token)
+def crear_arbol(datos_arbol: ArbolCrear, perfil: Perfil = Depends(perfil_actual)):
+    """Registra un árbol con sus observaciones y crea su primera inspección (origen
+    'registro'), que queda pendiente de revisión. El código (IE001-0001) y el usuario que
+    lo registra los asigna la base de datos."""
+    cliente = db.cliente_de_usuario(perfil.sesion.token)
 
     # 1) Validar que las casillas marcadas existan en el catálogo
-    codigos = sorted(set(datos.observaciones))
+    codigos = sorted(set(datos_arbol.observaciones))
     if codigos:
         validos = {f["codigo"] for f in cliente.table("observaciones_catalogo").select("codigo").execute().data}
         invalidos = [c for c in codigos if c not in validos]
         if invalidos:
             raise HTTPException(status_code=422, detail=f"Observaciones no válidas: {invalidos}")
 
-    # 2) Guardar el árbol
-    fila = datos.model_dump(exclude={"observaciones"})
+    # 2) Guardar el árbol (solo sus columnas: la precisión y las notas son de la inspección)
+    fila = datos_arbol.model_dump(exclude={"observaciones", "precision_gps_m", "notas"})
     creado = cliente.table("arboles").insert(fila).execute().data[0]
 
-    # 3) Guardar las observaciones; si falla, se borra el árbol para no dejarlo a medias
-    if codigos:
-        try:
+    # 3) Guardar las observaciones y la inspección de registro; si algo falla, se borra el
+    #    árbol (y en cascada lo que alcanzó a guardarse) para no dejarlo a medias.
+    try:
+        if codigos:
             cliente.table("arbol_observaciones").insert(
                 [{"arbol_id": creado["id"], "observacion_codigo": c} for c in codigos]
             ).execute()
-        except Exception:
-            db.get_admin().table("arboles").delete().eq("id", creado["id"]).execute()
-            raise
+        registrar_inspeccion(
+            cliente,
+            creado,
+            InspeccionCrear(
+                lat=datos_arbol.lat,
+                lng=datos_arbol.lng,
+                precision_gps_m=datos_arbol.precision_gps_m,
+                dap_cm=datos_arbol.dap_cm,
+                altura_m=datos_arbol.altura_m,
+                copa_m=datos_arbol.copa_m,
+                etapa=datos_arbol.etapa,
+                interferencia=datos_arbol.interferencia,
+                interferencia_otra=datos_arbol.interferencia_otra,
+                observaciones=codigos,
+                notas=datos_arbol.notas,
+            ),
+            "registro",
+        )
+    except Exception:
+        db.get_admin().table("arboles").delete().eq("id", creado["id"]).execute()
+        raise
 
-    return _resumen_por_id(cliente, creado["id"])
+    return resumen_por_id(cliente, creado["id"])
 
 
 @app.get("/arboles", response_model=list[ArbolResumen], tags=["Árboles"])
@@ -240,51 +267,57 @@ def listar_arboles(
     if zona:
         q = q.eq("zona", zona)
     if especie and especie.strip():
-        q = q.ilike("nombre_comun", f"%{_escapar_like(especie.strip())}%")
+        q = q.ilike("nombre_comun", f"%{escapar_like(especie.strip())}%")
     return q.order("registrado_en", desc=True).range(desplazamiento, desplazamiento + limite - 1).execute().data
 
 
 @app.get("/arboles/{arbol_id}", response_model=ArbolDetalle, tags=["Árboles"])
 def detalle_arbol(arbol_id: UUID, sesion: Sesion = Depends(usuario_actual)):
-    """Un árbol con sus observaciones y sus fotos (URLs temporales)."""
+    """Un árbol con los hallazgos de su última inspección válida y sus fotos de registro
+    (URLs temporales). El historial completo está en /arboles/{id}/inspecciones."""
     cliente = db.cliente_de_usuario(sesion.token)
-    resumen = _resumen_por_id(cliente, str(arbol_id))
+    resumen = resumen_por_id(cliente, str(arbol_id))
+    catalogo = datos.catalogo_observaciones(cliente)
 
-    filas_obs = (
-        cliente.table("arbol_observaciones")
-        .select("observacion_codigo, observaciones_catalogo(grupo, etiqueta)")
-        .eq("arbol_id", str(arbol_id))
-        .execute()
-        .data
-    )
-    observaciones = [
-        ObservacionOut(
-            codigo=f["observacion_codigo"],
-            grupo=f["observaciones_catalogo"]["grupo"],
-            etiqueta=f["observaciones_catalogo"]["etiqueta"],
+    if resumen.get("ultima_inspeccion_id"):
+        codigos = datos.observaciones_por_inspeccion(cliente, [str(resumen["ultima_inspeccion_id"])]).get(
+            str(resumen["ultima_inspeccion_id"]), []
         )
-        for f in filas_obs
+    else:  # árbol sin inspecciones (datos anteriores a la migración 001)
+        filas_obs = cliente.table("arbol_observaciones").select("observacion_codigo").eq("arbol_id", str(arbol_id)).execute().data
+        codigos = [f["observacion_codigo"] for f in filas_obs]
+    observaciones = [
+        ObservacionOut(codigo=c, grupo=catalogo[c]["grupo"], etiqueta=catalogo[c]["etiqueta"])
+        for c in codigos
+        if c in catalogo
     ]
 
     filas_fotos = cliente.table("arbol_fotos").select("id, tipo, storage_path").eq("arbol_id", str(arbol_id)).execute().data
-    fotos = [FotoOut(id=f["id"], tipo=f["tipo"], url=_url_firmada(cliente, f["storage_path"])) for f in filas_fotos]
+    fotos = [FotoOut(id=str(f["id"]), tipo=f["tipo"], url=url_firmada(cliente, f["storage_path"])) for f in filas_fotos]
 
     return ArbolDetalle(**resumen, observaciones=observaciones, fotos=fotos)
 
 
+def _metodo_del_arbol(cliente, arbol: dict):
+    metodos = datos.metodos(cliente)
+    return metodos.get(str(arbol.get("ultimo_metodo_id"))) or datos.metodo_por_defecto(metodos)
+
+
 @app.get("/arboles/{arbol_id}/calculos", response_model=Calculos, tags=["Árboles"])
 def calculos_arbol(arbol_id: UUID, sesion: Sesion = Depends(usuario_actual)):
-    """Biomasa, carbono, CO2 y O2 estimados para un árbol."""
+    """Biomasa, carbono, CO2 y O2 estimados para un árbol, con las constantes de la versión
+    del método con que se calificó su última inspección."""
     cliente = db.cliente_de_usuario(sesion.token)
-    a = _resumen_por_id(cliente, str(arbol_id))
-    valores = calculos.calcular(a["dap_cm"], a["altura_m"], a["nombre_comun"])
+    a = resumen_por_id(cliente, str(arbol_id))
+    metodo = _metodo_del_arbol(cliente, a)
+    valores = calcular_ambientales(metodo, a["dap_cm"], a["altura_m"], a["nombre_comun"])
     return Calculos(
         codigo=a["codigo"],
         nombre_comun=a["nombre_comun"],
         dap_cm=a["dap_cm"],
         altura_m=a["altura_m"],
-        metodo=calculos.METODO,
-        advertencia=calculos.ADVERTENCIA,
+        metodo=descripcion_metodo(metodo),
+        advertencia="Estimación aproximada. Confirmar las fórmulas con el docente.",
         **valores,
     )
 
@@ -309,7 +342,7 @@ def subir_foto(
         raise HTTPException(status_code=413, detail="La foto supera el máximo de 5 MB")
 
     # El tipo declarado lo pone el navegador y se puede falsificar: manda el contenido real.
-    tipo_real = _tipo_real_imagen(contenido)
+    tipo_real = tipo_real_imagen(contenido)
     if tipo_real is None:
         raise HTTPException(status_code=422, detail="El archivo no es una imagen JPG, PNG o WebP válida.")
     extension = EXTENSIONES[tipo_real]
@@ -349,11 +382,13 @@ def subir_foto(
 def estadisticas(sesion: Sesion = Depends(usuario_actual)):
     """Datos para las pantallas de inicio y estadísticas."""
     cliente = db.cliente_de_usuario(sesion.token)
-    filas = _traer_todo(
+    filas = traer_todo(
         cliente,
         "arboles_resumen",
-        "prefijo, nombre_corto, nombre_comun, dap_cm, altura_m, copa_m, etapa, estado",
+        "id, prefijo, nombre_corto, nombre_comun, dap_cm, altura_m, copa_m, etapa, estado, ultimo_metodo_id",
     )
+    metodos = datos.metodos(cliente)
+    defecto = datos.metodo_por_defecto(metodos)
 
     total = len(filas)
     por_estado = {"sano": 0, "riesgo": 0, "critico": 0}
@@ -371,12 +406,16 @@ def estadisticas(sesion: Sesion = Depends(usuario_actual)):
 
     totales = {"biomasa_total_kg": 0.0, "carbono_kg": 0.0, "co2_kg": 0.0, "o2_kg": 0.0}
     for f in filas:
-        c = calculos.calcular(f["dap_cm"], f["altura_m"], f["nombre_comun"])
+        metodo = metodos.get(str(f.get("ultimo_metodo_id"))) or defecto
+        c = calcular_ambientales(metodo, f["dap_cm"], f["altura_m"], f["nombre_comun"])
         for clave in totales:
             totales[clave] += c[clave]
 
+    pendientes = traer_todo(cliente, "inspecciones", "id", filtros=[("eq", ("estado_revision", "pendiente"))])
+
     return Estadisticas(
         total=total,
+        inspecciones_pendientes=len(pendientes),
         por_estado=por_estado,
         por_institucion=por_institucion,
         por_etapa=dict(Counter(f["etapa"] for f in filas)),

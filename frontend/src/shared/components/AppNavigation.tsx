@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { fonts, gradients, layout, palette } from '@/config/constants';
 import { useAuthStore } from '@/features/auth/store';
+import { esRutaDeModulo } from '@/features/modules/modulos';
 import { useIsWide } from '@/hooks/use-is-wide';
 import { queryClient } from '@/services/api/queryClient';
 import { BrandMark } from '@/shared/components/BrandMark';
@@ -12,8 +13,10 @@ import { gradient } from '@/shared/styles/gradient';
 
 const navItems: { label: string; icon: IconName; href: Href; isActive: (path: string) => boolean }[] = [
   { label: 'Inicio', icon: 'home', href: '/(app)' as Href, isActive: (path) => path === '/' },
-  { label: 'Inventario', icon: 'list', href: '/(app)/trees' as Href, isActive: (path) => path === '/trees' },
+  // La ficha de un árbol (/trees/<id>) también es parte del inventario.
+  { label: 'Inventario', icon: 'list', href: '/(app)/trees' as Href, isActive: (path) => path === '/trees' || (path.startsWith('/trees/') && path !== '/trees/new') },
   { label: 'Registrar', icon: 'addCircle', href: '/(app)/trees/new' as Href, isActive: (path) => path === '/trees/new' },
+  { label: 'Módulos', icon: 'modules', href: '/(app)/modules' as Href, isActive: esRutaDeModulo },
 ];
 
 async function signOut() {
@@ -67,9 +70,14 @@ export function AppHeader() {
 
         <View style={styles.account}>
           {isWide && email ? <Text style={styles.email} numberOfLines={1}>{email}</Text> : null}
-          <View style={styles.avatar}>
+          <Pressable
+            accessibilityRole="link"
+            accessibilityLabel="Mi perfil"
+            onPress={() => router.navigate('/(app)/profile' as Href)}
+            style={({ pressed }) => [styles.avatar, pressed && styles.pressed]}
+          >
             <Text style={styles.avatarText}>{email?.[0]?.toUpperCase() ?? 'A'}</Text>
-          </View>
+          </Pressable>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Cerrar sesión"

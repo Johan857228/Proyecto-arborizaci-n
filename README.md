@@ -31,6 +31,15 @@ uvicorn main:app --reload
 Antes de arrancarlo, copia `backend/.env.example` como `backend/.env` y completa las claves de Supabase
 (ver [Variables de entorno](#variables-de-entorno)).
 
+**Base de datos:** aplica una vez, en Supabase → SQL Editor y en este orden,
+`backend/sql/001_fase1_modulos.sql`, `backend/sql/002_fase2_metas_escenarios.sql` y
+`backend/sql/003_validaciones.sql`. Las dos primeras crean las tablas de inspecciones, revisión,
+intervenciones, cursos, presupuestos, configuración, metas y escenarios sin borrar datos; la tercera
+agrega en la base los mismos límites que validan el formulario y la API (medidas máximas, coordenadas
+dentro de Colombia y largo de los textos "Otra"). Después asigna
+el rol de administrador a tu cuenta (instrucciones al final del primer archivo y en
+[`backend/README_backend.md`](backend/README_backend.md#migraciones-de-la-base-de-datos)).
+
 El backend queda disponible en `http://127.0.0.1:8000` (documentación interactiva en `/docs`).
 Pruebas: `python -m pytest -q` (usan un Supabase falso, no necesitan claves). Más detalles en
 [`backend/README_backend.md`](backend/README_backend.md).
@@ -57,6 +66,10 @@ npm test
 
 La primera vez, arranca Expo una vez (`npm run web`) antes de `npm run typecheck`: Expo genera
 `expo-env.d.ts`, que trae los tipos de los archivos CSS y no se sube a Git.
+
+Si clonas el proyecto en una carpeta cuyo nombre tiene paréntesis (por ejemplo `Nueva carpeta (7)`),
+`npm test` y `npm run lint` fallan por cómo jest-expo y ESLint leen esas rutas en Windows. Usa una carpeta
+sin paréntesis.
 
 ## Flujo de trabajo del equipo
 
@@ -86,3 +99,29 @@ CORS_ORIGINS=
 ```
 EXPO_PUBLIC_API_URL=http://192.168.1.20:8000
 ```
+
+## Despliegue
+
+| Parte | Dónde | Dirección |
+|---|---|---|
+| Frontend (Expo web) | Vercel, proyecto `inventario-arboreo` | https://inventario-arboreo.vercel.app |
+| Backend (FastAPI) | Railway, proyecto `inventario-arboreo`, servicio `backend` | https://backend-production-2f7d.up.railway.app |
+| Base de datos, Auth y fotos | Supabase, proyecto `inventario-arboreo` | migraciones `backend/sql/001` → `002` → `003` ya aplicadas |
+
+Variables configuradas:
+
+- Railway (`backend`): `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_KEY` y `CORS_ORIGINS`
+  (los dominios de Vercel). El arranque y la comprobación de salud (`/salud`) están en `backend/railway.json`.
+- Vercel: `EXPO_PUBLIC_API_URL` con la dirección del backend. Se lee al compilar, así que si cambia hay
+  que volver a desplegar el frontend. La compilación y las rutas dinámicas están en `frontend/vercel.json`.
+
+Para publicar cambios desde una copia local con las CLI (`vercel login` y `railway login` una vez):
+
+```bash
+cd backend && railway up --service backend
+cd frontend && vercel deploy --prod
+```
+
+Las cuentas se crean en Supabase → Authentication → Users → Add user. Al crearlas, la base les genera
+el perfil como estudiante sin institución, y un administrador les asigna rol, institución y curso en la
+app, en Módulos → Usuarios.
