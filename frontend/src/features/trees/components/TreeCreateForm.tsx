@@ -42,7 +42,9 @@ export function TreeCreateForm({ catalogs, submitting, submitError, onCancel, on
   return (
     <Screen>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <PrimaryButton title="Volver al inventario" onPress={onCancel} variant="secondary" />
+        <View style={styles.backAction}>
+          <PrimaryButton title="Volver al inventario" onPress={onCancel} variant="secondary" />
+        </View>
         <Heading
           subtitle="Registra el árbol con ubicación, medidas, observaciones y evidencia fotográfica."
         >
@@ -53,35 +55,41 @@ export function TreeCreateForm({ catalogs, submitting, submitError, onCancel, on
         </Text>
 
         <Section title="Identificación y ubicación">
-          <Controller
-            name="institucion_id"
-            control={form.control}
-            render={({ field, fieldState }) => (
-              <SelectField
-                label="Institución"
-                value={field.value}
-                options={catalogs.instituciones.map((item) => ({
-                  label: item.nombre,
-                  value: item.id,
-                }))}
-                onChange={field.onChange}
-                error={fieldState.error?.message}
+          <View style={styles.row}>
+            <View style={styles.cell}>
+              <Controller
+                name="institucion_id"
+                control={form.control}
+                render={({ field, fieldState }) => (
+                  <SelectField
+                    label="Institución"
+                    value={field.value}
+                    options={catalogs.instituciones.map((item) => ({
+                      label: item.nombre,
+                      value: item.id,
+                    }))}
+                    onChange={field.onChange}
+                    error={fieldState.error?.message}
+                  />
+                )}
               />
-            )}
-          />
-          <Controller
-            name="zona"
-            control={form.control}
-            render={({ field, fieldState }) => (
-              <SelectField
-                label="Zona"
-                value={field.value}
-                options={zonas.map((value) => ({ label: value, value }))}
-                onChange={field.onChange}
-                error={fieldState.error?.message}
+            </View>
+            <View style={styles.cell}>
+              <Controller
+                name="zona"
+                control={form.control}
+                render={({ field, fieldState }) => (
+                  <SelectField
+                    label="Zona"
+                    value={field.value}
+                    options={zonas.map((value) => ({ label: value, value }))}
+                    onChange={field.onChange}
+                    error={fieldState.error?.message}
+                  />
+                )}
               />
-            )}
-          />
+            </View>
+          </View>
           {form.zonaActual === 'Otra' ? (
             <Controller
               name="zona_otra"
@@ -123,22 +131,28 @@ export function TreeCreateForm({ catalogs, submitting, submitError, onCancel, on
             adicionales.
           </Text>
           <View style={styles.photoActions}>
-            <PrimaryButton
-              title={form.photos.some((photo) => photo.tipo === 'completo') ? 'Cambiar foto general' : 'Agregar foto general'}
-              onPress={() => void form.pickPhoto('completo')}
-              variant="secondary"
-            />
-            <PrimaryButton
-              title={form.photos.some((photo) => photo.tipo === 'detalle') ? 'Cambiar foto de detalle' : 'Agregar foto de detalle'}
-              onPress={() => void form.pickPhoto('detalle')}
-              variant="secondary"
-            />
-            <PrimaryButton
-              title={`Agregar foto adicional (${form.photos.filter((photo) => photo.tipo === 'adicional').length}/3)`}
-              onPress={() => void form.pickPhoto('adicional')}
-              disabled={form.photos.filter((photo) => photo.tipo === 'adicional').length >= 3}
-              variant="secondary"
-            />
+            <View style={styles.cell}>
+              <PrimaryButton
+                title={form.photos.some((photo) => photo.tipo === 'completo') ? 'Cambiar foto general' : 'Agregar foto general'}
+                onPress={() => void form.pickPhoto('completo')}
+                variant="secondary"
+              />
+            </View>
+            <View style={styles.cell}>
+              <PrimaryButton
+                title={form.photos.some((photo) => photo.tipo === 'detalle') ? 'Cambiar foto de detalle' : 'Agregar foto de detalle'}
+                onPress={() => void form.pickPhoto('detalle')}
+                variant="secondary"
+              />
+            </View>
+            <View style={styles.cell}>
+              <PrimaryButton
+                title={`Agregar foto adicional (${form.photos.filter((photo) => photo.tipo === 'adicional').length}/3)`}
+                onPress={() => void form.pickPhoto('adicional')}
+                disabled={form.photos.filter((photo) => photo.tipo === 'adicional').length >= 3}
+                variant="secondary"
+              />
+            </View>
           </View>
           {form.photos.map((photo) => (
             <Surface key={`${photo.tipo}-${photo.uri}`}>
@@ -173,9 +187,17 @@ export function TreeCreateForm({ catalogs, submitting, submitError, onCancel, on
               />
             )}
           />
-          <NumericField control={form.control} name="dap_cm" label="Diámetro del tronco (cm)" error={form.errors.dap_cm?.message} />
-          <NumericField control={form.control} name="altura_m" label="Altura (m)" error={form.errors.altura_m?.message} />
-          <NumericField control={form.control} name="copa_m" label="Diámetro de copa (m)" error={form.errors.copa_m?.message} />
+          <View style={styles.row}>
+            <View style={styles.cell}>
+              <NumericField control={form.control} name="dap_cm" label="Diámetro del tronco (cm)" error={form.errors.dap_cm?.message} />
+            </View>
+            <View style={styles.cell}>
+              <NumericField control={form.control} name="altura_m" label="Altura (m)" error={form.errors.altura_m?.message} />
+            </View>
+            <View style={styles.cell}>
+              <NumericField control={form.control} name="copa_m" label="Diámetro de copa (m)" error={form.errors.copa_m?.message} />
+            </View>
+          </View>
           <Controller
             name="etapa"
             control={form.control}
@@ -284,9 +306,13 @@ function photoLabel(tipo: FotoLocal['tipo']) {
 }
 
 const styles = StyleSheet.create({
-  content: { padding: 20, paddingBottom: 40, gap: 16 },
+  content: { width: '100%', maxWidth: 720, alignSelf: 'center', padding: 20, paddingBottom: 40, gap: 16 },
   helper: { color: palette.muted, fontSize: 13, lineHeight: 19 },
-  photoActions: { gap: 8 },
+  backAction: { alignSelf: 'flex-start' },
+  // Campos relacionados lado a lado cuando hay espacio; en teléfonos se apilan.
+  row: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 12 },
+  cell: { flexGrow: 1, flexBasis: 200 },
+  photoActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   photoRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   thumbnail: { width: 76, height: 76, borderRadius: 8, backgroundColor: palette.line },
   photoDescription: { flex: 1, gap: 5 },

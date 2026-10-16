@@ -53,12 +53,18 @@ export function DashboardScreen() {
           <Metric label="En riesgo" value={data?.por_estado.riesgo ?? 0} tone={palette.amber} />
         </View>
 
-        <PrimaryButton title="＋  Registrar un árbol" onPress={() => router.push('/(app)/trees/new' as Href)} />
-        <PrimaryButton
-          title="Consultar inventario"
-          variant="secondary"
-          onPress={() => router.push('/(app)/trees' as Href)}
-        />
+        <View style={styles.actions}>
+          <View style={styles.action}>
+            <PrimaryButton title="＋  Registrar un árbol" onPress={() => router.push('/(app)/trees/new' as Href)} />
+          </View>
+          <View style={styles.action}>
+            <PrimaryButton
+              title="Consultar inventario"
+              variant="secondary"
+              onPress={() => router.push('/(app)/trees' as Href)}
+            />
+          </View>
+        </View>
 
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Registros recientes</Text>
@@ -90,7 +96,7 @@ export function DashboardScreen() {
 }
 
 const styles = StyleSheet.create({
-  content: { paddingHorizontal: 20, paddingTop: 18, paddingBottom: 36, gap: 16 },
+  content: { width: '100%', maxWidth: 850, alignSelf: 'center', paddingHorizontal: 20, paddingTop: 18, paddingBottom: 36, gap: 16 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
   kicker: { color: palette.forest, fontSize: 11, fontWeight: '900', letterSpacing: 1.5 },
   greeting: { marginTop: 4, color: palette.ink, fontSize: 25, fontWeight: '900' },
@@ -111,6 +117,9 @@ const styles = StyleSheet.create({
   metric: { flex: 1, minHeight: 84, justifyContent: 'center', paddingHorizontal: 12, borderRadius: 8, backgroundColor: palette.paper, borderWidth: 1, borderColor: palette.line },
   metricValue: { color: palette.ink, fontSize: 25, fontWeight: '900' },
   metricLabel: { marginTop: 4, color: palette.muted, fontSize: 12, fontWeight: '600' },
+  // Botones lado a lado cuando hay espacio; en teléfonos cada uno ocupa su propia fila.
+  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  action: { flexGrow: 1, flexBasis: 240 },
   treeRow: { minHeight: 58, flexDirection: 'row', alignItems: 'center', gap: 12 },
   treeGlyph: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: '#EAF0E3' },
   treeGlyphText: { color: palette.forest, fontWeight: '900', fontSize: 17 },
