@@ -15,7 +15,7 @@ export const api = createAxiosInstance({
 
 export class ApiContractError extends Error {}
 
-const RUTAS_SIN_TOKEN = ['/auth/login', '/auth/refresh'];
+const RUTAS_SIN_TOKEN = ['/auth/login', '/auth/refresh', '/auth/registro', '/auth/reenviar-confirmacion'];
 
 api.interceptors.request.use(async (request) => {
   if (RUTAS_SIN_TOKEN.includes(request.url ?? '')) {

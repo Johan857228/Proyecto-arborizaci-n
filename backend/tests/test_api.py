@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
-from supabase_auth.errors import AuthApiError
+from supabase_auth.errors import AuthApiError, AuthWeakPasswordError
 
 import db
 import main
@@ -86,6 +86,107 @@ def test_login_normaliza_el_correo(monkeypatch):
     r = TestClient(main.app).post("/auth/login", json={"email": "  Docente@Colegio.edu.co ", "password": "x"})
     assert r.status_code == 200
     assert enviados[0]["email"] == "docente@colegio.edu.co"
+
+
+# ------------------------------- Registro de cuentas -------------------------------
+class AnonRegistro:
+    """Cliente anónimo de Supabase que guarda lo que se le pidió y responde lo indicado."""
+
+    def __init__(self, sesion=True, error=None):
+        self.enviados, self.reenvios = [], []
+        self.sesion, self.error = sesion, error
+        anon = self
+
+        class auth:
+            @staticmethod
+            def sign_up(datos):
+                anon.enviados.append(datos)
+                if anon.error:
+                    raise anon.error
+                usuario = SimpleNamespace(id="u-nuevo", email=datos["email"])
+                sesion = SimpleNamespace(access_token="tok", refresh_token="ref", expires_in=3600) if anon.sesion else None
+                return SimpleNamespace(session=sesion, user=usuario)
+
+            @staticmethod
+            def resend(datos):
+                anon.reenvios.append(datos)
+                if anon.error:
+                    raise anon.error
+
+        self.auth = auth
+
+
+CUENTA = {"nombre": "  Laura   Gómez ", "email": " Laura@Colegio.edu.co ", "password": "clave-segura-1"}
+
+
+def test_registro_con_confirmacion_por_correo(monkeypatch):
+    anon = AnonRegistro(sesion=False)
+    monkeypatch.setattr(db, "nuevo_cliente_anon", lambda: anon)
+    monkeypatch.setattr(main, "URL_FRONTEND", "https://inventario.example")
+    r = TestClient(main.app).post("/auth/registro", json=CUENTA)
+    assert r.status_code == 201
+    assert r.json() == {"requiere_confirmacion": True, "email": "laura@colegio.edu.co", "sesion": None}
+    enviado = anon.enviados[0]
+    assert enviado["email"] == "laura@colegio.edu.co" and enviado["password"] == "clave-segura-1"
+    assert enviado["options"] == {"data": {"nombre": "Laura Gómez"}, "email_redirect_to": "https://inventario.example/login"}
+
+
+def test_registro_sin_confirmacion_entra_de_una_vez(monkeypatch):
+    anon = AnonRegistro(sesion=True)
+    monkeypatch.setattr(db, "nuevo_cliente_anon", lambda: anon)
+    monkeypatch.setattr(main, "URL_FRONTEND", "")
+    r = TestClient(main.app).post("/auth/registro", json=CUENTA)
+    assert r.status_code == 201
+    assert r.json()["requiere_confirmacion"] is False and r.json()["sesion"]["access_token"] == "tok"
+    assert "email_redirect_to" not in anon.enviados[0]["options"]
+
+
+@pytest.mark.parametrize("cambio", [{"password": "corta"}, {"password": "x" * 73}, {"nombre": "   "},
+                                    {"email": "sin-arroba"}, {"nombre": "x" * 121}])
+def test_registro_valida_los_datos(monkeypatch, cambio):
+    anon = AnonRegistro()
+    monkeypatch.setattr(db, "nuevo_cliente_anon", lambda: anon)
+    assert TestClient(main.app).post("/auth/registro", json={**CUENTA, **cambio}).status_code == 422
+    assert anon.enviados == []
+
+
+@pytest.mark.parametrize("error, estado, texto", [
+    (AuthWeakPasswordError("Password should contain letters and digits", 422, ["characters"]), 422, "débil"),
+    (AuthApiError("Email rate limit exceeded", 429, "over_email_send_rate_limit"), 429, "demasiados correos"),
+    (AuthApiError("Email address not authorized", 400, "email_address_not_authorized"), 503, "administrador"),
+    (AuthApiError("Signups not allowed", 422, "signup_disabled"), 403, "cerrado"),
+    (AuthApiError("User already registered", 422, "user_already_exists"), 409, "Ya existe"),
+    (AuthApiError("Error sending confirmation email", 500, "unexpected_failure"), 503, "Supabase no respondió"),
+    (AuthApiError("Algo raro", 400, None), 400, "No se pudo crear la cuenta"),
+])
+def test_registro_explica_los_errores_de_supabase(monkeypatch, error, estado, texto):
+    monkeypatch.setattr(db, "nuevo_cliente_anon", lambda: AnonRegistro(error=error))
+    r = TestClient(main.app).post("/auth/registro", json=CUENTA)
+    assert r.status_code == estado and texto in r.json()["detail"]
+
+
+def test_reenviar_confirmacion(monkeypatch):
+    anon = AnonRegistro()
+    monkeypatch.setattr(db, "nuevo_cliente_anon", lambda: anon)
+    monkeypatch.setattr(main, "URL_FRONTEND", "https://inventario.example")
+    r = TestClient(main.app).post("/auth/reenviar-confirmacion", json={"email": " Laura@Colegio.edu.co"})
+    assert r.status_code == 202
+    assert anon.reenvios == [{"type": "signup", "email": "laura@colegio.edu.co",
+                              "options": {"email_redirect_to": "https://inventario.example/login"}}]
+    monkeypatch.setattr(db, "nuevo_cliente_anon", lambda: AnonRegistro(error=AuthApiError("x", 429, "over_email_send_rate_limit")))
+    assert TestClient(main.app).post("/auth/reenviar-confirmacion", json={"email": "a@b.co"}).status_code == 429
+
+
+def test_login_sin_confirmar_el_correo(monkeypatch):
+    class AnonSinConfirmar:
+        class auth:
+            @staticmethod
+            def sign_in_with_password(datos):
+                raise AuthApiError("Email not confirmed", 400, "email_not_confirmed")
+
+    monkeypatch.setattr(db, "nuevo_cliente_anon", lambda: AnonSinConfirmar)
+    r = TestClient(main.app).post("/auth/login", json={"email": "a@b.co", "password": "x"})
+    assert r.status_code == 403 and "confirmas tu correo" in r.json()["detail"]
 
 
 # ------------------------------- Crear árbol (validación) -------------------------------

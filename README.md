@@ -91,9 +91,12 @@ SUPABASE_URL=https://TU_ID.supabase.co
 SUPABASE_ANON_KEY=sb_publishable_...
 SUPABASE_SERVICE_KEY=sb_secret_...
 CORS_ORIGINS=
+URL_FRONTEND=
 ```
 
 `CORS_ORIGINS` es opcional: cualquier puerto de `localhost` y `127.0.0.1` ya está permitido.
+`URL_FRONTEND` es la dirección pública del frontend; el enlace del correo que confirma una cuenta
+nueva lleva ahí (sin ella, Supabase usa la Site URL del proyecto).
 
 `frontend/.env` (opcional): solo hace falta para probar en un teléfono físico, apuntando a la IP del computador:
 
@@ -111,8 +114,9 @@ EXPO_PUBLIC_API_URL=http://192.168.1.20:8000
 
 Variables configuradas:
 
-- Railway (`backend`): `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_KEY` y `CORS_ORIGINS`
-  (los dominios de Vercel). El arranque y la comprobación de salud (`/salud`) están en `backend/railway.json`.
+- Railway (`backend`): `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_KEY`, `CORS_ORIGINS`
+  (los dominios de Vercel) y `URL_FRONTEND`. El arranque y la comprobación de salud (`/salud`) están en
+  `backend/railway.json`.
 - Vercel: `EXPO_PUBLIC_API_URL` con la dirección del backend. Se lee al compilar, así que si cambia hay
   que volver a desplegar el frontend. La compilación y las rutas dinámicas están en `frontend/vercel.json`.
 

@@ -94,9 +94,15 @@ español qué campos revisar.
 
 ## Iniciar sesión
 
-El frontend no contiene usuarios ni contraseñas: usa las cuentas creadas en
-Supabase Auth. El rol, la institución y el curso de cada cuenta se ven en
-`/profile` y los asigna el administrador.
+El frontend no contiene usuarios ni contraseñas: usa las cuentas de Supabase
+Auth. Una persona puede crear la suya en `/register` ("Crear una cuenta" en el
+inicio de sesión): entra como estudiante sin institución y, si Supabase pide
+confirmar el correo, primero abre el enlace que le llega. Al volver del enlace,
+el inicio de sesión avisa que la cuenta quedó confirmada (y quita de la URL los
+datos que agrega Supabase); si intenta entrar sin confirmar, puede pedir otro
+enlace. El administrador también crea cuentas desde Usuarios, ya confirmadas y
+con rol, institución y curso. El rol, la institución y el curso se ven en
+`/profile`.
 
 La contraseña no se guarda. En web la sesión termina al cerrar la pestaña; en
 dispositivos móviles se usa el almacenamiento seguro del sistema. Cuando el

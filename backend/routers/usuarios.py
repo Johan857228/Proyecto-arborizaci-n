@@ -2,12 +2,13 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
+from supabase_auth.errors import AuthError
 
 import datos
 import db
-from auth import Perfil, perfil_actual, revisor_actual
-from schemas import Rol
+from auth import Perfil, admin_actual, error_de_auth, perfil_actual, revisor_actual
+from schemas import CLAVE_MAX, CLAVE_MIN, PATRON_CORREO, CorreoNormalizado, Rol
 
 router = APIRouter(tags=["Usuarios"])
 
@@ -57,7 +58,43 @@ class UsuarioEditar(BaseModel):
         return v
 
 
+class UsuarioCrear(CorreoNormalizado):
+    nombre: str = Field(min_length=1, max_length=120)
+    email: str = Field(max_length=254, pattern=PATRON_CORREO)
+    password: str = Field(min_length=CLAVE_MIN, max_length=CLAVE_MAX)
+    rol: Rol = "estudiante"
+    institucion_id: str | None = None
+    curso_id: UUID | None = None
+
+    @field_validator("nombre")
+    @classmethod
+    def _limpiar(cls, v: str) -> str:
+        v = " ".join(v.split())
+        if not v:
+            raise ValueError("Escribe el nombre")
+        return v
+
+    @model_validator(mode="after")
+    def _institucion(self):
+        if self.rol != "administrador" and not self.institucion_id:
+            raise ValueError("Elige la institución: docentes y estudiantes trabajan en una")
+        if self.curso_id and not self.institucion_id:
+            raise ValueError("El curso necesita una institución")
+        return self
+
+
 COLUMNAS = "usuario_id, nombre, correo, rol, institucion_id, curso_id, activo"
+
+
+def _validar_institucion_y_curso(cliente, institucion_id: str | None, curso_id: str | None) -> None:
+    if institucion_id is not None and institucion_id not in datos.instituciones(cliente):
+        raise HTTPException(status_code=422, detail="La institución no existe")
+    if curso_id:
+        cursos = cliente.table("cursos").select("id, institucion_id").eq("id", curso_id).execute().data
+        if not cursos:
+            raise HTTPException(status_code=422, detail="El curso no existe")
+        if cursos[0]["institucion_id"] != institucion_id:
+            raise HTTPException(status_code=422, detail="El curso no pertenece a la institución del usuario")
 
 
 def _mi_perfil(cliente, perfil: Perfil) -> dict:
@@ -108,6 +145,43 @@ def listar(institucion_id: str | None = None, perfil: Perfil = Depends(revisor_a
     return filas
 
 
+@router.post("/usuarios", response_model=PerfilOut, status_code=201)
+def crear_usuario(d: UsuarioCrear, perfil: Perfil = Depends(admin_actual)):
+    """El administrador crea una cuenta con su rol, institución y curso. La cuenta queda
+    confirmada (no se envía correo): el administrador comparte la contraseña inicial."""
+    cliente = db.cliente_de_usuario(perfil.sesion.token)
+    curso_id = str(d.curso_id) if d.curso_id else None
+    _validar_institucion_y_curso(cliente, d.institucion_id, curso_id)
+
+    admin = db.get_admin()  # crear usuarios en Supabase Auth exige la clave secret
+    try:
+        creado = admin.auth.admin.create_user({
+            "email": d.email,
+            "password": d.password,
+            "email_confirm": True,
+            "user_metadata": {"nombre": d.nombre},
+        })
+    except AuthError as e:
+        raise error_de_auth(e, "No se pudo crear la cuenta.")
+    usuario_id = str(creado.user.id)
+
+    # El trigger de la migración 001 ya creó el perfil como estudiante sin institución; aquí
+    # se completa. Si algo falla, se borra la cuenta para no dejarla a medias.
+    try:
+        filas = cliente.table("perfiles").update({
+            "nombre": d.nombre,
+            "rol": d.rol,
+            "institucion_id": d.institucion_id,
+            "curso_id": curso_id,
+        }).eq("usuario_id", usuario_id).execute().data
+        if not filas:
+            raise HTTPException(status_code=503, detail="No se creó el perfil de la cuenta: aplica la migración 001")
+    except Exception:
+        admin.auth.admin.delete_user(usuario_id)
+        raise
+    return filas[0]
+
+
 @router.patch("/usuarios/{usuario_id}", response_model=PerfilOut)
 def editar_usuario(usuario_id: UUID, d: UsuarioEditar, perfil: Perfil = Depends(revisor_actual)):
     """El administrador cambia nombre, rol, institución, curso y estado. El docente solo
@@ -143,11 +217,7 @@ def editar_usuario(usuario_id: UUID, d: UsuarioEditar, perfil: Perfil = Depends(
 
     institucion_final = cambios.get("institucion_id", actual.get("institucion_id"))
     if cambios.get("curso_id"):
-        cursos = cliente.table("cursos").select("id, institucion_id").eq("id", cambios["curso_id"]).execute().data
-        if not cursos:
-            raise HTTPException(status_code=422, detail="El curso no existe")
-        if cursos[0]["institucion_id"] != institucion_final:
-            raise HTTPException(status_code=422, detail="El curso no pertenece a la institución del usuario")
+        _validar_institucion_y_curso(cliente, institucion_final, cambios["curso_id"])
 
     actualizadas = cliente.table("perfiles").update(cambios).eq("usuario_id", str(usuario_id)).execute().data
     if not actualizadas:
