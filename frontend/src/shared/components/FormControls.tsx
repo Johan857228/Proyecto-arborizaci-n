@@ -1,5 +1,5 @@
 import type { PropsWithChildren, ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 
 import { palette } from '@/config/constants';
@@ -59,6 +59,7 @@ export function SelectField<T extends string | number>({
       <Text style={styles.label}>{label}</Text>
       <View style={[styles.pickerWrap, error && styles.invalid]}>
         <Picker
+          style={Platform.OS === 'web' ? styles.webPicker : undefined}
           selectedValue={value ?? ''}
           onValueChange={(next) => {
             const selectedOption = options.find((option) => option.value === next);
@@ -152,6 +153,8 @@ const styles = StyleSheet.create({
   multiline: { minHeight: 84, paddingTop: 12, textAlignVertical: 'top' },
   invalid: { borderColor: palette.red },
   pickerWrap: { borderWidth: 1, borderColor: palette.line, borderRadius: 8, backgroundColor: palette.paper, overflow: 'hidden' },
+  // En web el Picker es un <select> nativo: se quita su borde y se iguala al alto, la letra y el relleno de los campos de texto.
+  webPicker: { height: 48, paddingHorizontal: 13, borderWidth: 0, backgroundColor: 'transparent', color: palette.ink, fontSize: 16, fontFamily: 'System', cursor: 'pointer' },
   button: { minHeight: 52, alignItems: 'center', justifyContent: 'center', borderRadius: 8, paddingHorizontal: 18, backgroundColor: palette.forest },
   buttonText: { color: palette.paper, fontSize: 16, fontWeight: '800' },
   secondaryButton: { backgroundColor: palette.paper, borderWidth: 1, borderColor: palette.line },
