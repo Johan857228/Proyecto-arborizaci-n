@@ -2,6 +2,7 @@ import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
 import { SESSION_STORAGE_KEY } from '@/config/constants';
+import { sessionSchema } from '@/features/auth/schemas';
 import type { Session } from '@/shared/types/entities';
 
 export async function readStoredSession(): Promise<Session | null> {
@@ -11,7 +12,10 @@ export async function readStoredSession(): Promise<Session | null> {
   if (!value) return null;
 
   try {
-    return JSON.parse(value) as Session;
+    const result = sessionSchema.safeParse(JSON.parse(value));
+    if (result.success) return result.data satisfies Session;
+    await clearStoredSession();
+    return null;
   } catch {
     await clearStoredSession();
     return null;

@@ -12,6 +12,9 @@ export const api = createAxiosInstance({
 export class ApiContractError extends Error {}
 
 api.interceptors.request.use(async (request) => {
+  if (request.url === '/auth/login') {
+    return request;
+  }
   const session = await readStoredSession();
   if (session?.access_token) {
     request.headers.Authorization = `Bearer ${session.access_token}`;
