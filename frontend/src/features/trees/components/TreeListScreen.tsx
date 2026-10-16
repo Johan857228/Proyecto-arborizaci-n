@@ -3,14 +3,20 @@ import { router, type Href } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { palette } from '@/config/constants';
+import { fonts, gradients, layout, palette, shadows } from '@/config/constants';
 import { useCatalogs } from '@/features/catalogs/hooks/useCatalogs';
 import { treeKeys } from '@/features/trees/hooks/useCreateTree';
 import type { FiltrosInventario, Zona } from '@/features/trees/types';
 import { treesService } from '@/features/trees/services/treesService';
+import { useIsWide } from '@/hooks/use-is-wide';
 import { getApiErrorMessage } from '@/services/api/client';
-import type { EstadoArbol } from '@/shared/types/entities';
-import { PrimaryButton, Screen, SelectField, Surface } from '@/shared/components/FormControls';
+import type { ArbolResumen, EstadoArbol } from '@/shared/types/entities';
+import { InlineMessage, PrimaryButton, Screen, SelectField } from '@/shared/components/FormControls';
+import { Grid } from '@/shared/components/Grid';
+import { Icon, type IconName } from '@/shared/components/Icon';
+import { FadeIn } from '@/shared/components/Motion';
+import { StatusBadge } from '@/shared/components/StatusBadge';
+import { gradient } from '@/shared/styles/gradient';
 
 const PAGE_SIZE = 50;
 const TODAS = '__todas__';
@@ -30,20 +36,60 @@ const estados: { label: string; value: EstadoArbol | undefined }[] = [
   { label: 'En riesgo', value: 'riesgo' },
   { label: 'Críticos', value: 'critico' },
 ];
-const coloresEstado: Record<EstadoArbol, string> = {
-  sano: '#15803D',
-  riesgo: '#B45309',
-  critico: '#B91C1C',
-};
-const etiquetasEstado: Record<EstadoArbol, string> = {
-  sano: 'Sano',
-  riesgo: 'En riesgo',
-  critico: 'Crítico',
-};
+
+function Detail({ icon, label, value }: { icon: IconName; label: string; value: string }) {
+  return (
+    <View style={styles.detail}>
+      <Icon name={icon} size={16} color={palette.muted} />
+      <View style={styles.detailText}>
+        <Text style={styles.detailLabel}>{label}</Text>
+        <Text style={styles.detailValue} numberOfLines={1}>{value}</Text>
+      </View>
+    </View>
+  );
+}
+
+function TreeCard({ tree }: { tree: ArbolResumen }) {
+  return (
+    <View style={styles.treeCard}>
+      <View style={styles.treeHeader}>
+        <View style={[styles.treeIcon, gradient(gradients.lime)]}><Icon name="tree" size={22} color={palette.forestDark} /></View>
+        <View style={styles.treeInfo}>
+          <Text style={styles.treeName} numberOfLines={1}>{tree.nombre_comun}</Text>
+          <Text style={styles.scientificName} numberOfLines={1}>{tree.nombre_cientifico}</Text>
+        </View>
+        <StatusBadge estado={tree.estado} />
+      </View>
+      <View style={styles.codeChip}>
+        <Text style={styles.code}>{tree.codigo}</Text>
+      </View>
+      <View style={styles.details}>
+        <Detail icon="building" label="Institución" value={tree.nombre_corto} />
+        <Detail icon="location" label="Zona" value={`${tree.zona}${tree.zona_otra ? ` · ${tree.zona_otra}` : ''}`} />
+      </View>
+      <View style={styles.measures}>
+        <View style={styles.measure}>
+          <Text style={styles.measureValue}>{tree.altura_m} m</Text>
+          <Text style={styles.measureLabel}>Altura</Text>
+        </View>
+        <View style={styles.measure}>
+          <Text style={styles.measureValue}>{tree.dap_cm} cm</Text>
+          <Text style={styles.measureLabel}>DAP</Text>
+        </View>
+        <View style={styles.measure}>
+          <Text style={styles.measureValue}>{tree.n_observaciones}</Text>
+          <Text style={styles.measureLabel}>Observaciones</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
 
 export default function TreeListScreen() {
+  const isWide = useIsWide();
   const catalogs = useCatalogs();
   const [search, setSearch] = useState('');
+  const [searchFocused, setSearchFocused] = useState(false);
   const [estado, setEstado] = useState<EstadoArbol>();
   const [institution, setInstitution] = useState<string>();
   const [species, setSpecies] = useState<string>();
@@ -75,6 +121,16 @@ export default function TreeListScreen() {
     tree.zona,
     tree.nombre_corto,
   ].some((value) => value.toLocaleLowerCase().includes(searchText)));
+  // Con filtros o búsqueda activos, una lista vacía significa "sin coincidencias", no "inventario vacío".
+  const filtering = Object.keys(filters).length > 0 || searchText.length > 0;
+
+  function clearFilters() {
+    setSearch('');
+    setEstado(undefined);
+    setInstitution(undefined);
+    setSpecies(undefined);
+    setZone(undefined);
+  }
 
   const institutionOptions = [
     { label: 'Todas las instituciones', value: TODAS },
@@ -95,7 +151,7 @@ export default function TreeListScreen() {
   return (
     <Screen>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <View style={styles.header}>
+        <FadeIn index={0} style={styles.header}>
           <View style={styles.heading}>
             <Text style={styles.eyebrow}>GESTIÓN AMBIENTAL</Text>
             <Text style={styles.title}>Inventario de árboles</Text>
@@ -105,88 +161,107 @@ export default function TreeListScreen() {
           </View>
           <View style={styles.headerAction}>
             <PrimaryButton
-              title="＋ Registrar árbol"
-              onPress={() => router.push('/(app)/trees/new' as Href)}
+              title="Registrar árbol"
+              icon="add"
+              onPress={() => router.navigate('/(app)/trees/new' as Href)}
             />
           </View>
-        </View>
+        </FadeIn>
 
-        <View style={styles.summary}>
-          <View>
-            <Text style={styles.summaryLabel}>Registros cargados</Text>
-            <Text style={styles.summaryNumber}>{inventory.isLoading ? '…' : trees.length}</Text>
+        <FadeIn index={1} style={styles.toolbar}>
+          <View style={styles.searchRow}>
+            <View style={[styles.search, searchFocused && styles.searchFocused]}>
+              <Icon name="search" size={20} color={palette.muted} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Buscar por código, especie o zona"
+                placeholderTextColor="#8A978F"
+                value={search}
+                onChangeText={setSearch}
+                onFocus={() => setSearchFocused(true)}
+                onBlur={() => setSearchFocused(false)}
+                accessibilityLabel="Buscar árboles"
+                returnKeyType="search"
+              />
+              {search.length > 0 ? (
+                <Pressable accessibilityRole="button" accessibilityLabel="Borrar búsqueda" onPress={() => setSearch('')}>
+                  <Icon name="close" size={18} color={palette.muted} />
+                </Pressable>
+              ) : null}
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Actualizar inventario"
+              disabled={inventory.isFetching}
+              onPress={() => void inventory.refetch()}
+              style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}
+            >
+              {inventory.isFetching ? (
+                <ActivityIndicator size="small" color={palette.forest} />
+              ) : (
+                <Icon name="refresh" size={20} color={palette.forest} />
+              )}
+            </Pressable>
           </View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Actualizar inventario"
-            disabled={inventory.isFetching}
-            onPress={() => void inventory.refetch()}
-            style={styles.refreshButton}
-          >
-            <Text style={styles.refreshText}>{inventory.isFetching ? 'Actualizando…' : 'Actualizar'}</Text>
-          </Pressable>
-        </View>
 
-        <TextInput
-          style={styles.search}
-          placeholder="Buscar por código, especie o zona"
-          placeholderTextColor={palette.muted}
-          value={search}
-          onChangeText={setSearch}
-          accessibilityLabel="Buscar árboles"
-          returnKeyType="search"
-        />
+          <View style={styles.filters}>
+            <View style={styles.filter}>
+              <SelectField
+                label="Institución"
+                value={institution ?? TODAS}
+                options={institutionOptions}
+                onChange={(value) => setInstitution(value === TODAS ? undefined : value)}
+                error={catalogs.error ? getApiErrorMessage(catalogs.error) : undefined}
+              />
+            </View>
+            <View style={styles.filter}>
+              <SelectField
+                label="Especie"
+                value={species ?? TODAS}
+                options={speciesOptions}
+                onChange={(value) => setSpecies(value === TODAS ? undefined : value)}
+              />
+            </View>
+            <View style={styles.filter}>
+              <SelectField
+                label="Zona"
+                value={zone ?? TODAS}
+                options={zoneOptions}
+                onChange={(value) => setZone(value === TODAS || !isZona(value) ? undefined : value)}
+              />
+            </View>
+          </View>
 
-        <View style={styles.filters}>
-          <View style={styles.filter}>
-            <SelectField
-              label="Institución"
-              value={institution ?? TODAS}
-              options={institutionOptions}
-              onChange={(value) => setInstitution(value === TODAS ? undefined : value)}
-              error={catalogs.error ? getApiErrorMessage(catalogs.error) : undefined}
-            />
-          </View>
-          <View style={styles.filter}>
-            <SelectField
-              label="Especie"
-              value={species ?? TODAS}
-              options={speciesOptions}
-              onChange={(value) => setSpecies(value === TODAS ? undefined : value)}
-            />
-          </View>
-          <View style={styles.filter}>
-            <SelectField
-              label="Zona"
-              value={zone ?? TODAS}
-              options={zoneOptions}
-              onChange={(value) => setZone(value === TODAS || !isZona(value) ? undefined : value)}
-            />
-          </View>
-        </View>
-
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.stateFilters}>
-          {estados.map((option) => {
-            const selected = estado === option.value;
-            return (
-              <Pressable
-                key={option.label}
-                accessibilityRole="button"
-                accessibilityState={{ selected }}
-                onPress={() => setEstado(option.value)}
-                style={[styles.stateFilter, selected && styles.stateFilterSelected]}
-              >
-                <Text style={[styles.stateFilterText, selected && styles.stateFilterTextSelected]}>
-                  {option.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.stateFilters}>
+            {estados.map((option) => {
+              const selected = estado === option.value;
+              return (
+                <Pressable
+                  key={option.label}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                  onPress={() => setEstado(option.value)}
+                  style={[styles.stateFilter, selected && styles.stateFilterSelected]}
+                >
+                  <Text style={[styles.stateFilterText, selected && styles.stateFilterTextSelected]}>
+                    {option.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </FadeIn>
 
         <View style={styles.listHeading}>
-          <Text style={styles.sectionTitle}>Árboles</Text>
-          <Text style={styles.count}>{trees.length} en pantalla</Text>
+          <Text style={styles.sectionTitle}>
+            {inventory.isLoading ? 'Cargando…' : `${trees.length} ${trees.length === 1 ? 'árbol' : 'árboles'}`}
+          </Text>
+          {filtering ? (
+            <Pressable accessibilityRole="button" onPress={clearFilters} style={styles.clear}>
+              <Icon name="close" size={16} color={palette.forest} />
+              <Text style={styles.clearText}>Limpiar filtros</Text>
+            </Pressable>
+          ) : null}
         </View>
 
         {inventory.isLoading ? (
@@ -196,58 +271,44 @@ export default function TreeListScreen() {
           </View>
         ) : inventory.isError ? (
           <View style={styles.message}>
-            <Text style={styles.errorTitle}>No se pudo cargar el inventario</Text>
+            <View style={[styles.messageIcon, { backgroundColor: palette.redSoft }]}>
+              <Icon name="error" size={26} color={palette.red} />
+            </View>
+            <Text style={styles.messageTitle}>No se pudo cargar el inventario</Text>
             <Text style={styles.messageText}>{getApiErrorMessage(inventory.error)}</Text>
-            <PrimaryButton title="Reintentar" variant="secondary" onPress={() => void inventory.refetch()} />
+            <PrimaryButton title="Reintentar" icon="refresh" variant="secondary" onPress={() => void inventory.refetch()} />
           </View>
         ) : trees.length === 0 ? (
           <View style={styles.message}>
-            <Text style={styles.emptyTitle}>
-              {allTrees.length === 0 ? 'Aún no hay árboles registrados' : 'No hay coincidencias'}
+            <View style={styles.messageIcon}>
+              <Icon name={filtering ? 'search' : 'tree'} size={26} color={palette.forest} />
+            </View>
+            <Text style={styles.messageTitle}>
+              {filtering ? 'No hay coincidencias' : 'Aún no hay árboles registrados'}
             </Text>
             <Text style={styles.messageText}>
-              {allTrees.length === 0
-                ? 'Registra el primer árbol para comenzar el inventario.'
-                : 'Prueba con otro término o cambia los filtros.'}
+              {filtering
+                ? 'Prueba con otro término o cambia los filtros.'
+                : 'Registra el primer árbol para comenzar el inventario.'}
             </Text>
-            {allTrees.length === 0 ? (
-              <PrimaryButton title="Registrar árbol" onPress={() => router.push('/(app)/trees/new' as Href)} />
-            ) : null}
+            {filtering ? (
+              <PrimaryButton title="Limpiar filtros" icon="close" variant="secondary" onPress={clearFilters} />
+            ) : (
+              <PrimaryButton title="Registrar árbol" icon="add" onPress={() => router.navigate('/(app)/trees/new' as Href)} />
+            )}
           </View>
         ) : (
-          trees.map((tree) => (
-            <Surface key={tree.id}>
-              <View style={styles.treeHeader}>
-                <View style={styles.treeIcon}><Text style={styles.treeIconText}>T</Text></View>
-                <View style={styles.treeInfo}>
-                  <Text style={styles.treeName}>{tree.nombre_comun}</Text>
-                  <Text style={styles.scientificName}>{tree.nombre_cientifico}</Text>
-                  <Text style={styles.code}>{tree.codigo}</Text>
-                </View>
-                <View style={[styles.status, { backgroundColor: `${coloresEstado[tree.estado]}18` }]}>
-                  <Text style={[styles.statusText, { color: coloresEstado[tree.estado] }]}>
-                    {etiquetasEstado[tree.estado]}
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.divider} />
-              <View style={styles.details}>
-                <View style={styles.detail}>
-                  <Text style={styles.detailLabel}>Institución</Text>
-                  <Text style={styles.detailValue}>{tree.nombre_corto}</Text>
-                </View>
-                <View style={styles.detail}>
-                  <Text style={styles.detailLabel}>Zona</Text>
-                  <Text style={styles.detailValue}>{tree.zona}{tree.zona_otra ? ` · ${tree.zona_otra}` : ''}</Text>
-                </View>
-              </View>
-              <View style={styles.metrics}>
-                <Text style={styles.metric}>Altura: {tree.altura_m} m</Text>
-                <Text style={styles.metric}>DAP: {tree.dap_cm} cm</Text>
-                <Text style={styles.metric}>Observaciones: {tree.n_observaciones}</Text>
-              </View>
-            </Surface>
-          ))
+          <Grid
+            items={trees}
+            columns={isWide ? 2 : 1}
+            gap={16}
+            keyOf={(tree) => tree.id}
+            renderItem={(tree) => (
+              <FadeIn index={2 + trees.indexOf(tree)}>
+                <TreeCard tree={tree} />
+              </FadeIn>
+            )}
+          />
         )}
 
         {inventory.hasNextPage ? (
@@ -258,60 +319,58 @@ export default function TreeListScreen() {
             variant="secondary"
           />
         ) : null}
-        {inventory.isFetching && !inventory.isLoading ? (
-          <Text style={styles.note}>Actualizando resultados…</Text>
-        ) : null}
-        <Text style={styles.footer}>Los códigos son asignados por el sistema y se muestran como solo lectura.</Text>
+        <InlineMessage tone="info">Los códigos son asignados por el sistema y se muestran como solo lectura.</InlineMessage>
       </ScrollView>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  content: { padding: 20, paddingBottom: 40, width: '100%', maxWidth: 850, alignSelf: 'center', gap: 14 },
+  content: { width: '100%', maxWidth: layout.maxWidth, alignSelf: 'center', padding: 20, paddingTop: 24, paddingBottom: 40, gap: 18 },
   // Con espacio, el botón queda a la derecha del título; en teléfonos baja y ocupa todo el ancho.
   header: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-end', gap: 16 },
   heading: { flexGrow: 3, flexShrink: 1, flexBasis: 360, gap: 6 },
-  headerAction: { flexGrow: 1, flexBasis: 200 },
-  eyebrow: { color: palette.forest, fontSize: 11, fontWeight: '900', letterSpacing: 1.4 },
-  title: { color: palette.ink, fontSize: 28, fontWeight: '900' },
-  subtitle: { color: palette.muted, fontSize: 14, lineHeight: 20 },
-  summary: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 17, borderRadius: 8, backgroundColor: palette.ink },
-  summaryLabel: { color: '#D8E9DB', fontSize: 12 },
-  summaryNumber: { color: '#FFFFFF', fontSize: 28, fontWeight: '900' },
-  refreshButton: { paddingHorizontal: 13, paddingVertical: 10, borderRadius: 7, backgroundColor: '#FFFFFF' },
-  refreshText: { color: palette.forest, fontSize: 12, fontWeight: '800' },
-  search: { minHeight: 48, paddingHorizontal: 14, borderWidth: 1, borderColor: palette.line, borderRadius: 8, backgroundColor: palette.paper, color: palette.ink, fontSize: 15 },
+  headerAction: { flexGrow: 1, flexBasis: 200, maxWidth: 260 },
+  eyebrow: { color: palette.forest, fontSize: 12, fontFamily: fonts.bold, letterSpacing: 1.4 },
+  title: { color: palette.ink, fontSize: 28, fontFamily: fonts.extraBold, letterSpacing: -0.6 },
+  subtitle: { color: palette.muted, fontSize: 15, lineHeight: 22 },
+  toolbar: { gap: 14, padding: 16, borderRadius: 20, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.paper, boxShadow: shadows.card },
+  searchRow: { flexDirection: 'row', gap: 10 },
+  search: { flex: 1, minHeight: 50, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, borderWidth: 1, borderColor: palette.line, borderRadius: 12, backgroundColor: palette.canvas },
+  searchFocused: { borderColor: palette.forest, backgroundColor: palette.paper, boxShadow: '0 0 0 3px rgba(27, 107, 74, 0.15)' },
+  searchInput: { flex: 1, minHeight: 48, color: palette.ink, fontSize: 15, outlineWidth: 0 },
+  iconButton: { width: 50, height: 50, alignItems: 'center', justifyContent: 'center', borderRadius: 12, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.paper },
+  pressed: { opacity: 0.75 },
   filters: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 12 },
   filter: { flexGrow: 1, flexBasis: 220 },
-  stateFilters: { gap: 8, paddingBottom: 4 },
-  stateFilter: { paddingHorizontal: 14, paddingVertical: 9, borderRadius: 20, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.paper },
+  stateFilters: { gap: 8 },
+  stateFilter: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 999, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.paper },
   stateFilterSelected: { borderColor: palette.forest, backgroundColor: palette.forest },
-  stateFilterText: { color: palette.ink, fontSize: 12, fontWeight: '700' },
+  stateFilterText: { color: palette.ink, fontSize: 13, fontFamily: fonts.semiBold },
   stateFilterTextSelected: { color: palette.paper },
-  listHeading: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 4 },
-  sectionTitle: { color: palette.ink, fontSize: 18, fontWeight: '900' },
-  count: { color: palette.muted, fontSize: 12 },
-  message: { alignItems: 'center', gap: 10, padding: 24, borderWidth: 1, borderColor: palette.line, borderRadius: 8, backgroundColor: palette.paper },
-  messageText: { color: palette.muted, fontSize: 13, lineHeight: 19, textAlign: 'center' },
-  errorTitle: { color: palette.red, fontSize: 16, fontWeight: '800', textAlign: 'center' },
-  emptyTitle: { color: palette.ink, fontSize: 16, fontWeight: '800', textAlign: 'center' },
-  treeHeader: { flexDirection: 'row', alignItems: 'center', gap: 11 },
-  treeIcon: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 13, backgroundColor: '#E6EFDF' },
-  treeIconText: { color: palette.forest, fontSize: 18, fontWeight: '900' },
-  treeInfo: { flex: 1 },
-  treeName: { color: palette.ink, fontSize: 16, fontWeight: '800' },
-  scientificName: { marginTop: 2, color: palette.muted, fontSize: 12, fontStyle: 'italic' },
-  code: { marginTop: 4, color: palette.forest, fontSize: 12, fontWeight: '900' },
-  status: { paddingHorizontal: 9, paddingVertical: 6, borderRadius: 16 },
-  statusText: { fontSize: 11, fontWeight: '800' },
-  divider: { height: 1, marginVertical: 13, backgroundColor: palette.line },
+  listHeading: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
+  sectionTitle: { color: palette.ink, fontSize: 18, fontFamily: fonts.extraBold },
+  clear: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  clearText: { color: palette.forest, fontSize: 13, fontFamily: fonts.bold },
+  message: { alignItems: 'center', gap: 10, padding: 32, borderWidth: 1, borderColor: palette.line, borderRadius: 20, backgroundColor: palette.paper, boxShadow: shadows.card },
+  messageIcon: { width: 56, height: 56, marginBottom: 4, alignItems: 'center', justifyContent: 'center', borderRadius: 18, backgroundColor: palette.forestSoft },
+  messageTitle: { color: palette.ink, fontSize: 17, fontFamily: fonts.extraBold, textAlign: 'center' },
+  messageText: { maxWidth: 360, color: palette.muted, fontSize: 14, lineHeight: 20, textAlign: 'center' },
+  treeCard: { gap: 14, padding: 18, borderRadius: 20, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.paper, boxShadow: shadows.card },
+  treeHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  treeIcon: { width: 46, height: 46, alignItems: 'center', justifyContent: 'center', borderRadius: 14, backgroundColor: palette.forestSoft },
+  treeInfo: { flex: 1, minWidth: 0 },
+  treeName: { color: palette.ink, fontSize: 17, fontFamily: fonts.bold },
+  scientificName: { marginTop: 2, color: palette.muted, fontSize: 13, fontStyle: 'italic' },
+  codeChip: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, backgroundColor: palette.canvas, borderWidth: 1, borderColor: palette.line },
+  code: { color: palette.forestDark, fontSize: 12, fontFamily: fonts.extraBold, letterSpacing: 0.6 },
   details: { flexDirection: 'row', gap: 12 },
-  detail: { flex: 1 },
+  detail: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  detailText: { flex: 1, minWidth: 0 },
   detailLabel: { color: palette.muted, fontSize: 11 },
-  detailValue: { marginTop: 3, color: palette.ink, fontSize: 13, fontWeight: '700' },
-  metrics: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 12 },
-  metric: { color: palette.muted, fontSize: 11 },
-  note: { color: palette.muted, fontSize: 12, textAlign: 'center' },
-  footer: { color: palette.muted, fontSize: 11, textAlign: 'center', lineHeight: 16 },
+  detailValue: { marginTop: 1, color: palette.ink, fontSize: 14, fontFamily: fonts.semiBold },
+  measures: { flexDirection: 'row', gap: 8 },
+  measure: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 12, backgroundColor: palette.canvas },
+  measureValue: { color: palette.ink, fontSize: 15, fontFamily: fonts.extraBold },
+  measureLabel: { marginTop: 2, color: palette.muted, fontSize: 11 },
 });

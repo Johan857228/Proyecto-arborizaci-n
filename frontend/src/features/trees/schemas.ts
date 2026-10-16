@@ -2,6 +2,10 @@ import { z } from 'zod';
 
 import type { Catalogos } from '@/features/catalogs/types';
 
+// Medida numérica con mensajes en español: vacía ("Ingresa…") o con un valor que no es número.
+const medida = (mensajeVacio: string) =>
+  z.number({ error: (issue) => (issue.input === undefined ? mensajeVacio : 'Escribe un número válido.') });
+
 const arbolFieldsSchema = z.object({
   institucion_id: z.string().min(1, 'Selecciona la institución.'),
   zona: z.enum([
@@ -15,9 +19,9 @@ const arbolFieldsSchema = z.object({
   lat: z.number().min(-90).max(90),
   lng: z.number().min(-180).max(180),
   especie_id: z.number().int().positive('Selecciona una especie.'),
-  dap_cm: z.number().gt(0, 'Debe ser mayor que cero.'),
-  altura_m: z.number().gt(0).max(25, 'Máximo 25 m.'),
-  copa_m: z.number().gt(0),
+  dap_cm: medida('Ingresa el diámetro del tronco.').gt(0, 'Debe ser mayor que cero.'),
+  altura_m: medida('Ingresa la altura.').gt(0, 'Debe ser mayor que cero.').max(25, 'Máximo 25 m.'),
+  copa_m: medida('Ingresa el diámetro de copa.').gt(0, 'Debe ser mayor que cero.'),
   etapa: z.enum(['Plántula', 'Juvenil', 'Adulto', 'Senescente']),
   interferencia: z.enum([
     'Ninguna',

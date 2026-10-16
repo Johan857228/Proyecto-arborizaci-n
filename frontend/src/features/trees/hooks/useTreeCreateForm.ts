@@ -124,6 +124,10 @@ export function useTreeCreateForm(
     setValue('observaciones', updated, { shouldValidate: true });
   }
 
+  function clearObservations() {
+    setValue('observaciones', [], { shouldValidate: true });
+  }
+
   function removePhoto(photoToRemove: FotoLocal) {
     setPhotos((current) => current.filter((photo) => photo !== photoToRemove));
   }
@@ -172,6 +176,7 @@ export function useTreeCreateForm(
     removePhoto,
     updateLocation,
     toggleObservation,
+    clearObservations,
     submit,
   };
 }

@@ -22,6 +22,21 @@ api.interceptors.request.use(async (request) => {
   return request;
 });
 
+// Si el servidor rechaza el token (401) fuera del inicio de sesión, la sesión expiró: se avisa
+// al manejador registrado por la app para cerrarla y volver al login.
+let onSessionExpired: (() => Promise<void>) | undefined;
+
+export function setSessionExpiredHandler(handler: () => Promise<void>) {
+  onSessionExpired = handler;
+}
+
+api.interceptors.response.use(undefined, async (error: unknown) => {
+  if (isAxiosError(error) && error.response?.status === 401 && error.config?.url !== '/auth/login') {
+    await onSessionExpired?.();
+  }
+  return Promise.reject(error);
+});
+
 export function getApiErrorMessage(error: unknown) {
   if (error instanceof ApiContractError) {
     return error.message;

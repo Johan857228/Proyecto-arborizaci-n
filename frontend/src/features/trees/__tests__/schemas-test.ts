@@ -30,4 +30,11 @@ describe('arbolCreateSchema', () => {
     expect(arbolCreateSchema.safeParse({ ...validTree, zona: 'Otra' }).success).toBe(false);
     expect(arbolCreateSchema.safeParse({ ...validTree, zona: 'Otra', zona_otra: 'Cancha norte' }).success).toBe(true);
   });
+
+  it('muestra en español qué medida falta o no es un número', () => {
+    const vacia = arbolCreateSchema.safeParse({ ...validTree, altura_m: undefined });
+    expect(vacia.error?.issues.find((issue) => issue.path[0] === 'altura_m')?.message).toBe('Ingresa la altura.');
+    const invalida = arbolCreateSchema.safeParse({ ...validTree, dap_cm: Number('abc') });
+    expect(invalida.error?.issues.find((issue) => issue.path[0] === 'dap_cm')?.message).toBe('Escribe un número válido.');
+  });
 });
