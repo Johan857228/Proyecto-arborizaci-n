@@ -62,7 +62,14 @@ dispositivos móviles se usa el almacenamiento seguro del sistema.
 ```powershell
 npm run typecheck
 npm run lint
+npm test
 ```
+
+Las pruebas usan Jest con el preset `jest-expo` y viven en carpetas `__tests__/`
+junto al código que prueban. `npm run test:watch` las vuelve a ejecutar al guardar.
+
+En un clon nuevo, arranca Expo una vez (`npm run web`) antes de `npm run typecheck`:
+Expo genera `expo-env.d.ts` con los tipos de los archivos CSS (no se sube a Git).
 
 El modo SQLite y sus fotos son provisionales y pertenecen al backend. No uses la
 cuenta de demostración ni los datos locales para información real o producción.
