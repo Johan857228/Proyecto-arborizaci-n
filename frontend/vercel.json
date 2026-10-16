@@ -1,0 +1,17 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "installCommand": "npm ci",
+  "buildCommand": "npx expo export -p web",
+  "outputDirectory": "dist",
+  "cleanUrls": true,
+  "rewrites": [
+    { "source": "/trees/:id/inspect", "destination": "/trees/[id]/inspect" },
+    { "source": "/trees/:id/intervention", "destination": "/trees/[id]/intervention" },
+    { "source": "/trees/:id", "destination": "/trees/[id]" },
+    { "source": "/inspections/:id", "destination": "/inspections/[id]" },
+    { "source": "/interventions/:id", "destination": "/interventions/[id]" },
+    { "source": "/courses/:id", "destination": "/courses/[id]" },
+    { "source": "/budgets/:id", "destination": "/budgets/[id]" }
+  ]
+}

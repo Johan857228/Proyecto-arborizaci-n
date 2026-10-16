@@ -28,7 +28,7 @@ class ConsultaFalsa:
         return self
 
     def __getattr__(self, metodo):
-        if metodo in ("select", "eq", "ilike", "order", "range", "limit", "in_"):
+        if metodo in ("select", "eq", "neq", "ilike", "order", "range", "limit", "in_"):
             return lambda *a, **k: self._anotar(metodo, *a, **k)
         raise AttributeError(metodo)
 
@@ -40,6 +40,14 @@ class ConsultaFalsa:
         self.accion = "delete"
         return self._anotar("delete")
 
+    def update(self, fila):
+        self.accion, self.fila = "update", fila
+        return self._anotar("update", fila)
+
+    def upsert(self, fila, **opciones):
+        self.accion, self.fila = "insert", fila
+        return self._anotar("upsert", fila, **opciones)
+
     def execute(self):
         if self.accion == "insert":
             if self.almacen.get("falla_insert") == self.tabla:
@@ -48,6 +56,8 @@ class ConsultaFalsa:
             return SimpleNamespace(data=[{"id": "id-nuevo", **f} for f in filas])
         if self.accion == "delete":
             return SimpleNamespace(data=[])
+        if self.accion == "update":
+            return SimpleNamespace(data=[{**f, **self.fila} for f in self.almacen.get(self.tabla, [])])
         return SimpleNamespace(data=self.almacen.get(self.tabla, []))
 
 
@@ -66,6 +76,9 @@ class StorageFalso:
 
     def create_signed_url(self, ruta, segundos):
         return {"signedURL": f"https://falso/{ruta}"}
+
+    def create_signed_urls(self, rutas, segundos):
+        return [{"path": r, "signedURL": f"https://falso/{r}", "error": None} for r in rutas]
 
 
 class ClienteFalso:
@@ -101,6 +114,24 @@ ARBOL = {
     "registrado_por": "usuario-1",
 }
 
+PERFIL = {
+    "usuario_id": "usuario-1",
+    "nombre": "Usuario Uno",
+    "correo": "a@b.c",
+    "rol": "estudiante",
+    "institucion_id": "sj",
+    "curso_id": None,
+    "activo": True,
+}
+
+METODO_V1 = {
+    "id": "metodo-1",
+    "version": 1,
+    "nombre": "Conteo de hallazgos",
+    "umbral_riesgo": 1,
+    "umbral_critico": 4,
+}
+
 CUERPO_ARBOL = {
     "institucion_id": "sj",
     "zona": "Patio central",
@@ -119,7 +150,13 @@ CUERPO_ARBOL = {
 @pytest.fixture
 def entorno(monkeypatch):
     """Devuelve (cliente HTTP de prueba, almacén de datos, registro de llamadas)."""
-    almacen = {"arboles_resumen": [ARBOL], "arboles": [ARBOL], "arbol_fotos": []}
+    almacen = {
+        "arboles_resumen": [ARBOL],
+        "arboles": [ARBOL],
+        "arbol_fotos": [],
+        "perfiles": [PERFIL],
+        "metodos_calculo": [METODO_V1],
+    }
     registro: list = []
     falso = ClienteFalso(almacen, registro)
     monkeypatch.setattr(db, "cliente_de_usuario", lambda token: falso)

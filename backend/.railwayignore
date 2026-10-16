@@ -1,0 +1,7 @@
+# No se sube a Railway: entorno local, claves y pruebas.
+venv/
+.venv/
+.env
+__pycache__/
+.pytest_cache/
+tests/

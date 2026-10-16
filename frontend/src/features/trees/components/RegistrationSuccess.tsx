@@ -15,12 +15,14 @@ export function RegistrationSuccess({
   nombreComun,
   photoWarning,
   onRegisterAnother,
+  onViewTree,
   onViewInventory,
 }: {
   codigo: string;
   nombreComun: string;
   photoWarning?: string;
   onRegisterAnother: () => void;
+  onViewTree: () => void;
   onViewInventory: () => void;
 }) {
   return (
@@ -31,7 +33,10 @@ export function RegistrationSuccess({
             <Icon name={photoWarning ? 'warning' : 'checkCircle'} size={36} color={photoWarning ? palette.amber : palette.forest} />
           </Animated.View>
           <Text style={styles.title}>{photoWarning ? 'Árbol guardado, falta una foto' : 'Árbol registrado'}</Text>
-          <Text style={styles.subtitle}>El registro ya forma parte del inventario institucional.</Text>
+          <Text style={styles.subtitle}>
+            El registro ya forma parte del inventario institucional y quedó como su primera inspección,
+            pendiente de revisión por un docente.
+          </Text>
           <View style={styles.summary}>
             <Text style={styles.summaryLabel}>Código asignado</Text>
             <Text style={styles.code}>{codigo}</Text>
@@ -40,7 +45,8 @@ export function RegistrationSuccess({
           {photoWarning ? <InlineMessage tone="warning">{photoWarning}</InlineMessage> : null}
           <View style={styles.actions}>
             <PrimaryButton title="Registrar otro árbol" icon="add" onPress={onRegisterAnother} />
-            <PrimaryButton title="Ver inventario" icon="list" variant="secondary" onPress={onViewInventory} />
+            <PrimaryButton title="Ver ficha del árbol" icon="tree" variant="secondary" onPress={onViewTree} />
+            <PrimaryButton title="Ver inventario" icon="list" variant="ghost" onPress={onViewInventory} />
           </View>
         </FadeIn>
       </ScrollView>

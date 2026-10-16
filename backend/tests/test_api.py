@@ -198,9 +198,8 @@ def test_listar_busca_la_especie_sin_comodines(entorno):
 
 def test_detalle_arbol(entorno):
     cliente, almacen, _ = entorno
-    almacen["arbol_observaciones"] = [
-        {"observacion_codigo": "f_manchas", "observaciones_catalogo": {"grupo": "follaje", "etiqueta": "Manchas"}}
-    ]
+    almacen["observaciones_catalogo"] = [{"codigo": "f_manchas", "grupo": "follaje", "etiqueta": "Manchas", "orden": 1}]
+    almacen["arbol_observaciones"] = [{"observacion_codigo": "f_manchas"}]
     almacen["arbol_fotos"] = [{"id": "f1", "tipo": "completo", "storage_path": "x/y.jpg"}]
     r = cliente.get(f"/arboles/{ARBOL['id']}")
     assert r.status_code == 200

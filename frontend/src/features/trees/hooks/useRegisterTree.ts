@@ -1,3 +1,5 @@
+import { useQueryClient } from '@tanstack/react-query';
+
 import { useCreateTree } from '@/features/trees/hooks/useCreateTree';
 import { useUploadPhoto } from '@/features/trees/hooks/useUploadPhoto';
 import { fotosRegistroSchema } from '@/features/trees/schemas';
@@ -13,6 +15,7 @@ interface RegistrationResult {
 export function useRegisterTree() {
   const createTree = useCreateTree();
   const uploadPhoto = useUploadPhoto();
+  const queryClient = useQueryClient();
 
   async function submit(values: ArbolCrear, photos: FotoLocal[]): Promise<RegistrationResult> {
     const validatedPhotos = fotosRegistroSchema.safeParse(photos);
@@ -28,6 +31,8 @@ export function useRegisterTree() {
       return { tree };
     } catch (photoError) {
       return { tree, photoError };
+    } finally {
+      await queryClient.invalidateQueries();
     }
   }
 

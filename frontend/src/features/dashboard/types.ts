@@ -3,6 +3,7 @@ export type { ArbolResumen } from '@/shared/types/entities';
 
 export interface Estadisticas {
   total: number;
+  inspecciones_pendientes?: number;
   por_estado: Record<string, number>;
   por_institucion: { prefijo: string; nombre_corto: string; total: number }[];
   por_etapa: Record<string, number>;

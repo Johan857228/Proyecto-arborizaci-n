@@ -1,4 +1,5 @@
 import { useInfiniteQuery } from '@tanstack/react-query';
+import { Image } from 'expo-image';
 import { router, type Href } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -10,12 +11,14 @@ import type { FiltrosInventario, Zona } from '@/features/trees/types';
 import { treesService } from '@/features/trees/services/treesService';
 import { useIsWide } from '@/hooks/use-is-wide';
 import { getApiErrorMessage } from '@/services/api/client';
+import { formatFecha } from '@/shared/format';
 import type { ArbolResumen, EstadoArbol } from '@/shared/types/entities';
 import { InlineMessage, PrimaryButton, Screen, SelectField } from '@/shared/components/FormControls';
 import { Grid } from '@/shared/components/Grid';
 import { Icon, type IconName } from '@/shared/components/Icon';
 import { FadeIn } from '@/shared/components/Motion';
 import { StatusBadge } from '@/shared/components/StatusBadge';
+import { RevisionBadge } from '@/shared/components/UI';
 import { gradient } from '@/shared/styles/gradient';
 
 const PAGE_SIZE = 50;
@@ -51,18 +54,41 @@ function Detail({ icon, label, value }: { icon: IconName; label: string; value: 
 
 function TreeCard({ tree }: { tree: ArbolResumen }) {
   return (
-    <View style={styles.treeCard}>
-      <View style={styles.treeHeader}>
-        <View style={[styles.treeIcon, gradient(gradients.lime)]}><Icon name="tree" size={22} color={palette.forestDark} /></View>
-        <View style={styles.treeInfo}>
+    <Pressable
+      accessibilityRole="link"
+      accessibilityLabel={`Ver ficha de ${tree.codigo}`}
+      onPress={() => router.push(`/(app)/trees/${tree.id}` as Href)}
+      style={({ pressed }) => [styles.treeCard, pressed && styles.pressed]}
+    >
+      {/* La foto general más reciente es la portada; sin foto queda el ícono sobre el degradado. */}
+      <View style={styles.cover}>
+        {tree.foto_url ? (
+          <Image
+            source={{ uri: tree.foto_url }}
+            style={StyleSheet.absoluteFill}
+            contentFit="cover"
+            transition={200}
+            accessibilityLabel={`Foto de ${tree.nombre_comun} ${tree.codigo}`}
+          />
+        ) : (
+          <View style={[styles.coverEmpty, gradient(gradients.lime)]}>
+            <Icon name="tree" size={44} color={palette.forestDark} />
+            <Text style={styles.coverEmptyText}>Sin foto todavía</Text>
+          </View>
+        )}
+        <View style={[styles.coverVeil, gradient('linear-gradient(180deg, rgba(8, 24, 15, 0.25) 0%, rgba(8, 24, 15, 0) 35%, rgba(8, 24, 15, 0.8) 100%)')]} />
+        <View style={styles.coverTop}>
+          <View style={styles.codeChip}>
+            <Text style={styles.code}>{tree.codigo}</Text>
+          </View>
+          <StatusBadge estado={tree.estado} />
+        </View>
+        <View style={styles.coverBottom}>
           <Text style={styles.treeName} numberOfLines={1}>{tree.nombre_comun}</Text>
           <Text style={styles.scientificName} numberOfLines={1}>{tree.nombre_cientifico}</Text>
         </View>
-        <StatusBadge estado={tree.estado} />
       </View>
-      <View style={styles.codeChip}>
-        <Text style={styles.code}>{tree.codigo}</Text>
-      </View>
+      <View style={styles.cardBody}>
       <View style={styles.details}>
         <Detail icon="building" label="Institución" value={tree.nombre_corto} />
         <Detail icon="location" label="Zona" value={`${tree.zona}${tree.zona_otra ? ` · ${tree.zona_otra}` : ''}`} />
@@ -81,7 +107,15 @@ function TreeCard({ tree }: { tree: ArbolResumen }) {
           <Text style={styles.measureLabel}>Observaciones</Text>
         </View>
       </View>
-    </View>
+      {tree.ultima_inspeccion_en ? (
+        <View style={styles.inspection}>
+          <Icon name="calendar" size={14} color={palette.muted} />
+          <Text style={styles.inspectionText}>Última inspección: {formatFecha(tree.ultima_inspeccion_en)}</Text>
+          {tree.ultima_revision === 'pendiente' ? <RevisionBadge estado="pendiente" /> : null}
+        </View>
+      ) : null}
+      </View>
+    </Pressable>
   );
 }
 
@@ -157,6 +191,7 @@ export default function TreeListScreen() {
             <Text style={styles.title}>Inventario de árboles</Text>
             <Text style={styles.subtitle}>
               Consulta los registros institucionales y filtra por estado, institución, especie o zona.
+              Toca un árbol para ver su ficha, su historial de inspecciones y sus intervenciones.
             </Text>
           </View>
           <View style={styles.headerAction}>
@@ -356,13 +391,17 @@ const styles = StyleSheet.create({
   messageIcon: { width: 56, height: 56, marginBottom: 4, alignItems: 'center', justifyContent: 'center', borderRadius: 18, backgroundColor: palette.forestSoft },
   messageTitle: { color: palette.ink, fontSize: 17, fontFamily: fonts.extraBold, textAlign: 'center' },
   messageText: { maxWidth: 360, color: palette.muted, fontSize: 14, lineHeight: 20, textAlign: 'center' },
-  treeCard: { gap: 14, padding: 18, borderRadius: 20, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.paper, boxShadow: shadows.card },
-  treeHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  treeIcon: { width: 46, height: 46, alignItems: 'center', justifyContent: 'center', borderRadius: 14, backgroundColor: palette.forestSoft },
-  treeInfo: { flex: 1, minWidth: 0 },
-  treeName: { color: palette.ink, fontSize: 17, fontFamily: fonts.bold },
-  scientificName: { marginTop: 2, color: palette.muted, fontSize: 13, fontStyle: 'italic' },
-  codeChip: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, backgroundColor: palette.canvas, borderWidth: 1, borderColor: palette.line },
+  treeCard: { overflow: 'hidden', borderRadius: 20, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.paper, boxShadow: shadows.card },
+  cover: { height: 190, backgroundColor: palette.forestSoft },
+  coverEmpty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 6 },
+  coverEmptyText: { color: palette.forestDark, fontSize: 12, fontFamily: fonts.semiBold },
+  coverVeil: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
+  coverTop: { position: 'absolute', top: 12, left: 12, right: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  coverBottom: { position: 'absolute', left: 16, right: 16, bottom: 12 },
+  cardBody: { gap: 14, padding: 18 },
+  treeName: { color: palette.paper, fontSize: 19, fontFamily: fonts.extraBold, letterSpacing: -0.2 },
+  scientificName: { marginTop: 2, color: '#DCE9DF', fontSize: 13, fontStyle: 'italic' },
+  codeChip: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, backgroundColor: 'rgba(255, 255, 255, 0.92)' },
   code: { color: palette.forestDark, fontSize: 12, fontFamily: fonts.extraBold, letterSpacing: 0.6 },
   details: { flexDirection: 'row', gap: 12 },
   detail: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 8 },
@@ -373,4 +412,6 @@ const styles = StyleSheet.create({
   measure: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 12, backgroundColor: palette.canvas },
   measureValue: { color: palette.ink, fontSize: 15, fontFamily: fonts.extraBold },
   measureLabel: { marginTop: 2, color: palette.muted, fontSize: 11 },
+  inspection: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
+  inspectionText: { color: palette.muted, fontSize: 12 },
 });

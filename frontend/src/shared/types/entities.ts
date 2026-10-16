@@ -30,4 +30,12 @@ export interface ArbolResumen {
   registrado_en: string;
   n_observaciones: number;
   estado: EstadoArbol;
+  especie_id?: number | null;
+  registrado_por?: string | null;
+  puntaje_riesgo?: number | null;
+  ultima_inspeccion_id?: string | null;
+  ultima_inspeccion_en?: string | null;
+  ultima_revision?: 'pendiente' | 'confirmada' | 'anulada' | null;
+  n_inspecciones?: number | null;
+  foto_url?: string | null;
 }

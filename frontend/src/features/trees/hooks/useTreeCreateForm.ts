@@ -5,6 +5,7 @@ import { Platform } from 'react-native';
 import { useForm, useWatch } from 'react-hook-form';
 
 import type { Catalogos } from '@/features/catalogs/types';
+import { payloadBiotico, valoresBioticosIniciales } from '@/features/inspections/bioticos';
 import { useCaptureLocation } from '@/features/trees/hooks/useCaptureLocation';
 import { createArbolCreateSchema, fotosRegistroSchema, type ArbolFormInput } from '@/features/trees/schemas';
 import type { ArbolCrear, FotoLocal } from '@/features/trees/types';
@@ -36,6 +37,7 @@ export function useTreeCreateForm(
       lat: 0,
       lng: 0,
       gps_confirmado: false,
+      precision_gps_m: null,
       especie_id: 0,
       dap_cm: undefined,
       altura_m: undefined,
@@ -44,6 +46,8 @@ export function useTreeCreateForm(
       interferencia: 'Ninguna',
       interferencia_otra: '',
       observaciones: [],
+      notas: '',
+      ...valoresBioticosIniciales,
     },
   });
 
@@ -117,6 +121,7 @@ export function useTreeCreateForm(
     setValue('lat', value.lat, { shouldValidate: true });
     setValue('lng', value.lng, { shouldValidate: true });
     setValue('gps_confirmado', true, { shouldValidate: true });
+    setValue('precision_gps_m', value.accuracy == null ? null : Math.round(value.accuracy * 10) / 10, { shouldValidate: true });
   }
 
   function toggleObservation(code: string) {
@@ -161,6 +166,9 @@ export function useTreeCreateForm(
         ? input.interferencia_otra
         : undefined,
       observaciones: input.observaciones,
+      precision_gps_m: input.precision_gps_m ?? null,
+      notas: input.notas,
+      ...payloadBiotico(input),
     };
     await onSubmit(payload, validPhotos.data);
   });

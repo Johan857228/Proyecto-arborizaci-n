@@ -31,6 +31,7 @@ export function LoginScreen() {
   const isCompact = useWindowDimensions().width < 1024;
   const login = useLogin();
   const sessionExpired = useAuthStore((state) => state.sessionExpired);
+  const aviso = useAuthStore((state) => state.aviso);
   const webOrigin = Platform.OS === 'web' && typeof window !== 'undefined'
     ? window.location.origin
     : null;
@@ -60,6 +61,8 @@ export function LoginScreen() {
       {sessionExpired ? (
         <InlineMessage tone="warning">Tu sesión expiró por seguridad. Inicia sesión de nuevo para continuar.</InlineMessage>
       ) : null}
+
+      {aviso ? <InlineMessage tone="warning">{aviso}</InlineMessage> : null}
 
       {backendStatus.data?.temporal ? (
         <InlineMessage tone="warning">

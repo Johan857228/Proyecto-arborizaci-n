@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 
 import type { Session } from '@/features/auth/types';
+import { queryClient } from '@/services/api/queryClient';
 import {
   clearStoredSession,
   readStoredSession,
@@ -12,9 +13,11 @@ interface AuthState {
   hydrated: boolean;
   /** true cuando la sesión terminó porque el servidor rechazó el token (expiró). */
   sessionExpired: boolean;
+  /** Otro motivo de cierre para mostrar en el inicio de sesión (p. ej. cuenta desactivada). */
+  aviso: string | null;
   hydrate: () => Promise<void>;
   setSession: (session: Session) => Promise<void>;
-  signOut: () => Promise<void>;
+  signOut: (aviso?: string) => Promise<void>;
   expire: () => Promise<void>;
 }
 
@@ -22,6 +25,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   session: null,
   hydrated: false,
   sessionExpired: false,
+  aviso: null,
   hydrate: async () => {
     try {
       set({ session: await readStoredSession(), hydrated: true });
@@ -31,14 +35,17 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
   setSession: async (session) => {
     await writeStoredSession(session);
-    set({ session, hydrated: true, sessionExpired: false });
+    set({ session, hydrated: true, sessionExpired: false, aviso: null });
   },
-  signOut: async () => {
+  signOut: async (aviso) => {
     await clearStoredSession();
-    set({ session: null, hydrated: true, sessionExpired: false });
+    // Los datos en caché pertenecen al usuario que sale: no deben verse en la siguiente sesión.
+    queryClient.clear();
+    set({ session: null, hydrated: true, sessionExpired: false, aviso: aviso ?? null });
   },
   expire: async () => {
     await clearStoredSession();
-    set({ session: null, hydrated: true, sessionExpired: true });
+    queryClient.clear();
+    set({ session: null, hydrated: true, sessionExpired: true, aviso: null });
   },
 }));

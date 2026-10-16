@@ -1,3 +1,5 @@
+import '@/shared/validacion';
+
 import {
   PlusJakartaSans_600SemiBold,
   PlusJakartaSans_700Bold,
@@ -11,7 +13,7 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
 import { palette } from '@/config/constants';
 import { useAuthStore } from '@/features/auth/store';
-import { api, setSessionExpiredHandler } from '@/services/api/client';
+import { api, setSessionExpiredHandler, setSessionRenewedHandler } from '@/services/api/client';
 import { queryClient } from '@/services/api/queryClient';
 import { BrandMark } from '@/shared/components/BrandMark';
 import '@/global.css';
@@ -34,11 +36,12 @@ function SessionGate() {
     void hydrate();
   }, [hydrate]);
 
-  // Token expirado: cerrar la sesión una sola vez y limpiar los datos guardados en caché.
+  // Token renovado: guardar la nueva sesión. Si ya no se puede renovar, cerrar la sesión una sola
+  // vez (el store limpia también los datos guardados en caché).
   useEffect(() => {
+    setSessionRenewedHandler((nueva) => useAuthStore.getState().setSession(nueva));
     setSessionExpiredHandler(async () => {
       if (!useAuthStore.getState().session) return;
-      queryClient.clear();
       await useAuthStore.getState().expire();
     });
   }, []);

@@ -1,13 +1,27 @@
+import { isAxiosError } from 'axios';
 import { Stack } from 'expo-router';
+import { useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { palette } from '@/config/constants';
+import { useAuthStore } from '@/features/auth/store';
+import { useMiPerfil } from '@/features/perfil/hooks/usePerfil';
 import { useIsWide } from '@/hooks/use-is-wide';
 import { AppBackground } from '@/shared/components/AppBackground';
 import { AppHeader, BottomNav } from '@/shared/components/AppNavigation';
 
 export default function AppLayout() {
   const isWide = useIsWide();
+  const perfil = useMiPerfil();
+  const signOut = useAuthStore((state) => state.signOut);
+  // El backend responde 403 al perfil de una cuenta desactivada: se cierra la sesión con el motivo.
+  const cuentaDesactivada = isAxiosError(perfil.error) && perfil.error.response?.status === 403;
+
+  useEffect(() => {
+    if (cuentaDesactivada) {
+      void signOut('Tu cuenta está desactivada. Habla con el administrador de tu institución.');
+    }
+  }, [cuentaDesactivada, signOut]);
 
   // Barra superior en todas las pantallas; en teléfonos la navegación va abajo, como en una app nativa.
   // Las pantallas son transparentes para que se vea el fondo decorativo común.

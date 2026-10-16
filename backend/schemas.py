@@ -32,7 +32,23 @@ Interferencia = Literal[
     "Otra infraestructura",
 ]
 Estado = Literal["sano", "riesgo", "critico"]
+
+# Agentes bióticos (tabla de variables FB-01 a FB-06). Se registran en cada inspección.
+TipoInsecto = Literal["defoliadores", "chupadores", "escamas", "arrieras", "minadores", "agalladores"]
+TipoEnfermedad = Literal["fungica", "bacteriana", "viral", "indeterminada"]
+ParteArbol = Literal["hojas", "ramas", "tronco", "raiz", "flores_frutos"]
+TipoHemiparasita = Literal["pajarito", "cuscuta"]
+TipoEpifita = Literal["bromelias", "orquideas", "helechos", "liquenes", "musgos"]
+CAMPOS_BIOTICOS = {
+    "insectos", "insectos_parte", "insectos_sev", "enfermedad", "enfermedad_parte", "enfermedad_sev",
+    "muestra_lab", "cod_muestra_lab", "hemiparasitas", "pct_hemiparasitas", "bejucos", "epifitas",
+}
 TipoFoto = Literal["completo", "detalle", "adicional"]
+EstadoRevision = Literal["pendiente", "confirmada", "anulada"]
+OrigenInspeccion = Literal["registro", "seguimiento"]
+Rol = Literal["administrador", "docente", "estudiante"]
+
+ZONAS: tuple[str, ...] = ("Patio central", "Entrada principal", "Zona deportiva", "Bloques académicos", "Otra")
 
 
 # ------------------------------- Autenticación -------------------------------
@@ -44,6 +60,10 @@ class LoginIn(BaseModel):
     @classmethod
     def _normalizar_email(cls, v):
         return v.strip().lower() if isinstance(v, str) else v
+
+
+class RefrescarIn(BaseModel):
+    refresh_token: str = Field(min_length=10)
 
 
 class SesionOut(BaseModel):
@@ -85,7 +105,56 @@ class Catalogos(BaseModel):
 
 
 # ----------------------------------- Árboles -----------------------------------
-class ArbolCrear(BaseModel):
+class CamposBioticos(BaseModel):
+    """Agentes bióticos observados en la visita (FB-01 a FB-06). Todos son opcionales: si no se
+    observa un agente, su tipo va vacío y no se envían su parte ni su severidad (escala 0 a 4)."""
+
+    insectos: TipoInsecto | None = Field(default=None, description="FB-01 tipo de insecto")
+    insectos_parte: ParteArbol | None = None
+    insectos_sev: int | None = Field(default=None, ge=0, le=4)
+    enfermedad: TipoEnfermedad | None = Field(default=None, description="FB-02 enfermedad sospechada")
+    enfermedad_parte: ParteArbol | None = None
+    enfermedad_sev: int | None = Field(default=None, ge=0, le=4)
+    muestra_lab: bool = Field(default=False, description="FB-03 se tomó muestra para laboratorio")
+    cod_muestra_lab: str | None = Field(default=None, min_length=3, max_length=40, pattern=r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
+    hemiparasitas: TipoHemiparasita | None = Field(default=None, description="FB-04 pajarito o cuscuta")
+    pct_hemiparasitas: float | None = Field(default=None, gt=0, le=100, description="Porcentaje de la copa afectado")
+    bejucos: int | None = Field(default=None, ge=0, le=4, description="FB-05 severidad 0 a 4")
+    epifitas: list[TipoEpifita] = Field(default_factory=list, max_length=5, description="FB-06 selección múltiple")
+
+    @field_validator("cod_muestra_lab", mode="before")
+    @classmethod
+    def _limpiar_codigo(cls, v):
+        if isinstance(v, str):
+            v = v.strip().upper()
+        return v or None
+
+    @field_validator("epifitas", mode="before")
+    @classmethod
+    def _epifitas_vacias(cls, v):
+        return [] if v is None else v
+
+    @model_validator(mode="after")
+    def _reglas_bioticas(self):
+        for agente, nombre in (("insectos", "los insectos"), ("enfermedad", "la enfermedad")):
+            if getattr(self, agente) is None:
+                setattr(self, f"{agente}_parte", None)
+                setattr(self, f"{agente}_sev", None)
+            elif getattr(self, f"{agente}_parte") is None or getattr(self, f"{agente}_sev") is None:
+                raise ValueError(f"Indica la parte afectada y la severidad de {nombre}")
+        if self.muestra_lab and not self.cod_muestra_lab:
+            raise ValueError("Escribe el código con que se rotuló la muestra de laboratorio")
+        if not self.muestra_lab:
+            self.cod_muestra_lab = None
+        if self.hemiparasitas is None:
+            self.pct_hemiparasitas = None
+        elif self.pct_hemiparasitas is None:
+            raise ValueError("Indica qué porcentaje de la copa cubren las hemiparásitas")
+        self.epifitas = sorted(set(self.epifitas))
+        return self
+
+
+class ArbolCrear(CamposBioticos):
     """Lo que envía el formulario del frontend (pasos 1, 3 y 4 del prototipo)."""
 
     institucion_id: str = Field(min_length=1, max_length=64)
@@ -105,9 +174,13 @@ class ArbolCrear(BaseModel):
         max_length=MAX_OBSERVACIONES,
         description="Códigos de las casillas marcadas, p. ej. f_manchas",
     )
+    precision_gps_m: float | None = Field(
+        default=None, ge=0, le=10000, description="Precisión que reporta el GPS del dispositivo, en metros"
+    )
+    notas: str | None = Field(default=None, max_length=1000, description="Notas de la primera inspección")
 
     # mode="before": se limpian los espacios ANTES de medir el largo del texto
-    @field_validator("zona_otra", "interferencia_otra", mode="before")
+    @field_validator("zona_otra", "interferencia_otra", "notas", mode="before")
     @classmethod
     def _limpiar_texto(cls, v):
         if isinstance(v, str):
@@ -146,6 +219,15 @@ class ArbolResumen(BaseModel):
     registrado_en: datetime
     n_observaciones: int
     estado: Estado
+    # Columnas de la vista desde la migración 001 (opcionales para no romper datos anteriores)
+    especie_id: int | None = None
+    registrado_por: str | None = None
+    puntaje_riesgo: float | None = None
+    ultima_inspeccion_id: str | None = None
+    ultima_inspeccion_en: datetime | None = None
+    ultima_revision: EstadoRevision | None = None
+    n_inspecciones: int | None = None
+    foto_url: str | None = Field(default=None, description="Foto general más reciente (URL firmada por 1 hora)")
 
 
 class ObservacionOut(BaseModel):
@@ -208,6 +290,7 @@ class TotalesAmbientales(BaseModel):
 
 class Estadisticas(BaseModel):
     total: int
+    inspecciones_pendientes: int = 0
     por_estado: dict[str, int]
     por_institucion: list[ConteoInstitucion]
     por_etapa: dict[str, int]

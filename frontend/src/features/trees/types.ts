@@ -1,3 +1,5 @@
+import type { PayloadBiotico } from '@/features/inspections/bioticos';
+
 export type Zona =
   | 'Patio central'
   | 'Entrada principal'
@@ -26,7 +28,7 @@ export interface PaginaInventario extends FiltrosInventario {
   desplazamiento: number;
 }
 
-export interface ArbolCrear {
+export interface ArbolCrear extends Partial<PayloadBiotico> {
   institucion_id: string;
   zona: Zona;
   zona_otra?: string | null;
@@ -40,6 +42,8 @@ export interface ArbolCrear {
   interferencia: Interferencia;
   interferencia_otra?: string | null;
   observaciones: string[];
+  precision_gps_m?: number | null;
+  notas?: string;
 }
 
 export interface FotoLocal {

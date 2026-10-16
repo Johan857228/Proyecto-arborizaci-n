@@ -6,14 +6,20 @@ import Animated from 'react-native-reanimated';
 
 import { chartColors, fonts, gradients, layout, palette, shadows } from '@/config/constants';
 import { useDashboard } from '@/features/dashboard/hooks/useDashboard';
+import { useMiProgreso } from '@/features/gamification/api';
+import { modulosPara } from '@/features/modules/modulos';
+import { useCuentasSinInstitucion, useMiPerfil } from '@/features/perfil/hooks/usePerfil';
+import { ETIQUETA_ROL, esAdmin, esRevisor } from '@/features/perfil/schemas';
 import { useIsWide } from '@/hooks/use-is-wide';
 import { getApiErrorMessage } from '@/services/api/client';
+import { saludo } from '@/shared/format';
 import { DonutChart, type DonutSlice } from '@/shared/components/DonutChart';
-import { InlineMessage, Screen } from '@/shared/components/FormControls';
+import { InlineMessage, PrimaryButton, Screen } from '@/shared/components/FormControls';
 import { Grid } from '@/shared/components/Grid';
 import { Icon, type IconName } from '@/shared/components/Icon';
 import { AnimatedNumber, FadeIn, FloatingLeaf, Shimmer, usePressScale } from '@/shared/components/Motion';
 import { StatusBadge, estadoArbol } from '@/shared/components/StatusBadge';
+import { Badge, NavCard, ProgressBar, RevisionBadge } from '@/shared/components/UI';
 import { gradient } from '@/shared/styles/gradient';
 import type { EstadoArbol } from '@/shared/types/entities';
 
@@ -35,13 +41,6 @@ function topConOtras(items: { key: string; label: string; value: number }[]): Do
     ...principales.map((item, index) => ({ ...item, color: chartColors.categorical[index] })),
     ...(resto > 0 ? [{ key: 'otras', label: 'Otras', value: resto, color: chartColors.other }] : []),
   ];
-}
-
-function greeting() {
-  const hour = new Date().getHours();
-  if (hour < 12) return 'Buenos días';
-  if (hour < 19) return 'Buenas tardes';
-  return 'Buenas noches';
 }
 
 function formatDate(iso: string) {
@@ -87,7 +86,14 @@ function HeroButton({ title, icon, onPress, variant }: { title: string; icon: Ic
 export function DashboardScreen() {
   const isWide = useIsWide();
   const { stats, recentTrees } = useDashboard();
+  const perfil = useMiPerfil();
+  const progreso = useMiProgreso();
   const data = stats.data;
+  const revisor = esRevisor(perfil.data);
+  const primerNombre = perfil.data?.nombre.split(' ')[0];
+  const pendientes = data?.inspecciones_pendientes ?? 0;
+  const modulos = modulosPara(perfil.data);
+  const cuentasNuevas = useCuentasSinInstitucion(esAdmin(perfil.data));
   const counts: Record<EstadoArbol, number> = {
     sano: data?.por_estado.sano ?? 0,
     riesgo: data?.por_estado.riesgo ?? 0,
@@ -137,9 +143,22 @@ export function DashboardScreen() {
     <Screen>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <FadeIn index={0} style={styles.pageHeader}>
-          <Text style={styles.greeting}>{greeting()}</Text>
+          <Text style={styles.greeting}>{saludo()}{primerNombre ? `, ${primerNombre}` : ''}</Text>
           <Text style={styles.pageSubtitle}>Este es el estado del arbolado de tu institución.</Text>
+          {perfil.data ? (
+            <View style={styles.badges}>
+              <Badge label={ETIQUETA_ROL[perfil.data.rol]} tono="info" />
+              {perfil.data.institucion_nombre ? <Badge label={perfil.data.institucion_nombre} /> : null}
+              {perfil.data.curso_nombre ? <Badge label={`Curso ${perfil.data.curso_nombre}`} /> : null}
+            </View>
+          ) : null}
         </FadeIn>
+        {perfil.error ? <InlineMessage>{getApiErrorMessage(perfil.error)}</InlineMessage> : null}
+        {perfil.data && !perfil.data.institucion_id ? (
+          <InlineMessage tone="info">
+            Tu cuenta aún no tiene institución asignada. Pídele al administrador que te la asigne para entrar a un curso y aparecer en el ranking de tu institución.
+          </InlineMessage>
+        ) : null}
 
         <FadeIn index={1} style={[styles.hero, isWide && styles.heroWide]}>
           {/* Foto del campus con un velo verde para que el texto se lea bien. */}
@@ -188,7 +207,75 @@ export function DashboardScreen() {
           )}
         />
 
-        <FadeIn index={6} style={styles.sectionHeading}>
+        <FadeIn index={6} style={[styles.columns, isWide && styles.columnsWide]}>
+          {revisor ? (
+            <View style={[styles.column, isWide && styles.columnWide]}>
+              <Card title="Revisión de inspecciones" icon="review">
+                <Text style={styles.activityValue}>{stats.isLoading ? '—' : pendientes}</Text>
+                <Text style={styles.activityText}>
+                  {pendientes === 1 ? 'inspección espera revisión' : 'inspecciones esperan revisión'}. Al confirmarlas
+                  cuentan en los reportes y suman puntos a quien las hizo.
+                </Text>
+                <PrimaryButton
+                  title={pendientes > 0 ? 'Revisar ahora' : 'Ver revisión'}
+                  icon="review"
+                  variant={pendientes > 0 ? 'primary' : 'secondary'}
+                  compact
+                  onPress={() => router.navigate('/(app)/review' as Href)}
+                />
+              </Card>
+            </View>
+          ) : null}
+          <View style={[styles.column, isWide && styles.columnWide]}>
+            <Card
+              title="Tu progreso"
+              icon="trophy"
+              action={(
+                <Pressable accessibilityRole="link" onPress={() => router.navigate('/(app)/progress' as Href)} style={styles.cardAction}>
+                  <Text style={styles.cardActionText}>Ver detalle</Text>
+                  <Icon name="chevronRight" size={16} color={palette.forest} />
+                </Pressable>
+              )}
+            >
+              {progreso.data ? (
+                <>
+                  <Text style={styles.activityTitle}>{progreso.data.nivel.nombre} · {progreso.data.puntos} puntos</Text>
+                  <ProgressBar pct={progreso.data.nivel.progreso_pct} />
+                  <Text style={styles.activityText}>
+                    {progreso.data.nivel.siguiente
+                      ? `${progreso.data.nivel.faltan} puntos para ${progreso.data.nivel.siguiente}`
+                      : 'Nivel máximo alcanzado'}
+                    {` · Racha: ${progreso.data.racha.actual} semana(s)`}
+                    {progreso.data.resumen.pendientes ? ` · ${progreso.data.resumen.pendientes} inspección(es) esperando revisión` : ''}
+                  </Text>
+                </>
+              ) : progreso.error ? (
+                <InlineMessage>{getApiErrorMessage(progreso.error)}</InlineMessage>
+              ) : (
+                <Text style={styles.activityText}>Cargando tu progreso…</Text>
+              )}
+            </Card>
+          </View>
+        </FadeIn>
+
+        <FadeIn index={7} style={styles.sectionHeading}>
+          <Text style={styles.sectionTitle}>Módulos</Text>
+          <Text style={styles.sectionCaption}>Inspecciones, mantenimiento, cursos, reportes y gestión de la institución.</Text>
+        </FadeIn>
+        <FadeIn index={8} style={styles.modules}>
+          {modulos.map((modulo) => (
+            <NavCard
+              key={modulo.clave}
+              title={modulo.titulo}
+              text={modulo.texto}
+              href={modulo.href}
+              icon={modulo.icono}
+              badge={modulo.clave === 'revision' ? pendientes : modulo.clave === 'usuarios' ? cuentasNuevas : undefined}
+            />
+          ))}
+        </FadeIn>
+
+        <FadeIn index={9} style={styles.sectionHeading}>
           <Text style={styles.sectionTitle}>Distribución del arbolado</Text>
           <Text style={styles.sectionCaption}>Pasa el cursor o toca una porción para ver su detalle.</Text>
         </FadeIn>
@@ -198,7 +285,7 @@ export function DashboardScreen() {
           gap={20}
           keyOf={(chart) => chart.key}
           renderItem={(chart) => (
-            <FadeIn index={7 + distribucion.indexOf(chart)} style={styles.chartCard}>
+            <FadeIn index={10 + distribucion.indexOf(chart)} style={styles.chartCard}>
               <Card title={chart.title} icon={chart.icon}>
                 <DonutChart slices={chart.slices} centerLabel={chart.centerLabel} size={150} thickness={20} delay={400 + distribucion.indexOf(chart) * 150} />
               </Card>
@@ -206,7 +293,7 @@ export function DashboardScreen() {
           )}
         />
 
-        <FadeIn index={10} style={[styles.columns, isWide && styles.columnsWide]}>
+        <FadeIn index={13} style={[styles.columns, isWide && styles.columnsWide]}>
           <View style={[styles.column, isWide && styles.columnWide]}>
             <Card title="Salud del arbolado" icon="trending">
               <DonutChart
@@ -255,16 +342,28 @@ export function DashboardScreen() {
               {recentTrees.isLoading ? <Text style={styles.helper}>Cargando registros…</Text> : null}
               {recentTrees.error ? <InlineMessage>{getApiErrorMessage(recentTrees.error)}</InlineMessage> : null}
               {(recentTrees.data ?? []).map((tree, index) => (
-                <FadeIn key={tree.id} index={11 + index} style={[styles.treeRow, index > 0 && styles.treeRowDivider]}>
-                  <View style={[styles.treeGlyph, gradient(gradients.lime)]}><Icon name="tree" size={20} color={palette.forestDark} /></View>
-                  <View style={styles.treeInfo}>
-                    <Text style={styles.treeCode}>{tree.codigo}</Text>
-                    <Text style={styles.treeSpecies} numberOfLines={1}>{tree.nombre_comun} · {tree.zona}</Text>
-                  </View>
-                  <View style={styles.treeMeta}>
-                    <StatusBadge estado={tree.estado} />
-                    <Text style={styles.treeDate}>{formatDate(tree.registrado_en)}</Text>
-                  </View>
+                <FadeIn key={tree.id} index={14 + index} style={index > 0 ? styles.treeRowDivider : undefined}>
+                  <Pressable
+                    accessibilityRole="link"
+                    accessibilityLabel={`Ver ficha de ${tree.codigo}`}
+                    onPress={() => router.push(`/(app)/trees/${tree.id}` as Href)}
+                    style={({ pressed }) => [styles.treeRow, pressed && styles.pressed]}
+                  >
+                    {tree.foto_url ? (
+                      <Image source={{ uri: tree.foto_url }} style={styles.treeThumb} contentFit="cover" transition={150} />
+                    ) : (
+                      <View style={[styles.treeGlyph, gradient(gradients.lime)]}><Icon name="tree" size={20} color={palette.forestDark} /></View>
+                    )}
+                    <View style={styles.treeInfo}>
+                      <Text style={styles.treeCode}>{tree.codigo}</Text>
+                      <Text style={styles.treeSpecies} numberOfLines={1}>{tree.nombre_comun} · {tree.zona}</Text>
+                      {tree.ultima_revision === 'pendiente' ? <RevisionBadge estado="pendiente" /> : null}
+                    </View>
+                    <View style={styles.treeMeta}>
+                      <StatusBadge estado={tree.estado} />
+                      <Text style={styles.treeDate}>{formatDate(tree.registrado_en)}</Text>
+                    </View>
+                  </Pressable>
                 </FadeIn>
               ))}
               {!recentTrees.isLoading && !recentTrees.error && recentTrees.data?.length === 0 ? (
@@ -288,6 +387,11 @@ const styles = StyleSheet.create({
   pageHeader: { gap: 4 },
   greeting: { color: palette.ink, fontSize: 28, fontFamily: fonts.extraBold, letterSpacing: -0.6 },
   pageSubtitle: { color: palette.muted, fontSize: 15 },
+  badges: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 },
+  activityValue: { color: palette.ink, fontSize: 30, fontFamily: fonts.extraBold, letterSpacing: -0.5 },
+  activityTitle: { color: palette.ink, fontSize: 16, fontFamily: fonts.bold },
+  activityText: { color: palette.muted, fontSize: 13, lineHeight: 19 },
+  modules: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   hero: { gap: 20, padding: 24, paddingTop: 140, overflow: 'hidden', borderRadius: 24, backgroundColor: palette.forestDark, boxShadow: shadows.raised },
   heroVeil: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
   heroPlace: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6, paddingVertical: 5, paddingHorizontal: 10, borderRadius: 999, backgroundColor: 'rgba(255, 255, 255, 0.12)', borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.18)' },
@@ -332,6 +436,7 @@ const styles = StyleSheet.create({
   treeRow: { minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 },
   treeRowDivider: { borderTopWidth: 1, borderTopColor: palette.line },
   treeGlyph: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: palette.forestSoft },
+  treeThumb: { width: 48, height: 48, borderRadius: 12, backgroundColor: palette.forestSoft },
   treeInfo: { flex: 1, minWidth: 0 },
   treeCode: { color: palette.ink, fontFamily: fonts.bold, fontSize: 14 },
   treeSpecies: { marginTop: 2, color: palette.muted, fontSize: 13 },

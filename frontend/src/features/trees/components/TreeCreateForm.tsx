@@ -9,6 +9,7 @@ import type { Catalogos } from '@/features/catalogs/types';
 import type { ArbolCrear, FotoLocal } from '@/features/trees/types';
 import { useIsWide } from '@/hooks/use-is-wide';
 import { ObservationPicker } from '@/features/trees/components/ObservationPicker';
+import { BioticAgentsFields } from '@/features/inspections/components/BioticAgentsFields';
 import {
   Field,
   Heading,
@@ -111,7 +112,7 @@ export function TreeCreateForm({ catalogs, submitting, submitError, onCancel, on
         <View style={styles.backAction}>
           <PrimaryButton title="Inventario" icon="back" variant="ghost" compact onPress={onCancel} />
         </View>
-        <Heading subtitle="Registra el árbol con ubicación, medidas, observaciones y evidencia fotográfica.">
+        <Heading subtitle="Registra el árbol con ubicación, medidas, observaciones y evidencia fotográfica. Al guardar queda como su primera inspección, que revisará un docente.">
           Registrar árbol
         </Heading>
 
@@ -317,7 +318,7 @@ export function TreeCreateForm({ catalogs, submitting, submitError, onCancel, on
           />
         </Section>
 
-        <Section step={4} icon="leaf" title="Interferencias y observaciones" description="Infraestructura afectada y estado fitosanitario del árbol.">
+        <Section step={4} icon="leaf" title="Interferencias y observaciones" description="Infraestructura afectada, estado fitosanitario y agentes bióticos del árbol.">
           <Controller
             name="interferencia"
             control={form.control}
@@ -354,6 +355,25 @@ export function TreeCreateForm({ catalogs, submitting, submitError, onCancel, on
             error={form.errors.observaciones?.message}
             onToggle={form.toggleObservation}
             onClear={form.clearObservations}
+          />
+          <View style={styles.divider} />
+          <BioticAgentsFields control={form.control} codigoArbol={prefijo ? `${prefijo}-XXXX` : undefined} />
+          <View style={styles.divider} />
+          <Controller
+            name="notas"
+            control={form.control}
+            render={({ field, fieldState }) => (
+              <Field
+                label="Notas de la inspección (opcional)"
+                maxLength={1000}
+                value={field.value ?? ''}
+                onChangeText={field.onChange}
+                onBlur={field.onBlur}
+                multiline
+                placeholder="Lo que observaste y no está en la lista"
+                error={fieldState.error?.message}
+              />
+            )}
           />
         </Section>
 
