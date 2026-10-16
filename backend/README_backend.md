@@ -344,7 +344,7 @@ Configuración sin tocar código. La versión 1 usa los mismos valores de `calcu
 
 ## Limitaciones conocidas
 
-- Los usuarios se crean a mano en Supabase Auth; al primer inicio de sesión tienen rol `estudiante` y el administrador les asigna institución, rol y curso desde la pantalla Usuarios.
+- Mientras el proyecto use el correo de prueba de Supabase, los enlaces de confirmación solo llegan a direcciones del equipo del proyecto (y pocos por hora). Hasta configurar un SMTP propio, las cuentas de estudiantes y docentes conviene crearlas el administrador desde Usuarios.
 - La vista `perfiles_publicos` es *security definer* a propósito (expone nombre, rol, institución y curso de todos para rankings y revisiones, sin el correo). El linter de Supabase la marca como advertencia.
 - Los indicadores, el avance de los cursos y los rankings se calculan en memoria leyendo el historial completo; para un colegio (cientos o pocos miles de árboles) es suficiente.
 - Si el registro de observaciones falla, el árbol se borra para no quedar a medias, pero el consecutivo del código ya consumido no se recupera.
