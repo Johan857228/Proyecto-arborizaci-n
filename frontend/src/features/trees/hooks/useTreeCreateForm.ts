@@ -2,9 +2,10 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as ImagePicker from 'expo-image-picker';
 import { useMemo, useState } from 'react';
 import { Platform } from 'react-native';
-import { useForm, useWatch } from 'react-hook-form';
+import { useForm, useWatch, type Path, type PathValue } from 'react-hook-form';
 
 import type { Catalogos } from '@/features/catalogs/types';
+import { combinarValor } from '@/features/ia/sugerencias';
 import { payloadBiotico, valoresBioticosIniciales } from '@/features/inspections/bioticos';
 import { useCaptureLocation } from '@/features/trees/hooks/useCaptureLocation';
 import { createArbolCreateSchema, fotosRegistroSchema, type ArbolFormInput } from '@/features/trees/schemas';
@@ -26,7 +27,7 @@ export function useTreeCreateForm(
   const [formError, setFormError] = useState<string>();
   const gps = useCaptureLocation();
   const schema = useMemo(() => createArbolCreateSchema(catalogs), [catalogs]);
-  const { control, handleSubmit, setValue, formState: { errors } } = useForm<ArbolFormInput>({
+  const { control, handleSubmit, setValue, getValues, formState: { errors } } = useForm<ArbolFormInput>({
     resolver: zodResolver(schema),
     mode: 'onChange',
     reValidateMode: 'onChange',
@@ -135,6 +136,15 @@ export function useTreeCreateForm(
     setValue('observaciones', [], { shouldValidate: true });
   }
 
+  /** Aplica una sugerencia de la IA: llena esos campos (las listas se suman a lo ya marcado). */
+  function applySuggestion(valores: Partial<ArbolFormInput>) {
+    for (const [campo, valor] of Object.entries(valores)) {
+      const nombre = campo as Path<ArbolFormInput>;
+      const nuevo = combinarValor(getValues(nombre), valor) as PathValue<ArbolFormInput, typeof nombre>;
+      setValue(nombre, nuevo, { shouldValidate: true, shouldDirty: true });
+    }
+  }
+
   function removePhoto(photoToRemove: FotoLocal) {
     setPhotos((current) => current.filter((photo) => photo !== photoToRemove));
   }
@@ -187,6 +197,7 @@ export function useTreeCreateForm(
     updateLocation,
     toggleObservation,
     clearObservations,
+    applySuggestion,
     submit,
   };
 }

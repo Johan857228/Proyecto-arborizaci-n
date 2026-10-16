@@ -43,6 +43,7 @@ from routers import (
     cursos,
     escenarios,
     gamificacion,
+    ia,
     inspecciones,
     intervenciones,
     metas,
@@ -134,7 +135,7 @@ async def manejar_error_db(request, exc: APIError):
 
 
 for modulo in (inspecciones, intervenciones, cursos, usuarios, presupuestos, configuracion,
-               gamificacion, reportes, metas, escenarios):
+               gamificacion, reportes, metas, escenarios, ia):
     app.include_router(modulo.router)
 
 

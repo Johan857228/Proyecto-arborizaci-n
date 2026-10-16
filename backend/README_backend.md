@@ -189,6 +189,25 @@ triggers en Supabase (para que tampoco se puedan saltar llamando a la API de Sup
 | GET / POST | `/escenarios` | Docente, admin / admin | Escenarios guardados / guardar |
 | GET / DELETE | `/escenarios/{id}` | Docente, admin / admin | Detalle / borrar |
 | GET | `/estadisticas` | Usuario | Totales, semáforo, por institución, especies, promedios, ambientales e inspecciones pendientes |
+| GET | `/ia/estado` | Usuario | Si la identificación con IA está activada y con qué modelo |
+| POST | `/ia/analizar-foto` | Usuario | Sugerencias de la IA a partir de la foto `general` (y `detalle`, opcional) |
+
+## Identificación con IA
+
+El registro tiene una tarjeta **"Identificación con IA"**: con la foto general (y la de detalle, si existe)
+Claude sugiere especie, etapa, interferencia, observaciones fitosanitarias y agentes bióticos FB-01, FB-02,
+FB-04, FB-05 y FB-06. Cada sugerencia trae su confianza y la señal que la respalda, y **solo se aplica si
+la persona la acepta**; nada se guarda por la IA. No estima medidas ni marca la muestra de laboratorio (FB-03).
+
+- Modelo: `claude-opus-5-5` (`servicios/ia.py`). Si el modelo declina una petición, la API la reintenta
+  sola con el modelo de respaldo recomendado (`fallbacks: "default"`).
+- Las respuestas se limitan a los catálogos y se revisan otra vez en el backend: un código o especie que no
+  está en el catálogo se descarta y las escalas fuera de rango se corrigen.
+- Para activarla, agrega `ANTHROPIC_API_KEY` (de console.anthropic.com) al `.env` y reinicia uvicorn. Sin
+  la clave, `POST /ia/analizar-foto` responde 503 y el formulario avisa que la IA no está activada.
+- Costo aproximado: unos US$0,04 por análisis. Para cuidar el saldo hay un máximo de 30 análisis por
+  usuario cada hora (`MAX_ANALISIS_POR_HORA` en `routers/ia.py`).
+- Las pruebas (`tests/test_ia.py`) usan un cliente falso: no necesitan la clave ni gastan saldo.
 
 ## Cómo lo usa el frontend (React)
 
