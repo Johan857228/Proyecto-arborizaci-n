@@ -1,4 +1,5 @@
-import { api } from '@/services/api/client';
+import { ApiContractError, api } from '@/services/api/client';
+import { sessionSchema } from '@/features/auth/schemas';
 import type { LoginInput, Session } from '@/features/auth/types';
 
 export interface BackendStatus {
@@ -9,11 +10,15 @@ export interface BackendStatus {
 
 export const authService = {
   async login(credentials: LoginInput) {
-    const { data } = await api.post<Session>('/auth/login', {
+    const { data } = await api.post<unknown>('/auth/login', {
       ...credentials,
       email: credentials.email.trim(),
     });
-    return data;
+    const result = sessionSchema.safeParse(data);
+    if (!result.success) {
+      throw new ApiContractError('El servidor no devolvió una sesión JWT válida.');
+    }
+    return result.data satisfies Session;
   },
 
   async getBackendStatus() {
