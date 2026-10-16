@@ -37,4 +37,5 @@ export interface ArbolResumen {
   ultima_inspeccion_en?: string | null;
   ultima_revision?: 'pendiente' | 'confirmada' | 'anulada' | null;
   n_inspecciones?: number | null;
+  foto_url?: string | null;
 }

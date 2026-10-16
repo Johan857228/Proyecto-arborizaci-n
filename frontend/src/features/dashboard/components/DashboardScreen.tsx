@@ -349,7 +349,11 @@ export function DashboardScreen() {
                     onPress={() => router.push(`/(app)/trees/${tree.id}` as Href)}
                     style={({ pressed }) => [styles.treeRow, pressed && styles.pressed]}
                   >
-                    <View style={[styles.treeGlyph, gradient(gradients.lime)]}><Icon name="tree" size={20} color={palette.forestDark} /></View>
+                    {tree.foto_url ? (
+                      <Image source={{ uri: tree.foto_url }} style={styles.treeThumb} contentFit="cover" transition={150} />
+                    ) : (
+                      <View style={[styles.treeGlyph, gradient(gradients.lime)]}><Icon name="tree" size={20} color={palette.forestDark} /></View>
+                    )}
                     <View style={styles.treeInfo}>
                       <Text style={styles.treeCode}>{tree.codigo}</Text>
                       <Text style={styles.treeSpecies} numberOfLines={1}>{tree.nombre_comun} · {tree.zona}</Text>
@@ -432,6 +436,7 @@ const styles = StyleSheet.create({
   treeRow: { minHeight: 60, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 },
   treeRowDivider: { borderTopWidth: 1, borderTopColor: palette.line },
   treeGlyph: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: palette.forestSoft },
+  treeThumb: { width: 48, height: 48, borderRadius: 12, backgroundColor: palette.forestSoft },
   treeInfo: { flex: 1, minWidth: 0 },
   treeCode: { color: palette.ink, fontFamily: fonts.bold, fontSize: 14 },
   treeSpecies: { marginTop: 2, color: palette.muted, fontSize: 13 },

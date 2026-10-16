@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import type { Catalogos } from '@/features/catalogs/types';
+import { camposBioticosSchema, validarBioticos } from '@/features/inspections/bioticos';
 import { textoOpcional } from '@/shared/validacion';
 import { isInColombia } from '@/shared/utils/geo';
 
@@ -37,6 +38,8 @@ const arbolFieldsSchema = z.object({
   // Se guardan en la primera inspección del árbol (la del registro).
   precision_gps_m: z.number().min(0).max(10000).nullable().optional(),
   notas: textoOpcional(1000),
+  // Agentes bióticos FB-01 a FB-06: van a la primera inspección, como los hallazgos.
+  ...camposBioticosSchema.shape,
 }).strict();
 
 function validateTreeRules(
@@ -56,6 +59,7 @@ function validateTreeRules(
       ctx.addIssue({ code: 'custom', path: ['interferencia_otra'], message: 'Escribe al menos 3 caracteres.' });
     }
   }
+  validarBioticos(value, ctx);
   if (new Set(value.observaciones).size !== value.observaciones.length) {
     ctx.addIssue({
       code: 'custom',
@@ -149,6 +153,8 @@ export const arbolResumenSchema = z.object({
   ultima_inspeccion_en: z.string().nullable().optional(),
   ultima_revision: z.enum(['pendiente', 'confirmada', 'anulada']).nullable().optional(),
   n_inspecciones: z.number().int().nullable().optional(),
+  // Foto general más reciente (URL firmada); solo viene en la lista de árboles.
+  foto_url: z.string().nullable().optional(),
 });
 
 export const arbolesResumenSchema = z.array(arbolResumenSchema);

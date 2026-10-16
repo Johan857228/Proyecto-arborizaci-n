@@ -14,6 +14,7 @@ from auth import Perfil, perfil_actual, revisor_actual
 from comun import BUCKET_FOTOS, MAX_FOTOS_ADICIONALES, leer_foto, resumen_por_id, traer_todo, url_firmada
 from schemas import (
     ALTURA_MAX_M,
+    CAMPOS_BIOTICOS,
     COPA_MAX_M,
     DAP_MAX_CM,
     LAT_MAX,
@@ -32,6 +33,7 @@ from schemas import (
     ObservacionOut,
     OrigenInspeccion,
     TipoFoto,
+    CamposBioticos,
 )
 from servicios.calificacion import calcular_ambientales, evaluar
 
@@ -41,7 +43,7 @@ DISTANCIA_AVISO_M = 50
 
 
 # ==================================== Modelos ====================================
-class InspeccionCrear(BaseModel):
+class InspeccionCrear(CamposBioticos):
     """Una visita al árbol: ubicación (opcional), medidas, hallazgos y notas. Usa los mismos
     límites que el registro del árbol (schemas.ArbolCrear)."""
 
@@ -112,6 +114,29 @@ class InspeccionOut(BaseModel):
     o2_kg: float
     advertencias: list[str] = []
     fotos_sugeridas: list[TipoFoto] = []
+    # Agentes bióticos (vacíos en las inspecciones anteriores a la migración 004)
+    insectos: str | None = None
+    insectos_parte: str | None = None
+    insectos_sev: int | None = None
+    enfermedad: str | None = None
+    enfermedad_parte: str | None = None
+    enfermedad_sev: int | None = None
+    muestra_lab: bool = False
+    cod_muestra_lab: str | None = None
+    hemiparasitas: str | None = None
+    pct_hemiparasitas: float | None = None
+    bejucos: int | None = None
+    epifitas: list[str] = []
+
+    @field_validator("muestra_lab", mode="before")
+    @classmethod
+    def _sin_muestra(cls, v):
+        return bool(v)
+
+    @field_validator("epifitas", mode="before")
+    @classmethod
+    def _sin_epifitas(cls, v):
+        return v or []
 
 
 class InspeccionConArbol(InspeccionOut):
@@ -185,6 +210,7 @@ def registrar_inspeccion(cliente, arbol: dict, d: InspeccionCrear, origen: str) 
         "interferencia": d.interferencia,
         "interferencia_otra": d.interferencia_otra,
         "notas": d.notas,
+        **d.model_dump(include=CAMPOS_BIOTICOS),
         "metodo_id": metodo.id,
         "puntaje_riesgo": puntaje,
         "calificacion": calificacion,

@@ -7,6 +7,8 @@ import { palette } from '@/config/constants';
 import { useAuthStore } from '@/features/auth/store';
 import { InspectionCard } from '@/features/inspections/components/InspectionCard';
 import { useHistorial } from '@/features/inspections/hooks/useInspecciones';
+import { resumenBiotico } from '@/features/inspections/bioticos';
+import type { Inspeccion } from '@/features/inspections/schemas';
 import {
   useIntervencionesArbol,
   useRecomendacionesArbol,
@@ -22,6 +24,7 @@ import { getApiErrorMessage } from '@/services/api/client';
 import { useAvisos } from '@/shared/avisos';
 import { formatFecha, formatFechaHora, formatNumero, formatPesos } from '@/shared/format';
 import { InlineMessage, PrimaryButton } from '@/shared/components/FormControls';
+import { PhotoGallery, type FotoGaleria } from '@/shared/components/PhotoGallery';
 import {
   AppHeader,
   Badge,
@@ -78,6 +81,11 @@ export function TreeDetailScreen({ arbolId, aviso: avisoRuta }: { arbolId: strin
   const puedeIntervenir = gestiona(perfil.data, a.institucion_id);
   const esRegistrante = Boolean(userId) && a.registrado_por === userId;
   const refrescando = arbol.isFetching || historial.isFetching;
+  const galeria = fotosDelArbol(a.fotos, historial.data);
+  const ultimaValida = (historial.data ?? [])
+    .filter((i) => i.estado_revision !== 'anulada')
+    .reduce<Inspeccion | undefined>((ultima, i) => (!ultima || i.fecha > ultima.fecha ? i : ultima), undefined);
+  const bioticos = ultimaValida ? resumenBiotico(ultimaValida) : [];
 
   return (
     <Page
@@ -139,6 +147,16 @@ export function TreeDetailScreen({ arbolId, aviso: avisoRuta }: { arbolId: strin
         <Text style={styles.texto}>
           {a.observaciones.length ? a.observaciones.map((o) => o.etiqueta).join(', ') : 'Sin hallazgos fitosanitarios.'}
         </Text>
+        <Text style={styles.subtitulo}>Agentes bióticos</Text>
+        {bioticos.length ? (
+          <View style={styles.kvs}>
+            {bioticos.map((l) => <KeyValue key={l.etiqueta} label={l.etiqueta} value={l.valor} />)}
+          </View>
+        ) : (
+          <Text style={styles.texto}>
+            {historial.isLoading ? 'Cargando…' : 'No se registraron agentes bióticos en la última inspección.'}
+          </Text>
+        )}
       </Card>
 
       <Card title="Cálculos ambientales">
@@ -157,7 +175,7 @@ export function TreeDetailScreen({ arbolId, aviso: avisoRuta }: { arbolId: strin
         )}
       </Card>
 
-      <FotosRegistro arbolId={a.id} fotos={a.fotos} puedeSubir={esRegistrante} />
+      <FotosRegistro arbolId={a.id} fotos={a.fotos} galeria={galeria} puedeSubir={esRegistrante} />
 
       <Card title="Recomendaciones">
         {recomendaciones.isLoading ? <LoadingState /> : recomendaciones.error ? (
@@ -235,13 +253,38 @@ export function TreeDetailScreen({ arbolId, aviso: avisoRuta }: { arbolId: strin
   );
 }
 
+/** Todas las fotos del árbol, de la visita más reciente a la más antigua. Las de registro salen
+ *  de la ficha mientras carga el historial. */
+function fotosDelArbol(
+  registro: { id: string; tipo: FotoLocal['tipo']; url: string | null }[],
+  historial: Inspeccion[] | undefined,
+): FotoGaleria[] {
+  if (!historial?.length) {
+    return registro.map((foto) => ({ id: foto.id, url: foto.url, titulo: photoLabel(foto.tipo), detalle: 'Registro' }));
+  }
+  const vistas = new Set<string>();
+  return historial.flatMap((inspeccion) =>
+    inspeccion.fotos
+      .filter((foto) => !vistas.has(foto.id) && vistas.add(foto.id))
+      .map((foto) => ({
+        id: foto.id,
+        url: foto.url,
+        titulo: photoLabel(foto.tipo),
+        detalle: `${inspeccion.origen === 'registro' ? 'Registro' : 'Seguimiento'} · ${formatFecha(inspeccion.fecha)}`
+          + (inspeccion.estado_revision === 'anulada' ? ' · anulada' : ''),
+      })),
+  );
+}
+
 function FotosRegistro({
   arbolId,
   fotos,
+  galeria,
   puedeSubir,
 }: {
   arbolId: string;
   fotos: { id: string; tipo: FotoLocal['tipo']; url: string | null }[];
+  galeria: FotoGaleria[];
   puedeSubir: boolean;
 }) {
   const picker = usePhotoPicker();
@@ -261,19 +304,13 @@ function FotosRegistro({
   }
 
   return (
-    <Card title="Fotos de registro">
-      {fotos.length ? (
-        <View style={styles.fotos}>
-          {fotos.map((foto) => (
-            <View key={foto.id} style={styles.fotoBox}>
-              {foto.url ? <Image source={{ uri: foto.url }} style={styles.foto} contentFit="cover" /> : <View style={styles.foto} />}
-              <Text style={styles.fotoLabel}>{photoLabel(foto.tipo)}</Text>
-            </View>
-          ))}
-        </View>
-      ) : (
-        <Text style={styles.texto}>Este árbol no tiene fotos de registro.</Text>
-      )}
+    <Card title="Galería de fotos">
+      {galeria.length ? (
+        <Text style={styles.texto}>
+          {galeria.length === 1 ? '1 foto' : `${galeria.length} fotos`}. Toca una para verla en grande y pasar a las demás.
+        </Text>
+      ) : null}
+      <PhotoGallery fotos={galeria} vacio="Este árbol todavía no tiene fotos." />
       {puedeSubir ? (
         <>
           <Row>
@@ -316,10 +353,6 @@ const styles = StyleSheet.create({
   itemHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   itemTitle: { color: palette.ink, fontSize: 14, fontWeight: '800', flexShrink: 1 },
   link: { color: palette.forest, fontSize: 13, fontWeight: '800' },
-  fotos: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  fotoBox: { gap: 4 },
-  foto: { width: 120, height: 120, borderRadius: 8, backgroundColor: palette.line },
-  fotoLabel: { color: palette.muted, fontSize: 11 },
   pendiente: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   fotoChica: { width: 52, height: 52, borderRadius: 6, backgroundColor: palette.line },
   flex: { flex: 1 },

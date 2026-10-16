@@ -28,7 +28,7 @@ class ConsultaFalsa:
         return self
 
     def __getattr__(self, metodo):
-        if metodo in ("select", "eq", "ilike", "order", "range", "limit", "in_"):
+        if metodo in ("select", "eq", "neq", "ilike", "order", "range", "limit", "in_"):
             return lambda *a, **k: self._anotar(metodo, *a, **k)
         raise AttributeError(metodo)
 
@@ -76,6 +76,9 @@ class StorageFalso:
 
     def create_signed_url(self, ruta, segundos):
         return {"signedURL": f"https://falso/{ruta}"}
+
+    def create_signed_urls(self, rutas, segundos):
+        return [{"path": r, "signedURL": f"https://falso/{r}", "error": None} for r in rutas]
 
 
 class ClienteFalso:

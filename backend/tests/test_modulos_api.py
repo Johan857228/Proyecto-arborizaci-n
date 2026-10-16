@@ -178,6 +178,40 @@ def test_inspeccion_valida_datos(api):
     assert api.post("/arboles/33333333-3333-3333-3333-333333333333/inspecciones", json=base).status_code == 404
 
 
+
+def test_agentes_bioticos_en_la_inspeccion(api):
+    base = {"dap_cm": 31, "altura_m": 8, "copa_m": 4, "etapa": "Adulto", "interferencia": "Ninguna"}
+    url = f"/arboles/{A1}/inspecciones"
+    # si hay un agente, su parte y su severidad son obligatorias; la severidad va de 0 a 4
+    assert api.post(url, json={**base, "insectos": "arrieras"}).status_code == 422
+    assert api.post(url, json={**base, "enfermedad": "fungica", "enfermedad_parte": "hojas", "enfermedad_sev": 5}).status_code == 422
+    assert api.post(url, json={**base, "insectos": "langostas", "insectos_parte": "hojas", "insectos_sev": 1}).status_code == 422
+    # la muestra de laboratorio necesita su código; las hemiparásitas, el porcentaje de copa
+    assert api.post(url, json={**base, "muestra_lab": True}).status_code == 422
+    assert api.post(url, json={**base, "muestra_lab": True, "cod_muestra_lab": "IE001 0001"}).status_code == 422
+    assert api.post(url, json={**base, "hemiparasitas": "pajarito"}).status_code == 422
+    assert api.post(url, json={**base, "hemiparasitas": "cuscuta", "pct_hemiparasitas": 120}).status_code == 422
+    assert api.post(url, json={**base, "bejucos": 7}).status_code == 422
+    assert api.post(url, json={**base, "epifitas": ["cactus"]}).status_code == 422
+    cuerpo = {**base, "enfermedad": "bacteriana", "enfermedad_parte": "tronco", "enfermedad_sev": 3,
+              "muestra_lab": True, "cod_muestra_lab": " ie001-0001-m1 ", "hemiparasitas": "pajarito",
+              "pct_hemiparasitas": 15, "bejucos": 1, "epifitas": ["orquideas", "liquenes", "orquideas"],
+              # sin insecto no se guardan su parte ni su severidad
+              "insectos_parte": "hojas", "insectos_sev": 2}
+    r = api.post(url, json=cuerpo)
+    assert r.status_code == 201, r.text
+    i = r.json()
+    assert i["enfermedad"] == "bacteriana" and i["enfermedad_sev"] == 3 and i["cod_muestra_lab"] == "IE001-0001-M1"
+    assert i["insectos"] is None and i["insectos_parte"] is None and i["insectos_sev"] is None
+    assert i["pct_hemiparasitas"] == 15 and i["bejucos"] == 1 and i["epifitas"] == ["liquenes", "orquideas"]
+    historial = api.get(f"/arboles/{A1}/inspecciones").json()
+    nueva = next(x for x in historial if x["id"] == i["id"])
+    assert nueva["hemiparasitas"] == "pajarito" and nueva["muestra_lab"] is True
+    # las inspecciones anteriores a la migración 004 salen sin agentes
+    anterior = next(x for x in historial if x["id"] == I1)
+    assert anterior["muestra_lab"] is False and anterior["epifitas"] == [] and anterior["insectos"] is None
+
+
 def test_sin_metodos_la_api_pide_la_migracion(api):
     api.base.tablas["metodos_calculo"] = []
     base = {"dap_cm": 31, "altura_m": 8, "copa_m": 4, "etapa": "Adulto", "interferencia": "Ninguna"}
@@ -196,7 +230,8 @@ def test_registrar_arbol_crea_inspeccion_de_registro(api):
     api.base.tablas["arboles_resumen"].append(_arbol("id-por-asignar", "IE001-0002", "sj"))
     cuerpo = {"institucion_id": "sj", "zona": "Patio central", "lat": 10.4, "lng": -73.2, "especie_id": 1, "dap_cm": 20,
               "altura_m": 5, "copa_m": 3, "etapa": "Juvenil", "interferencia": "Ninguna", "observaciones": ["f_manchas"],
-              "precision_gps_m": 7, "notas": "Cerca del aula 3"}
+              "precision_gps_m": 7, "notas": "Cerca del aula 3",
+              "insectos": "chupadores", "insectos_parte": "hojas", "insectos_sev": 2, "epifitas": ["musgos", "bromelias"]}
     # el cliente en memoria asigna un id aleatorio: se apunta el resumen a ese id después de insertar
     original = api.base.table
 
@@ -217,10 +252,12 @@ def test_registrar_arbol_crea_inspeccion_de_registro(api):
     r = api.post("/arboles", json=cuerpo)
     assert r.status_code == 201, r.text
     insertado = next(f for f in api.base.tablas["arboles"] if f["id"] == r.json()["id"])
-    assert "notas" not in insertado and "precision_gps_m" not in insertado
+    assert "notas" not in insertado and "precision_gps_m" not in insertado and "insectos" not in insertado
     registro = [i for i in api.base.tablas["inspecciones"] if i["arbol_id"] == r.json()["id"]]
     assert len(registro) == 1 and registro[0]["origen"] == "registro" and registro[0]["notas"] == "Cerca del aula 3"
     assert registro[0]["precision_gps_m"] == 7 and registro[0]["calificacion"] == "riesgo"
+    assert registro[0]["insectos"] == "chupadores" and registro[0]["insectos_sev"] == 2
+    assert registro[0]["epifitas"] == ["bromelias", "musgos"] and registro[0]["muestra_lab"] is False
 
 
 def test_fotos_de_inspeccion(api):
@@ -239,6 +276,26 @@ def test_fotos_de_inspeccion(api):
     assert [i["id"] for i in historial] == [I2, I1] or [i["id"] for i in historial] == [I1, I2]
     assert len(next(i for i in historial if i["id"] == I1)["fotos"]) == 4
 
+
+
+def test_lista_de_arboles_trae_la_foto_general_mas_reciente(api):
+    tablas = api.base.tablas
+    tablas["arbol_fotos"] += [
+        {"id": "f1", "arbol_id": A1, "tipo": "completo", "storage_path": f"{A1}/registro.jpg"},
+        {"id": "f2", "arbol_id": A2, "tipo": "detalle", "storage_path": f"{A2}/detalle.jpg"},
+    ]
+    lista = {a["id"]: a for a in api.get("/arboles").json()}
+    assert lista[A1]["foto_url"] == f"https://memoria/{A1}/registro.jpg"
+    assert lista[A2]["foto_url"] is None  # solo tiene foto de detalle
+    # la foto general de una visita de seguimiento pasa a ser la portada...
+    tablas["inspeccion_fotos"].append(
+        {"id": "f3", "inspeccion_id": I2, "tipo": "completo", "storage_path": f"{A1}/inspecciones/{I2}/x.jpg"})
+    lista = {a["id"]: a for a in api.get("/arboles").json()}
+    assert lista[A1]["foto_url"] == f"https://memoria/{A1}/inspecciones/{I2}/x.jpg"
+    # ...salvo que esa visita se anule: vuelve la del registro
+    next(i for i in tablas["inspecciones"] if i["id"] == I2)["estado_revision"] = "anulada"
+    lista = {a["id"]: a for a in api.get("/arboles").json()}
+    assert lista[A1]["foto_url"] == f"https://memoria/{A1}/registro.jpg"
 
 # ----------------------------------- Revisión -----------------------------------
 def test_revision_permisos(api):

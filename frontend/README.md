@@ -45,6 +45,20 @@ Al registrar un árbol el backend crea su primera inspección; después se abre 
 ficha con el estado actual, los cálculos ambientales, las recomendaciones, las
 intervenciones y el historial de inspecciones.
 
+Cada tarjeta del inventario muestra como portada la foto general más reciente del
+árbol (`foto_url`). La ficha reúne en una galería las fotos del registro y de las
+inspecciones; al tocar una se abre el visor a pantalla completa, con flechas,
+miniaturas y teclado en web (`shared/components/PhotoGallery.tsx`). El historial,
+la revisión y el detalle de cada inspección usan la misma galería en tamaño
+reducido.
+
+Los agentes bióticos (variables FB-01 a FB-06: insectos, enfermedad, muestra de
+laboratorio, hemiparásitas, bejucos y epífitas) se registran en el paso 4 del
+registro y en cada inspección de seguimiento, junto a los hallazgos
+(`features/inspections/components/BioticAgentsFields.tsx`). Las opciones, las reglas
+y los textos están en `features/inspections/bioticos.ts`. La ficha muestra los de
+la última inspección válida y el historial los de cada visita.
+
 ## Módulos y pantallas
 
 Todas las respuestas del backend se validan con Zod antes de usarlas

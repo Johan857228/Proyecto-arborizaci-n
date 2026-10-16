@@ -9,6 +9,7 @@ import type { Catalogos } from '@/features/catalogs/types';
 import type { ArbolCrear, FotoLocal } from '@/features/trees/types';
 import { useIsWide } from '@/hooks/use-is-wide';
 import { ObservationPicker } from '@/features/trees/components/ObservationPicker';
+import { BioticAgentsFields } from '@/features/inspections/components/BioticAgentsFields';
 import {
   Field,
   Heading,
@@ -317,7 +318,7 @@ export function TreeCreateForm({ catalogs, submitting, submitError, onCancel, on
           />
         </Section>
 
-        <Section step={4} icon="leaf" title="Interferencias y observaciones" description="Infraestructura afectada y estado fitosanitario del árbol.">
+        <Section step={4} icon="leaf" title="Interferencias y observaciones" description="Infraestructura afectada, estado fitosanitario y agentes bióticos del árbol.">
           <Controller
             name="interferencia"
             control={form.control}
@@ -355,6 +356,8 @@ export function TreeCreateForm({ catalogs, submitting, submitError, onCancel, on
             onToggle={form.toggleObservation}
             onClear={form.clearObservations}
           />
+          <View style={styles.divider} />
+          <BioticAgentsFields control={form.control} codigoArbol={prefijo ? `${prefijo}-XXXX` : undefined} />
           <View style={styles.divider} />
           <Controller
             name="notas"

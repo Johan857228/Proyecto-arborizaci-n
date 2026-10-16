@@ -32,6 +32,7 @@ from comun import (
     EXTENSIONES,
     MAX_FOTOS_ADICIONALES,
     escapar_like,
+    portadas_de_arboles,
     resumen_por_id,
     tipo_real_imagen,
     traer_todo,
@@ -51,6 +52,7 @@ from routers import (
 )
 from routers.inspecciones import InspeccionCrear, registrar_inspeccion
 from schemas import (
+    CAMPOS_BIOTICOS,
     ArbolCrear,
     ArbolDetalle,
     ArbolResumen,
@@ -212,7 +214,7 @@ def crear_arbol(datos_arbol: ArbolCrear, perfil: Perfil = Depends(perfil_actual)
             raise HTTPException(status_code=422, detail=f"Observaciones no válidas: {invalidos}")
 
     # 2) Guardar el árbol (solo sus columnas: la precisión y las notas son de la inspección)
-    fila = datos_arbol.model_dump(exclude={"observaciones", "precision_gps_m", "notas"})
+    fila = datos_arbol.model_dump(exclude={"observaciones", "precision_gps_m", "notas", *CAMPOS_BIOTICOS})
     creado = cliente.table("arboles").insert(fila).execute().data[0]
 
     # 3) Guardar las observaciones y la inspección de registro; si algo falla, se borra el
@@ -237,6 +239,7 @@ def crear_arbol(datos_arbol: ArbolCrear, perfil: Perfil = Depends(perfil_actual)
                 interferencia_otra=datos_arbol.interferencia_otra,
                 observaciones=codigos,
                 notas=datos_arbol.notas,
+                **datos_arbol.model_dump(include=CAMPOS_BIOTICOS),
             ),
             "registro",
         )
@@ -268,7 +271,9 @@ def listar_arboles(
         q = q.eq("zona", zona)
     if especie and especie.strip():
         q = q.ilike("nombre_comun", f"%{escapar_like(especie.strip())}%")
-    return q.order("registrado_en", desc=True).range(desplazamiento, desplazamiento + limite - 1).execute().data
+    filas = q.order("registrado_en", desc=True).range(desplazamiento, desplazamiento + limite - 1).execute().data
+    portadas = portadas_de_arboles(cliente, [f["id"] for f in filas])
+    return [{**f, "foto_url": portadas.get(f["id"])} for f in filas]
 
 
 @app.get("/arboles/{arbol_id}", response_model=ArbolDetalle, tags=["Árboles"])

@@ -5,6 +5,7 @@ import { Platform } from 'react-native';
 import { useForm, useWatch } from 'react-hook-form';
 
 import type { Catalogos } from '@/features/catalogs/types';
+import { payloadBiotico, valoresBioticosIniciales } from '@/features/inspections/bioticos';
 import { useCaptureLocation } from '@/features/trees/hooks/useCaptureLocation';
 import { createArbolCreateSchema, fotosRegistroSchema, type ArbolFormInput } from '@/features/trees/schemas';
 import type { ArbolCrear, FotoLocal } from '@/features/trees/types';
@@ -46,6 +47,7 @@ export function useTreeCreateForm(
       interferencia_otra: '',
       observaciones: [],
       notas: '',
+      ...valoresBioticosIniciales,
     },
   });
 
@@ -166,6 +168,7 @@ export function useTreeCreateForm(
       observaciones: input.observaciones,
       precision_gps_m: input.precision_gps_m ?? null,
       notas: input.notas,
+      ...payloadBiotico(input),
     };
     await onSubmit(payload, validPhotos.data);
   });

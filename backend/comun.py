@@ -96,6 +96,57 @@ def url_firmada(cliente, ruta: str, segundos: int = 3600) -> str | None:
         return None
 
 
+def urls_firmadas(cliente, rutas: list[str], segundos: int = 3600) -> dict[str, str]:
+    """Firma varias fotos en una sola llamada a Storage. Las que fallen quedan sin URL:
+    una foto perdida no debe tumbar una lista completa."""
+    rutas = list(dict.fromkeys(r for r in rutas if r))
+    if not rutas:
+        return {}
+    try:
+        respuesta = cliente.storage.from_(BUCKET_FOTOS).create_signed_urls(rutas, segundos)
+    except Exception:
+        return {}
+    firmadas = {}
+    for item in respuesta or []:
+        url = item.get("signedURL") or item.get("signedUrl")
+        if item.get("path") and url and not item.get("error"):
+            firmadas[item["path"]] = url
+    return firmadas
+
+
+def portadas_de_arboles(cliente, arbol_ids: list[str], tam: int = 100) -> dict[str, str]:
+    """Foto general más reciente de cada árbol: la de su última inspección de seguimiento no
+    anulada que tenga una, o si no la del registro. Devuelve {arbol_id: URL firmada}."""
+    rutas: dict[str, str] = {}
+    for inicio in range(0, len(arbol_ids), tam):
+        grupo = arbol_ids[inicio:inicio + tam]
+        for foto in (
+            cliente.table("arbol_fotos").select("arbol_id, storage_path")
+            .in_("arbol_id", grupo).eq("tipo", "completo").execute().data
+        ):
+            rutas[foto["arbol_id"]] = foto["storage_path"]
+        visitas = (
+            cliente.table("inspecciones").select("id, arbol_id, fecha")
+            .in_("arbol_id", grupo).eq("origen", "seguimiento").neq("estado_revision", "anulada")
+            .execute().data
+        )
+        if visitas:
+            por_visita = {v["id"]: v for v in visitas}
+            recientes: dict[str, tuple[str, str]] = {}
+            for foto in (
+                cliente.table("inspeccion_fotos").select("inspeccion_id, storage_path")
+                .in_("inspeccion_id", list(por_visita)).eq("tipo", "completo").execute().data
+            ):
+                visita = por_visita[foto["inspeccion_id"]]
+                actual = recientes.get(visita["arbol_id"])
+                if actual is None or str(visita["fecha"]) > actual[0]:
+                    recientes[visita["arbol_id"]] = (str(visita["fecha"]), foto["storage_path"])
+            for arbol_id, (_, ruta) in recientes.items():
+                rutas[arbol_id] = ruta
+    firmadas = urls_firmadas(cliente, list(rutas.values()))
+    return {arbol_id: firmadas[ruta] for arbol_id, ruta in rutas.items() if ruta in firmadas}
+
+
 def escapar_like(texto: str) -> str:
     """Busca el texto tal cual: en LIKE, % y _ son comodines y PostgREST trata * como %."""
     texto = texto.replace("*", "")

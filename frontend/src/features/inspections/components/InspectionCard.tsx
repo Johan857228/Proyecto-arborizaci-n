@@ -1,15 +1,18 @@
-import { Image } from 'expo-image';
 import { router, type Href } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { palette } from '@/config/constants';
+import { lineaBiotica } from '@/features/inspections/bioticos';
 import type { Inspeccion } from '@/features/inspections/schemas';
+import { photoLabel } from '@/features/trees/components/PhotoSection';
 import { formatFechaHora, formatNumero } from '@/shared/format';
+import { PhotoGallery } from '@/shared/components/PhotoGallery';
 import { Badge, RevisionBadge, StateBadge } from '@/shared/components/UI';
 
 /** Una visita en el historial del árbol. Al tocarla se abre su detalle. */
 export function InspectionCard({ inspeccion }: { inspeccion: Inspeccion }) {
   const anulada = inspeccion.estado_revision === 'anulada';
+  const bioticos = lineaBiotica(inspeccion);
   return (
     <Pressable
       accessibilityRole="link"
@@ -43,6 +46,7 @@ export function InspectionCard({ inspeccion }: { inspeccion: Inspeccion }) {
           ? `Hallazgos: ${inspeccion.observaciones.map((o) => o.etiqueta).join(', ')}`
           : 'Sin hallazgos fitosanitarios'}
       </Text>
+      {bioticos ? <Text style={styles.texto}>Agentes bióticos. {bioticos}</Text> : null}
       {inspeccion.notas ? <Text style={styles.notas}>“{inspeccion.notas}”</Text> : null}
       {inspeccion.comentario_revision ? (
         <Text style={[styles.texto, anulada && styles.motivo]}>
@@ -50,13 +54,16 @@ export function InspectionCard({ inspeccion }: { inspeccion: Inspeccion }) {
           {inspeccion.revisado_por_nombre ? ` (${inspeccion.revisado_por_nombre})` : ''}
         </Text>
       ) : null}
-      {inspeccion.fotos.length ? (
-        <View style={styles.fotos}>
-          {inspeccion.fotos.map((foto) =>
-            foto.url ? <Image key={foto.id} source={{ uri: foto.url }} style={styles.foto} contentFit="cover" /> : null,
-          )}
-        </View>
-      ) : null}
+      <PhotoGallery
+        compacta
+        tamano={64}
+        fotos={inspeccion.fotos.map((foto) => ({
+          id: foto.id,
+          url: foto.url,
+          titulo: photoLabel(foto.tipo),
+          detalle: `${inspeccion.origen === 'registro' ? 'Registro' : 'Seguimiento'} · ${formatFechaHora(inspeccion.fecha)}`,
+        }))}
+      />
     </Pressable>
   );
 }
@@ -74,6 +81,4 @@ const styles = StyleSheet.create({
   texto: { color: palette.muted, fontSize: 13, lineHeight: 18 },
   notas: { color: palette.ink, fontSize: 13, fontStyle: 'italic' },
   motivo: { color: palette.red },
-  fotos: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  foto: { width: 64, height: 64, borderRadius: 6, backgroundColor: palette.line },
 });

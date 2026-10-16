@@ -1,16 +1,18 @@
-import { Image } from 'expo-image';
 import { router, type Href } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { palette } from '@/config/constants';
+import { lineaBiotica } from '@/features/inspections/bioticos';
 import { ReviewActions } from '@/features/inspections/components/ReviewActions';
 import { usePendientes } from '@/features/inspections/hooks/useInspecciones';
 import { InstitucionSelector, useInstitucionElegida } from '@/features/perfil/components/InstitucionSelector';
 import { useMiPerfil } from '@/features/perfil/hooks/usePerfil';
 import { esRevisor } from '@/features/perfil/schemas';
+import { photoLabel } from '@/features/trees/components/PhotoSection';
 import { formatFechaHora, formatNumero } from '@/shared/format';
 import { PrimaryButton } from '@/shared/components/FormControls';
+import { PhotoGallery } from '@/shared/components/PhotoGallery';
 import {
   AppHeader,
   Badge,
@@ -93,12 +95,21 @@ export function ReviewScreen() {
             <Text style={styles.texto}>
               {i.observaciones.length ? `Hallazgos: ${i.observaciones.map((o) => o.etiqueta).join(', ')}` : 'Sin hallazgos'}
             </Text>
+            {lineaBiotica(i) ? <Text style={styles.texto}>Agentes bióticos. {lineaBiotica(i)}</Text> : null}
             {i.notas ? <Text style={styles.notas}>“{i.notas}”</Text> : null}
             {i.advertencias.length ? <Text style={styles.aviso}>{i.advertencias.join(' · ')}</Text> : null}
             {i.fotos.length ? (
-              <View style={styles.fotos}>
-                {i.fotos.map((f) => f.url ? <Image key={f.id} source={{ uri: f.url }} style={styles.foto} contentFit="cover" /> : null)}
-              </View>
+              <PhotoGallery
+                compacta
+                tamano={88}
+                maxMiniaturas={5}
+                fotos={i.fotos.map((f) => ({
+                  id: f.id,
+                  url: f.url,
+                  titulo: photoLabel(f.tipo),
+                  detalle: `${i.codigo} · ${formatFechaHora(i.fecha)}`,
+                }))}
+              />
             ) : <Text style={styles.aviso}>Sin fotos</Text>}
             {i.puede_revisar ? (
               <ReviewActions
@@ -137,6 +148,4 @@ const styles = StyleSheet.create({
   texto: { color: palette.ink, fontSize: 13, lineHeight: 18 },
   notas: { color: palette.ink, fontSize: 13, fontStyle: 'italic' },
   aviso: { color: palette.amber, fontSize: 12, fontWeight: '700' },
-  fotos: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  foto: { width: 90, height: 90, borderRadius: 6, backgroundColor: palette.line },
 });

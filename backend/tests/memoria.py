@@ -162,6 +162,9 @@ class Almacen:
     def create_signed_url(self, ruta, segundos):
         return {"signedURL": f"https://memoria/{ruta}"}
 
+    def create_signed_urls(self, rutas, segundos):
+        return [{"path": r, "signedURL": f"https://memoria/{r}", "error": None} for r in rutas]
+
 
 class BaseMemoria:
     def __init__(self, tablas: dict[str, list[dict]]):

@@ -44,11 +44,12 @@ pip install -r requerimientos.txt
 
 Los módulos de inspecciones, revisión, intervenciones, cursos, presupuestos, configuración,
 gamificación, reportes, metas y escenarios necesitan tablas nuevas en Supabase. Se crean con
-tres archivos que se pegan completos en **Supabase → SQL Editor → Run**, en este orden:
+cuatro archivos que se pegan completos en **Supabase → SQL Editor → Run**, en este orden:
 
 1. `sql/001_fase1_modulos.sql`
 2. `sql/002_fase2_metas_escenarios.sql`
 3. `sql/003_validaciones.sql`
+4. `sql/004_agentes_bioticos.sql`
 
 No borran datos: a cada árbol ya registrado le crean su inspección de registro (con los
 hallazgos que tenía) y a cada usuario de Supabase Auth su perfil. Se pueden ejecutar más de
@@ -78,6 +79,25 @@ select conrelid::regclass as tabla, conname as regla
   from pg_constraint
  where conname ~ '(rango|colombia|largo)$' and not convalidated;
 ```
+
+La 004 agrega a `inspecciones` las variables de agentes bióticos de la tabla FB-01 a FB-06. Se
+registran en cada visita (la primera es la del registro del árbol), igual que los hallazgos:
+
+| Variable | Columnas | Valores |
+|---|---|---|
+| FB-01 Insectos | `insectos`, `insectos_parte`, `insectos_sev` | defoliadores, chupadores, escamas, arrieras, minadores, agalladores; parte afectada; severidad 0 a 4 |
+| FB-02 Enfermedad | `enfermedad`, `enfermedad_parte`, `enfermedad_sev` | fungica, bacteriana, viral, indeterminada; parte afectada; severidad 0 a 4 |
+| FB-03 Muestra de laboratorio | `muestra_lab`, `cod_muestra_lab` | sí o no; código de 3 a 40 letras, números, guiones o guion bajo |
+| FB-04 Hemiparásitas | `hemiparasitas`, `pct_hemiparasitas` | pajarito (Loranthaceae) o cuscuta; porcentaje de la copa, mayor que 0 y hasta 100 |
+| FB-05 Bejucos | `bejucos` | 0 a 4 según la porción del individuo cubierta |
+| FB-06 Epífitas | `epifitas` (lista) | bromelias, orquideas, helechos, liquenes, musgos |
+
+Las partes del árbol son `hojas`, `ramas`, `tronco`, `raiz` y `flores_frutos`. Las reglas exigen
+que un insecto o una enfermedad vengan con su parte y su severidad, que la muestra tenga código y
+que la hemiparásita tenga porcentaje; si no se marca el agente, esos datos quedan vacíos. Las
+inspecciones anteriores quedan sin agentes registrados. Las reglas se vuelven a crear cada vez que
+se ejecuta el archivo. Los agentes no cambian el puntaje de riesgo: el estado del árbol sigue
+saliendo de los hallazgos.
 
 Sin las migraciones, los endpoints nuevos responden 503 con el mensaje "Falta una tabla en la
 base de datos: aplica las migraciones de backend/sql".
@@ -134,7 +154,7 @@ triggers en Supabase (para que tampoco se puedan saltar llamando a la API de Sup
 | GET | `/usuarios` | Docente, admin | Usuarios (el docente ve los de su institución) |
 | PATCH | `/usuarios/{id}` | Docente, admin | Admin: rol, institución, curso, estado. Docente: solo el curso |
 | POST | `/arboles` | Usuario | Registra un árbol y crea su inspección de registro |
-| GET | `/arboles` | Usuario | Lista con filtros (`institucion_id`, `estado`, `especie`, `zona`) y paginación |
+| GET | `/arboles` | Usuario | Lista con filtros (`institucion_id`, `estado`, `especie`, `zona`) y paginación; cada árbol trae `foto_url` (su foto general más reciente) |
 | GET | `/arboles/{id}` | Usuario | Detalle con los hallazgos de la última inspección válida y fotos de registro |
 | GET | `/arboles/{id}/calculos` | Usuario | Biomasa, carbono, CO₂ y O₂ con la versión del método de la última inspección |
 | POST | `/arboles/{id}/fotos?tipo=...` | Quien lo registró | Foto de registro (`completo`, `detalle` o `adicional`) |
@@ -242,6 +262,12 @@ El cuerpo trae `detail` con el mensaje. Los errores que vienen de la base de dat
 - Hasta 50 observaciones por árbol.
 - El correo del login debe tener formato válido; se limpia de espacios y se pasa a minúsculas.
 - En `GET /arboles`, `zona` solo acepta las zonas del catálogo y `especie` se busca tal cual (`%`, `_` y `*` no son comodines).
+- Agentes bióticos (FB-01 a FB-06) en el registro y en cada inspección: un insecto o una enfermedad
+  piden parte afectada y severidad 0 a 4; la muestra de laboratorio pide su código; la hemiparásita,
+  el porcentaje de copa. Si no se marca el agente, la API descarta la parte, la severidad o el código
+  que lleguen sueltos. Las epífitas se guardan sin repetir.
+- La foto de portada de cada árbol en `GET /arboles` es la foto general (`completo`) de la última
+  inspección de seguimiento no anulada que la tenga; si no hay, la del registro.
 - Una foto `completo`, una `detalle` y hasta 3 `adicional`; JPG, PNG o WebP; máximo 5 MB. El formato se comprueba con los primeros bytes del archivo, no con lo que declara el navegador.
 - Solo quien registró un árbol puede subirle fotos (el RLS impide además editar árboles ajenos).
 - El código `IE001-0001` y el campo `registrado_por` los asigna la base de datos; el frontend nunca los envía.

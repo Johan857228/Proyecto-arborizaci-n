@@ -1,6 +1,16 @@
 import { z } from 'zod';
 
 import type { Catalogos } from '@/features/catalogs/types';
+import {
+  bioticosSalidaSchema,
+  camposBioticosSchema,
+  validarBioticos,
+  TIPOS_ENFERMEDAD,
+  TIPOS_EPIFITA,
+  TIPOS_HEMIPARASITA,
+  TIPOS_INSECTO,
+  PARTES_ARBOL,
+} from '@/features/inspections/bioticos';
 import { fotoOutSchema, observacionOutSchema } from '@/features/trees/schemas';
 import { COLOMBIA, isInColombia } from '@/shared/utils/geo';
 import { numero, textoOpcional } from '@/shared/validacion';
@@ -54,6 +64,7 @@ export const inspeccionSchema = z.object({
   o2_kg: z.number(),
   advertencias: z.array(z.string()),
   fotos_sugeridas: z.array(z.enum(['completo', 'detalle', 'adicional'])),
+  ...bioticosSalidaSchema.shape,
 });
 export type Inspeccion = z.infer<typeof inspeccionSchema>;
 
@@ -90,12 +101,14 @@ const camposInspeccion = z.object({
   interferencia_otra: z.string().trim().max(120, 'Máximo 120 caracteres.').optional(),
   observaciones: z.array(z.string().min(1)).max(50),
   notas: textoOpcional(1000),
+  ...camposBioticosSchema.shape,
 });
 export type InspeccionFormInput = z.input<typeof camposInspeccion>;
 
 export function crearInspeccionFormSchema(catalogos: Catalogos) {
   const validas = new Set(catalogos.observaciones.map(({ codigo }) => codigo));
   return camposInspeccion.superRefine((valor, ctx) => {
+    validarBioticos(valor, ctx);
     if (valor.interferencia === 'Otra infraestructura') {
       const texto = valor.interferencia_otra?.trim() ?? '';
       if (!texto) {
@@ -135,6 +148,19 @@ export const inspeccionPayloadSchema = z.object({
   interferencia_otra: z.string().min(3).max(120).nullable(),
   observaciones: z.array(z.string().min(1)).max(50),
   notas: z.string().max(1000).nullable(),
+  // Opcionales: la API pone los valores por defecto si no se envían.
+  insectos: z.enum(TIPOS_INSECTO).nullable().optional(),
+  insectos_parte: z.enum(PARTES_ARBOL).nullable().optional(),
+  insectos_sev: z.number().int().min(0).max(4).nullable().optional(),
+  enfermedad: z.enum(TIPOS_ENFERMEDAD).nullable().optional(),
+  enfermedad_parte: z.enum(PARTES_ARBOL).nullable().optional(),
+  enfermedad_sev: z.number().int().min(0).max(4).nullable().optional(),
+  muestra_lab: z.boolean().optional(),
+  cod_muestra_lab: z.string().min(3).max(40).nullable().optional(),
+  hemiparasitas: z.enum(TIPOS_HEMIPARASITA).nullable().optional(),
+  pct_hemiparasitas: z.number().gt(0).max(100).nullable().optional(),
+  bejucos: z.number().int().min(0).max(4).optional(),
+  epifitas: z.array(z.enum(TIPOS_EPIFITA)).max(5).optional(),
 }).strict();
 export type InspeccionPayload = z.infer<typeof inspeccionPayloadSchema>;
 

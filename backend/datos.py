@@ -10,7 +10,9 @@ from servicios.gamificacion import PuntosInstitucion
 COLUMNAS_INSPECCION = (
     "id, arbol_id, inspector_id, fecha, origen, lat, lng, precision_gps_m, dap_cm, altura_m, copa_m, etapa, "
     "interferencia, interferencia_otra, notas, metodo_id, puntaje_riesgo, calificacion, estado_revision, "
-    "revisado_por, revisado_en, comentario_revision"
+    "revisado_por, revisado_en, comentario_revision, "
+    "insectos, insectos_parte, insectos_sev, enfermedad, enfermedad_parte, enfermedad_sev, "
+    "muestra_lab, cod_muestra_lab, hemiparasitas, pct_hemiparasitas, bejucos, epifitas"
 )
 COLUMNAS_PERFIL = "usuario_id, nombre, rol, institucion_id, curso_id, activo"
 

@@ -7,6 +7,8 @@ import { StyleSheet, Text, View } from 'react-native';
 import { palette } from '@/config/constants';
 import { useCatalogs } from '@/features/catalogs/hooks/useCatalogs';
 import type { Catalogos } from '@/features/catalogs/types';
+import { payloadBiotico, valoresBioticosIniciales } from '@/features/inspections/bioticos';
+import { BioticAgentsFields } from '@/features/inspections/components/BioticAgentsFields';
 import { useRegistrarInspeccion } from '@/features/inspections/hooks/useInspecciones';
 import {
   crearInspeccionFormSchema,
@@ -63,6 +65,8 @@ function Formulario({ arbol, catalogos }: { arbol: ArbolDetalle; catalogos: Cata
       interferencia_otra: arbol.interferencia_otra ?? '',
       observaciones: [],
       notas: '',
+      // Los agentes bióticos se registran según lo que se ve en esta visita.
+      ...valoresBioticosIniciales,
     },
   });
   const interferencia = useWatch({ control, name: 'interferencia' });
@@ -108,6 +112,7 @@ function Formulario({ arbol, catalogos }: { arbol: ArbolDetalle; catalogos: Cata
       interferencia_otra: valores.interferencia === 'Otra infraestructura' ? valores.interferencia_otra?.trim() || null : null,
       observaciones: valores.observaciones,
       notas: valores.notas?.trim() ? valores.notas.trim() : null,
+      ...payloadBiotico(valores),
     };
     try {
       const resultado = await registrar.mutateAsync({ payload, fotos: fotos.photos });
@@ -229,6 +234,7 @@ function Formulario({ arbol, catalogos }: { arbol: ArbolDetalle; catalogos: Cata
             </View>
           </View>
         ) : null)}
+        <BioticAgentsFields control={control} codigoArbol={arbol.codigo} />
         <Controller
           name="notas"
           control={control}

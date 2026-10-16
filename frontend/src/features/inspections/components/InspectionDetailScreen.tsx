@@ -5,6 +5,7 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { palette } from '@/config/constants';
 import { useAuthStore } from '@/features/auth/store';
+import { resumenBiotico } from '@/features/inspections/bioticos';
 import { ReviewActions } from '@/features/inspections/components/ReviewActions';
 import { useInspeccion, useSubirFotoInspeccion } from '@/features/inspections/hooks/useInspecciones';
 import { useMiPerfil } from '@/features/perfil/hooks/usePerfil';
@@ -15,6 +16,7 @@ import type { FotoLocal } from '@/features/trees/types';
 import { getApiErrorMessage } from '@/services/api/client';
 import { formatFechaHora, formatNumero } from '@/shared/format';
 import { InlineMessage, PrimaryButton } from '@/shared/components/FormControls';
+import { PhotoGallery } from '@/shared/components/PhotoGallery';
 import {
   AppHeader,
   Badge,
@@ -96,6 +98,14 @@ export function InspectionDetailScreen({ inspeccionId, aviso }: { inspeccionId: 
         <Text style={styles.texto}>
           {i.observaciones.length ? i.observaciones.map((o) => o.etiqueta).join(', ') : 'Sin hallazgos fitosanitarios.'}
         </Text>
+        <Text style={styles.subtitulo}>Agentes bióticos</Text>
+        {resumenBiotico(i).length ? (
+          <View style={styles.kvs}>
+            {resumenBiotico(i).map((l) => <KeyValue key={l.etiqueta} label={l.etiqueta} value={l.valor} />)}
+          </View>
+        ) : (
+          <Text style={styles.texto}>No se registraron agentes bióticos en esta visita.</Text>
+        )}
         {i.notas ? <><Text style={styles.subtitulo}>Notas</Text><Text style={styles.texto}>{i.notas}</Text></> : null}
         {i.advertencias.length ? <Notice tono="riesgo">{i.advertencias.join(' · ')}</Notice> : null}
       </Card>
@@ -119,18 +129,15 @@ export function InspectionDetailScreen({ inspeccionId, aviso }: { inspeccionId: 
       </Card>
 
       <Card title="Fotografías">
-        {i.fotos.length ? (
-          <View style={styles.fotos}>
-            {i.fotos.map((foto) => (
-              <View key={foto.id} style={styles.fotoBox}>
-                {foto.url ? <Image source={{ uri: foto.url }} style={styles.foto} contentFit="cover" /> : <View style={styles.foto} />}
-                <Text style={styles.fotoLabel}>{photoLabel(foto.tipo)}</Text>
-              </View>
-            ))}
-          </View>
-        ) : (
-          <Text style={styles.texto}>Esta inspección no tiene fotos.</Text>
-        )}
+        <PhotoGallery
+          vacio="Esta inspección no tiene fotos."
+          fotos={i.fotos.map((foto) => ({
+            id: foto.id,
+            url: foto.url,
+            titulo: photoLabel(foto.tipo),
+            detalle: `${i.origen === 'registro' ? 'Registro' : 'Seguimiento'} · ${formatFechaHora(i.fecha)}`,
+          }))}
+        />
         {esInspector && i.estado_revision === 'pendiente' && i.origen === 'seguimiento' ? (
           <SubirFotos inspeccionId={i.id} existentes={i.fotos.map((f) => f.tipo)} />
         ) : null}
@@ -186,10 +193,6 @@ const styles = StyleSheet.create({
   kvs: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   subtitulo: { color: palette.ink, fontSize: 13, fontWeight: '800' },
   texto: { color: palette.muted, fontSize: 13, lineHeight: 19 },
-  fotos: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  fotoBox: { gap: 4 },
-  foto: { width: 140, height: 140, borderRadius: 8, backgroundColor: palette.line },
-  fotoLabel: { color: palette.muted, fontSize: 11 },
   subir: { gap: 8 },
   pendiente: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   fotoChica: { width: 52, height: 52, borderRadius: 6, backgroundColor: palette.line },

@@ -32,11 +32,12 @@ Antes de arrancarlo, copia `backend/.env.example` como `backend/.env` y completa
 (ver [Variables de entorno](#variables-de-entorno)).
 
 **Base de datos:** aplica una vez, en Supabase → SQL Editor y en este orden,
-`backend/sql/001_fase1_modulos.sql`, `backend/sql/002_fase2_metas_escenarios.sql` y
-`backend/sql/003_validaciones.sql`. Las dos primeras crean las tablas de inspecciones, revisión,
-intervenciones, cursos, presupuestos, configuración, metas y escenarios sin borrar datos; la tercera
-agrega en la base los mismos límites que validan el formulario y la API (medidas máximas, coordenadas
-dentro de Colombia y largo de los textos "Otra"). Después asigna
+`backend/sql/001_fase1_modulos.sql`, `backend/sql/002_fase2_metas_escenarios.sql`,
+`backend/sql/003_validaciones.sql` y `backend/sql/004_agentes_bioticos.sql`. Las dos primeras crean
+las tablas de inspecciones, revisión, intervenciones, cursos, presupuestos, configuración, metas y
+escenarios sin borrar datos; la tercera agrega en la base los mismos límites que validan el
+formulario y la API (medidas máximas, coordenadas dentro de Colombia y largo de los textos "Otra"),
+y la cuarta agrega a cada inspección las variables de agentes bióticos FB-01 a FB-06. Después asigna
 el rol de administrador a tu cuenta (instrucciones al final del primer archivo y en
 [`backend/README_backend.md`](backend/README_backend.md#migraciones-de-la-base-de-datos)).
 
@@ -106,7 +107,7 @@ EXPO_PUBLIC_API_URL=http://192.168.1.20:8000
 |---|---|---|
 | Frontend (Expo web) | Vercel, proyecto `inventario-arboreo` | https://inventario-arboreo.vercel.app |
 | Backend (FastAPI) | Railway, proyecto `inventario-arboreo`, servicio `backend` | https://backend-production-2f7d.up.railway.app |
-| Base de datos, Auth y fotos | Supabase, proyecto `inventario-arboreo` | migraciones `backend/sql/001` → `002` → `003` ya aplicadas |
+| Base de datos, Auth y fotos | Supabase, proyecto `inventario-arboreo` | migraciones `backend/sql/001` → `002` → `003` → `004` ya aplicadas |
 
 Variables configuradas:
 
