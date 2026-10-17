@@ -403,6 +403,43 @@ def test_gestion_de_usuarios(api):
     assert api.patch(f"/usuarios/{est2}", json={"institucion_id": "zz"}).status_code == 422
 
 
+def test_el_administrador_crea_cuentas(api):
+    cuerpo = {"nombre": "  Sofía   Pérez ", "email": " Sofia@Colegio.edu.co", "password": "clave-segura-1",
+              "rol": "estudiante", "institucion_id": "sj", "curso_id": C1}
+    assert api.post("/usuarios", json=cuerpo).status_code == 403  # estudiante
+    api.como("docente")
+    assert api.post("/usuarios", json=cuerpo).status_code == 403
+    api.como("admin")
+    r = api.post("/usuarios", json=cuerpo)
+    assert r.status_code == 201, r.text
+    nuevo = r.json()
+    assert nuevo["nombre"] == "Sofía Pérez" and nuevo["correo"] == "sofia@colegio.edu.co"
+    assert (nuevo["rol"], nuevo["institucion_id"], nuevo["curso_id"], nuevo["activo"]) == ("estudiante", "sj", C1, True)
+    creado = api.base.auth.admin.usuarios[nuevo["usuario_id"]]
+    assert creado["email_confirm"] is True and creado["password"] == "clave-segura-1"
+    assert any(u["usuario_id"] == nuevo["usuario_id"] for u in api.get("/usuarios").json())
+
+    # mismo correo, contraseña corta, sin institución, curso de otra institución
+    assert api.post("/usuarios", json=cuerpo).status_code == 409
+    assert api.post("/usuarios", json={**cuerpo, "email": "otro@x.co", "password": "corta"}).status_code == 422
+    assert api.post("/usuarios", json={**cuerpo, "email": "otro@x.co", "institucion_id": None, "curso_id": None}).status_code == 422
+    assert api.post("/usuarios", json={**cuerpo, "email": "otro@x.co", "curso_id": C2}).status_code == 422
+    assert api.post("/usuarios", json={**cuerpo, "email": "otro@x.co", "institucion_id": "zz", "curso_id": None}).status_code == 422
+    # un administrador puede no tener institución
+    r = api.post("/usuarios", json={"nombre": "Coordinación", "email": "coord@x.co", "password": "clave-segura-2", "rol": "administrador"})
+    assert r.status_code == 201 and r.json()["rol"] == "administrador" and r.json()["institucion_id"] is None
+    assert len(api.base.auth.admin.usuarios) == 2
+
+
+def test_si_falla_el_perfil_se_borra_la_cuenta_creada(api):
+    api.como("admin")
+    api.base.fallar["perfiles"] = "update"
+    r = api.post("/usuarios", json={"nombre": "Ana", "email": "ana@x.co", "password": "clave-segura-1", "institucion_id": "sj"})
+    assert r.status_code >= 400
+    assert api.base.auth.admin.usuarios == {}
+    assert not any(p["correo"] == "ana@x.co" for p in api.base.tablas["perfiles"])
+
+
 # --------------------------------- Presupuestos ---------------------------------
 def test_presupuestos(api):
     assert api.get("/presupuestos").status_code == 403

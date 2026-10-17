@@ -109,9 +109,34 @@ SUPABASE_URL=https://TU_ID.supabase.co
 SUPABASE_ANON_KEY=sb_publishable_...
 SUPABASE_SERVICE_KEY=sb_secret_...
 CORS_ORIGINS=http://localhost:5173,http://localhost:3000
+URL_FRONTEND=https://inventario-arboreo.vercel.app
 ```
 
-`CORS_ORIGINS` son las direcciones del frontend que pueden llamar a la API.
+`CORS_ORIGINS` son las direcciones del frontend que pueden llamar a la API. `URL_FRONTEND` es a
+dónde lleva el enlace del correo de confirmación de una cuenta nueva (`/login`); Supabase solo la
+usa si está en su lista de **Redirect URLs**, si no usa la **Site URL** del proyecto.
+
+### Cuentas
+
+Hay dos formas de crear una cuenta, las dos en Supabase Auth:
+
+- **La persona misma**, desde "Crear una cuenta" en el inicio de sesión (`POST /auth/registro`). Se
+  respeta la configuración del proyecto en Supabase → Authentication: si "Confirm email" está
+  activo, Supabase le envía un enlace y la cuenta se activa al abrirlo; si no, entra de una vez. La
+  cuenta nace como estudiante sin institución (trigger de la migración 001) y el administrador le
+  asigna institución, rol y curso en Usuarios.
+- **El administrador**, desde Usuarios (`POST /usuarios`), con rol, institución y curso. La cuenta
+  queda confirmada y entra con la contraseña inicial que le asignó el administrador.
+
+Para que el registro propio funcione con estudiantes hay que configurar en Supabase (lo hace el
+dueño del proyecto):
+
+1. **Authentication → Emails → SMTP Settings**: un servidor de correo propio. El correo de prueba de
+   Supabase solo entrega a direcciones del equipo del proyecto y unos pocos por hora; con cualquier
+   otra dirección el registro responde que pidan la cuenta al administrador.
+2. **Authentication → URL Configuration**: Site URL `https://inventario-arboreo.vercel.app` y, en
+   Redirect URLs, `https://inventario-arboreo.vercel.app/**`. Así el enlace del correo vuelve a la app
+   y no a `localhost`.
 
 ## Ejecutar
 
@@ -149,9 +174,12 @@ triggers en Supabase (para que tampoco se puedan saltar llamando a la API de Sup
 | GET | `/salud` | Público | Comprueba que el servidor responde |
 | POST | `/auth/login` | Público | Devuelve el token (`access_token`) y el `refresh_token` |
 | POST | `/auth/refresh` | Público | Cambia el `refresh_token` por una sesión nueva |
+| POST | `/auth/registro` | Público | Crea una cuenta propia (nombre, correo, contraseña de 8 a 72 caracteres); si Supabase pide confirmar el correo no trae sesión |
+| POST | `/auth/reenviar-confirmacion` | Público | Vuelve a enviar el enlace de confirmación |
 | GET | `/catalogos` | Público | Especies, instituciones y casillas fitosanitarias |
 | GET / PATCH | `/perfil` | Usuario | Mi rol, institución y curso / cambiar mi nombre |
 | GET | `/usuarios` | Docente, admin | Usuarios (el docente ve los de su institución) |
+| POST | `/usuarios` | Admin | Crea una cuenta confirmada con rol, institución y curso |
 | PATCH | `/usuarios/{id}` | Docente, admin | Admin: rol, institución, curso, estado. Docente: solo el curso |
 | POST | `/arboles` | Usuario | Registra un árbol y crea su inspección de registro |
 | GET | `/arboles` | Usuario | Lista con filtros (`institucion_id`, `estado`, `especie`, `zona`) y paginación; cada árbol trae `foto_url` (su foto general más reciente) |
@@ -316,7 +344,7 @@ Configuración sin tocar código. La versión 1 usa los mismos valores de `calcu
 
 ## Limitaciones conocidas
 
-- Los usuarios se crean a mano en Supabase Auth; al primer inicio de sesión tienen rol `estudiante` y el administrador les asigna institución, rol y curso desde la pantalla Usuarios.
+- Mientras el proyecto use el correo de prueba de Supabase, los enlaces de confirmación solo llegan a direcciones del equipo del proyecto (y pocos por hora). Hasta configurar un SMTP propio, las cuentas de estudiantes y docentes conviene crearlas el administrador desde Usuarios.
 - La vista `perfiles_publicos` es *security definer* a propósito (expone nombre, rol, institución y curso de todos para rankings y revisiones, sin el correo). El linter de Supabase la marca como advertencia.
 - Los indicadores, el avance de los cursos y los rankings se calculan en memoria leyendo el historial completo; para un colegio (cientos o pocos miles de árboles) es suficiente.
 - Si el registro de observaciones falla, el árbol se borra para no quedar a medias, pero el consecutivo del código ya consumido no se recupera.

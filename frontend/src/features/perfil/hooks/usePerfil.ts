@@ -22,8 +22,8 @@ export function useUsuarios(institucionId?: string, enabled = true) {
   });
 }
 
-/** Cuentas que ya iniciaron sesión pero no tienen institución (solo las ve el administrador):
- *  el perfil se crea solo al entrar por primera vez y el administrador debe asignarla. */
+/** Cuentas sin institución (solo las ve el administrador): las que la persona crea desde el
+ *  inicio de sesión nacen así, y el administrador debe asignarla. */
 export function useCuentasSinInstitucion(enabled: boolean) {
   const usuarios = useUsuarios(undefined, enabled);
   return enabled ? (usuarios.data ?? []).filter((u) => !u.institucion_id).length : 0;
@@ -43,6 +43,11 @@ export function useEditarUsuario() {
       perfilService.editarUsuario(usuarioId, cambios),
     onSuccess: refrescar,
   });
+}
+
+export function useCrearUsuario() {
+  const refrescar = useRefrescarTodo();
+  return useMutation({ mutationFn: perfilService.crearUsuario, onSuccess: refrescar });
 }
 
 export function useCambiarMiNombre() {

@@ -52,14 +52,41 @@ ZONAS: tuple[str, ...] = ("Patio central", "Entrada principal", "Zona deportiva"
 
 
 # ------------------------------- Autenticación -------------------------------
-class LoginIn(BaseModel):
-    email: str = Field(max_length=254, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
-    password: str = Field(min_length=1, max_length=128)
+PATRON_CORREO = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
+# Supabase pide al menos 6 caracteres; aquí se exigen 8 y se corta en 72 (límite de bcrypt).
+CLAVE_MIN, CLAVE_MAX = 8, 72
 
-    @field_validator("email", mode="before")
+
+class CorreoNormalizado(BaseModel):
+    """El correo llega con espacios o mayúsculas al pegarlo: se limpia antes de validarlo."""
+
+    @field_validator("email", mode="before", check_fields=False)
     @classmethod
     def _normalizar_email(cls, v):
         return v.strip().lower() if isinstance(v, str) else v
+
+
+class LoginIn(CorreoNormalizado):
+    email: str = Field(max_length=254, pattern=PATRON_CORREO)
+    password: str = Field(min_length=1, max_length=128)
+
+
+class RegistroIn(CorreoNormalizado):
+    nombre: str = Field(min_length=1, max_length=120)
+    email: str = Field(max_length=254, pattern=PATRON_CORREO)
+    password: str = Field(min_length=CLAVE_MIN, max_length=CLAVE_MAX)
+
+    @field_validator("nombre")
+    @classmethod
+    def _limpiar_nombre(cls, v: str) -> str:
+        v = " ".join(v.split())
+        if not v:
+            raise ValueError("Escribe tu nombre")
+        return v
+
+
+class ReenviarConfirmacionIn(CorreoNormalizado):
+    email: str = Field(max_length=254, pattern=PATRON_CORREO)
 
 
 class RefrescarIn(BaseModel):
@@ -73,6 +100,14 @@ class SesionOut(BaseModel):
     expires_in: int | None = None
     user_id: str
     email: str | None = None
+
+
+class RegistroOut(BaseModel):
+    """Si Supabase pide confirmar el correo no hay sesión todavía: la persona abre el enlace
+    que le llega y luego inicia sesión. Si no lo pide, la sesión viene lista."""
+    requiere_confirmacion: bool
+    email: str
+    sesion: SesionOut | None = None
 
 
 # --------------------------------- Catálogos ---------------------------------

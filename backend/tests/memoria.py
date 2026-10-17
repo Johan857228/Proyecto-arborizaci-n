@@ -166,6 +166,36 @@ class Almacen:
         return [{"path": r, "signedURL": f"https://memoria/{r}", "error": None} for r in rutas]
 
 
+class AdminAuth:
+    """auth.admin de supabase-py: crea y borra usuarios. Al crear, imita el trigger de la
+    migración 001 que le crea el perfil (estudiante, sin institución)."""
+
+    def __init__(self, base):
+        self.base = base
+        self.usuarios: dict[str, dict] = {}
+
+    def create_user(self, atributos):
+        from supabase_auth.errors import AuthApiError
+
+        correo = atributos["email"]
+        if any(u["email"] == correo for u in self.usuarios.values()) or any(
+            p.get("correo") == correo for p in self.base.tablas.get("perfiles", [])
+        ):
+            raise AuthApiError("A user with this email address has already been registered", 422, "email_exists")
+        uid = str(uuid.uuid4())
+        self.usuarios[uid] = {"id": uid, **copy.deepcopy(atributos)}
+        nombre = (atributos.get("user_metadata") or {}).get("nombre") or correo.split("@")[0]
+        self.base.tablas.setdefault("perfiles", []).append({
+            "usuario_id": uid, "nombre": nombre, "correo": correo, "rol": "estudiante",
+            "institucion_id": None, "curso_id": None, "activo": True,
+        })
+        return SimpleNamespace(user=SimpleNamespace(id=uid, email=correo))
+
+    def delete_user(self, uid):
+        self.usuarios.pop(uid, None)
+        self.base.tablas["perfiles"] = [p for p in self.base.tablas.get("perfiles", []) if p["usuario_id"] != uid]
+
+
 class BaseMemoria:
     def __init__(self, tablas: dict[str, list[dict]]):
         self.tablas = copy.deepcopy(tablas)
@@ -173,6 +203,7 @@ class BaseMemoria:
         self.fallar: dict[str, str] = {}
         self.archivos: dict[str, bytes] = {}
         self.storage = Almacen(self)
+        self.auth = SimpleNamespace(admin=AdminAuth(self))
 
     def table(self, nombre):
         return Consulta(self, nombre)

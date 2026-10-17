@@ -1,5 +1,5 @@
-import { ApiContractError, api } from '@/services/api/client';
-import { sessionSchema } from '@/features/auth/schemas';
+import { ApiContractError, api, validar } from '@/services/api/client';
+import { registroRespuestaSchema, sessionSchema, type RegistroFormValues } from '@/features/auth/schemas';
 import type { LoginInput, Session } from '@/features/auth/types';
 
 export interface BackendStatus {
@@ -19,6 +19,16 @@ export const authService = {
       throw new ApiContractError('El servidor no devolvió una sesión JWT válida.');
     }
     return result.data satisfies Session;
+  },
+
+  /** Crea una cuenta propia. Si Supabase pide confirmar el correo, no trae sesión. */
+  async registrar({ nombre, email, password }: RegistroFormValues) {
+    const { data } = await api.post<unknown>('/auth/registro', { nombre, email, password });
+    return validar(registroRespuestaSchema, data);
+  },
+
+  async reenviarConfirmacion(email: string) {
+    await api.post('/auth/reenviar-confirmacion', { email: email.trim() });
   },
 
   async getBackendStatus() {

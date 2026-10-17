@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from supabase_auth.errors import AuthError
 
 import db
 
@@ -11,6 +12,35 @@ import db
 esquema_bearer = HTTPBearer(auto_error=False)
 
 ROLES_REVISORES = ("administrador", "docente")
+
+# Errores de Supabase Auth al crear cuentas o enviar correos, con un mensaje para la persona.
+ERRORES_AUTH = {
+    "weak_password": (422, "La contraseña es muy débil. Usa al menos 8 caracteres y mezcla letras y números."),
+    "email_exists": (409, "Ya existe una cuenta con ese correo."),
+    "user_already_exists": (409, "Ya existe una cuenta con ese correo."),
+    "email_address_invalid": (422, "Supabase no acepta ese correo. Revisa que esté bien escrito."),
+    "signup_disabled": (403, "El registro de cuentas está cerrado. Pide al administrador que te cree la cuenta."),
+    "email_not_confirmed": (403, "Todavía no confirmas tu correo. Abre el enlace que te enviamos al crear la cuenta o pide uno nuevo."),
+    "over_email_send_rate_limit": (429, "Se enviaron demasiados correos en poco tiempo. Intenta de nuevo en una hora."),
+    "over_request_rate_limit": (429, "Demasiados intentos seguidos. Espera unos minutos e intenta de nuevo."),
+    "email_address_not_authorized": (
+        503,
+        "Supabase todavía no puede enviar correos a esta dirección (el proyecto usa el correo de prueba de "
+        "Supabase). Pide al administrador que te cree la cuenta.",
+    ),
+}
+
+
+def error_de_auth(e: AuthError, por_defecto: str) -> HTTPException:
+    """Convierte un error de Supabase Auth en una respuesta con mensaje en español."""
+    codigo = getattr(e, "code", None)
+    if codigo in ERRORES_AUTH:
+        estado, mensaje = ERRORES_AUTH[codigo]
+        return HTTPException(status_code=estado, detail=mensaje)
+    if (getattr(e, "status", 0) or 0) >= 500:
+        # Por ejemplo, el servidor de correo de Supabase no respondió.
+        return HTTPException(status_code=503, detail=f"{por_defecto} Supabase no respondió; intenta más tarde.")
+    return HTTPException(status_code=400, detail=por_defecto)
 
 
 @dataclass

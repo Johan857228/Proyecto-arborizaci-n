@@ -4,6 +4,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { palette } from '@/config/constants';
 import { useCatalogs } from '@/features/catalogs/hooks/useCatalogs';
 import { useCursos } from '@/features/courses/api';
+import { CreateAccountCard } from '@/features/perfil/components/CreateAccountCard';
 import { InstitucionSelector, useInstitucionElegida } from '@/features/perfil/components/InstitucionSelector';
 import { useEditarUsuario, useMiPerfil, useUsuarios } from '@/features/perfil/hooks/usePerfil';
 import { ETIQUETA_ROL, esAdmin, esRevisor, rolSchema, type Rol, type Usuario } from '@/features/perfil/schemas';
@@ -39,9 +40,10 @@ export function UsersScreen() {
         eyebrow="Personas"
         title="Usuarios"
         subtitle={admin
-          ? 'Asigna rol, institución y curso. Las cuentas se crean en Supabase Auth; aquí aparecen al iniciar sesión por primera vez.'
+          ? 'Crea cuentas y asigna rol, institución y curso. Quien crea su propia cuenta desde el inicio de sesión aparece aquí sin institución.'
           : 'Asigna el curso a los estudiantes de tu institución.'}
       />
+      {admin ? <CreateAccountCard institucionInicial={institucion.institucionId} /> : null}
       {sinInstitucion.length ? (
         <View style={styles.nuevas}>
           <Notice tono="riesgo">

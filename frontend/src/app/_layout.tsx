@@ -29,7 +29,8 @@ function SessionGate() {
     PlusJakartaSans_800ExtraBold,
   });
 
-  const inLogin = segments[0] === 'login';
+  // Pantallas de acceso: iniciar sesión y crear cuenta.
+  const inLogin = segments[0] === 'login' || segments[0] === 'register';
   const inApp = segments[0] === '(app)';
 
   useEffect(() => {

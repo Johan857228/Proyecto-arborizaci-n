@@ -27,8 +27,10 @@ La versión web está publicada en **https://inventario-arboreo.vercel.app** (ve
 
 ### Árboles
 
-- **Inicio de sesión** con las cuentas que crea el equipo en Supabase. El token se renueva solo;
-  si la sesión expira o la cuenta está desactivada, la app vuelve al login con un aviso.
+- **Inicio de sesión y cuentas:** cada persona puede crear su cuenta desde "Crear una cuenta"
+  (entra como estudiante y confirma su correo), y el administrador también las crea desde Usuarios
+  con rol, institución y curso. El token se renueva solo; si la sesión expira o la cuenta está
+  desactivada, la app vuelve al login con un aviso.
 - **Inicio (dashboard):** cifras animadas del arbolado, impacto ambiental (CO₂, O₂ y biomasa),
   gráficos de dona por estado de salud, especie, etapa de desarrollo e institución, y accesos
   según el rol.
@@ -62,7 +64,7 @@ La versión web está publicada en **https://inventario-arboreo.vercel.app** (ve
 | Gestión institucional | Presupuestos* | Gasto ejecutado, comprometido y proyecciones |
 | | Escenarios* | Simular cómo repartir un presupuesto entre las acciones pendientes |
 | | Configuración* | Método de cálculo, pesos, umbrales y parámetros por institución |
-| | Usuarios* | Roles, instituciones, cursos y cuentas activas |
+| | Usuarios* | Crear cuentas; roles, instituciones, cursos y cuentas activas |
 
 \* Solo para docentes y administradores.
 
@@ -126,6 +128,7 @@ Los endpoints principales:
 |---|---|---|
 | GET | `/salud` | Comprobar que la API está activa |
 | POST | `/auth/login` · `/auth/refresh` | Iniciar sesión / renovar la sesión |
+| POST | `/auth/registro` · `/auth/reenviar-confirmacion` | Crear una cuenta propia / reenviar el correo de confirmación |
 | GET | `/catalogos` | Especies, instituciones y casillas fitosanitarias (público) |
 | GET / PATCH | `/perfil` | Mi rol, institución y curso |
 | POST / GET | `/arboles` | Registrar un árbol / listar con filtros y paginación |
@@ -222,9 +225,12 @@ SUPABASE_URL=https://TU_ID.supabase.co
 SUPABASE_ANON_KEY=sb_publishable_...
 SUPABASE_SERVICE_KEY=sb_secret_...
 CORS_ORIGINS=
+URL_FRONTEND=
 ```
 
 `CORS_ORIGINS` es opcional: cualquier puerto de `localhost` y `127.0.0.1` ya está permitido.
+`URL_FRONTEND` es la dirección pública del frontend; el enlace del correo que confirma una cuenta
+nueva lleva ahí (sin ella, Supabase usa la Site URL del proyecto).
 
 `frontend/.env` (opcional): solo hace falta para probar en un teléfono físico, apuntando a la IP
 del computador en la misma red:
@@ -235,16 +241,25 @@ EXPO_PUBLIC_API_URL=http://192.168.1.20:8000
 
 ### Cuentas
 
-Las cuentas se crean en Supabase → Authentication → Users → Add user. Al crearlas, la base les
-genera el perfil como estudiante sin institución, y un administrador les asigna rol, institución y
-curso en la app, en Módulos → Usuarios.
+Hay dos formas de crear una cuenta, y en las dos la base le genera el perfil:
+
+- **La persona misma**, con "Crear una cuenta" en el inicio de sesión. Entra como estudiante sin
+  institución; si Supabase tiene activo "Confirm email", primero abre el enlace que le llega. Un
+  administrador le asigna rol, institución y curso en Módulos → Usuarios.
+- **El administrador**, en Módulos → Usuarios → Crear una cuenta, con rol, institución, curso y una
+  contraseña inicial. Esa cuenta entra de una vez, sin confirmar el correo.
+
+Para que los correos de confirmación lleguen a los estudiantes, el dueño del proyecto en Supabase
+debe configurar un SMTP propio y las URL de la app (ver
+[`backend/README_backend.md`](backend/README_backend.md#cuentas)). Mientras tanto, el administrador
+puede crear las cuentas desde la app.
 
 ## Pruebas y chequeos
 
 | Parte | Comando | Estado actual |
 |---|---|---|
-| Backend | `python -m pytest -q` (dentro de `backend/`) | 126 pruebas; usan un Supabase falso y no necesitan claves |
-| Frontend | `npm run typecheck`, `npm run lint` y `npm test` (dentro de `frontend/`) | 55 pruebas con Jest (`jest-expo`) |
+| Backend | `python -m pytest -q` (dentro de `backend/`) | 144 pruebas; usan un Supabase falso y no necesitan claves |
+| Frontend | `npm run typecheck`, `npm run lint` y `npm test` (dentro de `frontend/`) | 60 pruebas con Jest (`jest-expo`) |
 
 En un clon nuevo, arranca Expo una vez (`npm run web`) antes de `npm run typecheck`: Expo genera
 `expo-env.d.ts`, que trae los tipos de los archivos CSS y no se sube a Git.
@@ -263,8 +278,9 @@ carpeta sin paréntesis.
 
 Variables configuradas:
 
-- Railway (`backend`): `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_KEY` y `CORS_ORIGINS`
-  (los dominios de Vercel). El arranque y la comprobación de salud (`/salud`) están en `backend/railway.json`.
+- Railway (`backend`): `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_KEY`, `CORS_ORIGINS`
+  (los dominios de Vercel) y `URL_FRONTEND`. El arranque y la comprobación de salud (`/salud`) están en
+  `backend/railway.json`.
 - Vercel: `EXPO_PUBLIC_API_URL` con la dirección del backend. Se lee al compilar, así que si cambia
   hay que volver a desplegar el frontend. La compilación y las rutas dinámicas están en `frontend/vercel.json`.
 
@@ -294,5 +310,5 @@ cd frontend && vercel deploy --prod
   una densidad de madera de 0.6 para todas las especies) y están por confirmar con el docente. La
   densidad, el factor de raíz y la fracción de carbono se pueden ajustar desde Configuración, sin
   tocar código.
-- **Limitaciones conocidas** (cuentas creadas a mano, plan gratuito de Supabase, cálculos en
+- **Limitaciones conocidas** (correo de prueba de Supabase, plan gratuito, cálculos en
   memoria, etc.): ver [`backend/README_backend.md`](backend/README_backend.md#limitaciones-conocidas).

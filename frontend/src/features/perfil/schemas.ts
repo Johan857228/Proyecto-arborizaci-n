@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { claveNuevaSchema, correoSchema, nombrePersonaSchema } from '@/features/auth/schemas';
+
 export const rolSchema = z.enum(['administrador', 'docente', 'estudiante']);
 export type Rol = z.infer<typeof rolSchema>;
 
@@ -43,6 +45,24 @@ export const editarUsuarioSchema = z.object({
   activo: z.boolean(),
 });
 export type EditarUsuario = z.infer<typeof editarUsuarioSchema>;
+
+/** Cuenta que crea el administrador: queda confirmada y con su rol e institución. */
+export const crearCuentaSchema = z
+  .object({
+    nombre: nombrePersonaSchema('Escribe el nombre.'),
+    email: correoSchema,
+    password: claveNuevaSchema,
+    rol: rolSchema,
+    institucion_id: z.string().nullable(),
+    curso_id: z.string().nullable(),
+  })
+  .superRefine((valor, ctx) => {
+    if (valor.rol !== 'administrador' && !valor.institucion_id) {
+      ctx.addIssue({ code: 'custom', path: ['institucion_id'], message: 'Elige la institución: docentes y estudiantes trabajan en una.' });
+    }
+  });
+export type CrearCuentaInput = z.input<typeof crearCuentaSchema>;
+export type CrearCuenta = z.output<typeof crearCuentaSchema>;
 
 export function esAdmin(perfil: MiPerfil | undefined) {
   return perfil?.rol === 'administrador';

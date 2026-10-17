@@ -26,7 +26,7 @@ from supabase_auth.errors import AuthApiError, AuthError
 
 import datos
 import db
-from auth import Perfil, Sesion, perfil_actual, usuario_actual
+from auth import Perfil, Sesion, error_de_auth, perfil_actual, usuario_actual
 from comun import (
     BUCKET_FOTOS,
     EXTENSIONES,
@@ -66,7 +66,10 @@ from schemas import (
     LoginIn,
     ObservacionOut,
     Promedios,
+    ReenviarConfirmacionIn,
     RefrescarIn,
+    RegistroIn,
+    RegistroOut,
     SesionOut,
     TipoFoto,
     TotalesAmbientales,
@@ -104,6 +107,10 @@ app.add_middleware(
 )
 
 MAX_FOTO_BYTES = 5 * 1024 * 1024
+
+# Dirección pública del frontend (p. ej. https://inventario-arboreo.vercel.app): el enlace del
+# correo de confirmación de cuentas lleva ahí. Sin ella, Supabase usa la Site URL del proyecto.
+URL_FRONTEND = os.environ.get("URL_FRONTEND", "").strip().rstrip("/")
 
 
 # =============================== Manejo de errores ===============================
@@ -165,9 +172,49 @@ def login(datos_login: LoginIn):
         res = db.nuevo_cliente_anon().auth.sign_in_with_password(
             {"email": datos_login.email, "password": datos_login.password}
         )
-    except AuthApiError:
+    except AuthApiError as e:
+        # Supabase solo dice que falta confirmar el correo si la contraseña es correcta.
+        if e.code == "email_not_confirmed":
+            raise error_de_auth(e, "")
         raise HTTPException(status_code=401, detail="Correo o contraseña incorrectos")
     return _sesion(res)
+
+
+def _opciones_de_correo() -> dict:
+    """A dónde lleva el enlace del correo de confirmación. Supabase solo acepta direcciones de
+    su lista de Redirect URLs; si no está, usa la Site URL del proyecto."""
+    return {"email_redirect_to": f"{URL_FRONTEND}/login"} if URL_FRONTEND else {}
+
+
+@app.post("/auth/registro", response_model=RegistroOut, status_code=201, tags=["Autenticación"])
+def registrarse(d: RegistroIn):
+    """Crea una cuenta propia con Supabase Auth, respetando su configuración: si el proyecto pide
+    confirmar el correo, Supabase envía el enlace y la cuenta se activa al abrirlo; si no, la
+    sesión viene lista. La cuenta nace como estudiante sin institución (trigger de la migración
+    001) y el administrador le asigna institución y rol en Usuarios."""
+    try:
+        res = db.nuevo_cliente_anon().auth.sign_up({
+            "email": d.email,
+            "password": d.password,
+            "options": {"data": {"nombre": d.nombre}, **_opciones_de_correo()},
+        })
+    except AuthError as e:
+        raise error_de_auth(e, "No se pudo crear la cuenta.")
+    if res is not None and res.session is not None and res.user is not None:
+        return RegistroOut(requiere_confirmacion=False, email=d.email, sesion=_sesion(res))
+    # Sin sesión: falta confirmar el correo. Si el correo ya tenía cuenta, Supabase responde
+    # igual (para no revelar qué correos están registrados) y no envía nada.
+    return RegistroOut(requiere_confirmacion=True, email=d.email)
+
+
+@app.post("/auth/reenviar-confirmacion", status_code=202, tags=["Autenticación"])
+def reenviar_confirmacion(d: ReenviarConfirmacionIn):
+    """Vuelve a enviar el enlace de confirmación de una cuenta creada desde la app."""
+    try:
+        db.nuevo_cliente_anon().auth.resend({"type": "signup", "email": d.email, "options": _opciones_de_correo()})
+    except AuthError as e:
+        raise error_de_auth(e, "No se pudo reenviar el correo.")
+    return {"detail": "Si la cuenta existe y no está confirmada, te enviamos un enlace nuevo."}
 
 
 @app.post("/auth/refresh", response_model=SesionOut, tags=["Autenticación"])
