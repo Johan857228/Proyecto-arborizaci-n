@@ -1,9 +1,8 @@
 import { Image } from 'expo-image';
 import { router, type Href } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
-import { palette } from '@/config/constants';
 import { useAuthStore } from '@/features/auth/store';
 import { resumenBiotico } from '@/features/inspections/bioticos';
 import { ReviewActions } from '@/features/inspections/components/ReviewActions';
@@ -31,8 +30,10 @@ import {
   Row,
   StateBadge,
 } from '@/shared/components/UI';
+import { crearEstilos } from '@/theme';
 
 export function InspectionDetailScreen({ inspeccionId, aviso }: { inspeccionId: string; aviso?: string }) {
+  const styles = useStyles();
   const consulta = useInspeccion(inspeccionId);
   const perfil = useMiPerfil();
   const userId = useAuthStore((state) => state.session?.user_id);
@@ -147,6 +148,7 @@ export function InspectionDetailScreen({ inspeccionId, aviso }: { inspeccionId: 
 }
 
 function SubirFotos({ inspeccionId, existentes }: { inspeccionId: string; existentes: FotoLocal['tipo'][] }) {
+  const styles = useStyles();
   const picker = usePhotoPicker();
   const subir = useSubirFotoInspeccion(inspeccionId);
   const [error, setError] = useState<string>();
@@ -188,7 +190,7 @@ function SubirFotos({ inspeccionId, existentes }: { inspeccionId: string; existe
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = crearEstilos(({ palette }) => ({
   badges: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   kvs: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   subtitulo: { color: palette.ink, fontSize: 13, fontWeight: '800' },
@@ -198,4 +200,4 @@ const styles = StyleSheet.create({
   fotoChica: { width: 52, height: 52, borderRadius: 6, backgroundColor: palette.line },
   flex: { flex: 1 },
   boton: { width: 110 },
-});
+}));

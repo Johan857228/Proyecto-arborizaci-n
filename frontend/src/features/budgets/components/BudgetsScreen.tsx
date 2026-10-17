@@ -2,9 +2,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { router, type Href } from 'expo-router';
 import { useState } from 'react';
 import { Controller, useForm, type Control } from 'react-hook-form';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
-import { palette } from '@/config/constants';
 import {
   presupuestoFormSchema,
   useGuardarPresupuesto,
@@ -32,6 +31,7 @@ import {
   ProgressBar,
   Row,
 } from '@/shared/components/UI';
+import { crearEstilos } from '@/theme';
 
 export function BudgetsScreen() {
   const perfil = useMiPerfil();
@@ -67,6 +67,7 @@ export function BudgetsScreen() {
 }
 
 export function PresupuestoCard({ presupuesto: p, detalle = false }: { presupuesto: Presupuesto; detalle?: boolean }) {
+  const styles = useStyles();
   const r = p.resumen;
   const tono = r.saldo_proyectado < 0 ? 'critico' : r.disponible < 0 ? 'critico' : (r.pct_ejecutado ?? 0) > 85 ? 'riesgo' : 'sano';
   return (
@@ -104,6 +105,7 @@ export function PresupuestoCard({ presupuesto: p, detalle = false }: { presupues
 }
 
 function Cifra({ label, valor, alerta = false }: { label: string; valor: string; alerta?: boolean }) {
+  const styles = useStyles();
   return (
     <View style={styles.cifra}>
       <Text style={styles.cifraLabel}>{label}</Text>
@@ -174,7 +176,7 @@ export function PresupuestoCampos({ control }: { control: Control<PresupuestoFor
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = crearEstilos(({ palette }) => ({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   titulo: { color: palette.forest, fontSize: 16, fontWeight: '900', flexShrink: 1 },
   texto: { color: palette.muted, fontSize: 12, lineHeight: 17 },
@@ -183,4 +185,4 @@ const styles = StyleSheet.create({
   cifraLabel: { color: palette.muted, fontSize: 11 },
   cifraValor: { color: palette.ink, fontSize: 15, fontWeight: '900' },
   alerta: { color: palette.red },
-});
+}));

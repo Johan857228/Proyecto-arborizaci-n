@@ -17,9 +17,10 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { fonts, palette } from '@/config/constants';
+import { fonts } from '@/config/constants';
 import { Icon } from '@/shared/components/Icon';
 import { gradient } from '@/shared/styles/gradient';
+import { crearEstilos, useTema } from '@/theme';
 
 export interface FotoGaleria {
   id: string;
@@ -52,6 +53,7 @@ export function PhotoGallery({
   maxMiniaturas?: number;
   vacio?: string;
 }) {
+  const styles = useStyles();
   const [ancho, setAncho] = useState(0);
   const [abierta, setAbierta] = useState<number | null>(null);
 
@@ -112,6 +114,8 @@ function Miniatura({
   cubierta?: string;
   onPress: () => void;
 }) {
+  const styles = useStyles();
+  const { palette } = useTema();
   const [encima, setEncima] = useState(false);
   return (
     <Pressable
@@ -156,6 +160,8 @@ function Visor({
   onCambiar: (indice: number) => void;
   onCerrar: () => void;
 }) {
+  const styles = useStyles();
+  const { palette } = useTema();
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const desplazamiento = useRef<ScrollView>(null);
@@ -211,7 +217,7 @@ function Visor({
               onPress={() => void Linking.openURL(foto.url as string)}
               style={({ pressed }) => [styles.botonRedondo, pressed && styles.presionada]}
             >
-              <Icon name="openExternal" size={20} color={palette.paper} />
+              <Icon name="openExternal" size={20} color={palette.white} />
             </Pressable>
           ) : null}
           <Pressable
@@ -220,7 +226,7 @@ function Visor({
             onPress={onCerrar}
             style={({ pressed }) => [styles.botonRedondo, pressed && styles.presionada]}
           >
-            <Icon name="close" size={22} color={palette.paper} />
+            <Icon name="close" size={22} color={palette.white} />
           </Pressable>
         </View>
 
@@ -255,7 +261,7 @@ function Visor({
               onPress={() => ir(actual - 1)}
               style={({ pressed }) => [styles.flecha, styles.flechaIzquierda, { top: insets.top + 60 + altoImagen / 2 - 24 }, actual === 0 && styles.oculta, pressed && styles.presionada]}
             >
-              <Icon name="chevronLeft" size={28} color={palette.paper} />
+              <Icon name="chevronLeft" size={28} color={palette.white} />
             </Pressable>
             <Pressable
               accessibilityRole="button"
@@ -264,7 +270,7 @@ function Visor({
               onPress={() => ir(actual + 1)}
               style={({ pressed }) => [styles.flecha, styles.flechaDerecha, { top: insets.top + 60 + altoImagen / 2 - 24 }, actual === fotos.length - 1 && styles.oculta, pressed && styles.presionada]}
             >
-              <Icon name="chevronRight" size={28} color={palette.paper} />
+              <Icon name="chevronRight" size={28} color={palette.white} />
             </Pressable>
             <ScrollView ref={tiras} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tira}>
               {fotos.map((f, i) => (
@@ -287,7 +293,7 @@ function Visor({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = crearEstilos(({ palette }) => ({
   vacio: { color: palette.muted, fontSize: 13, lineHeight: 19 },
   cuadricula: { flexDirection: 'row', flexWrap: 'wrap', gap: ESPACIO },
   filaCompacta: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
@@ -296,15 +302,15 @@ const styles = StyleSheet.create({
   presionada: { opacity: 0.8 },
   sinImagen: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   pie: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingTop: 28, paddingHorizontal: 10, paddingBottom: 9, backgroundColor: 'rgba(8, 24, 15, 0.35)' },
-  pieTitulo: { color: palette.paper, fontSize: 13, fontFamily: fonts.bold },
+  pieTitulo: { color: palette.white, fontSize: 13, fontFamily: fonts.bold },
   pieDetalle: { marginTop: 1, color: '#DCE9DF', fontSize: 11 },
   cubierta: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(8, 24, 15, 0.55)' },
-  cubiertaTexto: { color: palette.paper, fontSize: 18, fontFamily: fonts.extraBold },
+  cubiertaTexto: { color: palette.white, fontSize: 18, fontFamily: fonts.extraBold },
   visor: { flex: 1, backgroundColor: '#07130D' },
   barra: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, minHeight: 52 },
   barraTexto: { flex: 1, minWidth: 0 },
   contador: { color: palette.leaf, fontSize: 12, fontFamily: fonts.bold, letterSpacing: 0.6 },
-  visorTitulo: { color: palette.paper, fontSize: 16, fontFamily: fonts.bold },
+  visorTitulo: { color: palette.white, fontSize: 16, fontFamily: fonts.bold },
   visorDetalle: { color: '#C9D8CE', fontSize: 12 },
   botonRedondo: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 21, backgroundColor: 'rgba(255, 255, 255, 0.12)' },
   carrusel: { flexGrow: 0, marginTop: 8 },
@@ -317,4 +323,4 @@ const styles = StyleSheet.create({
   tira: { gap: 8, paddingHorizontal: 16, paddingTop: 14 },
   tiraFoto: { width: 56, height: 56, overflow: 'hidden', borderRadius: 10, borderWidth: 2, borderColor: 'transparent', opacity: 0.6, backgroundColor: 'rgba(255, 255, 255, 0.08)' },
   tiraFotoActiva: { borderColor: palette.leaf, opacity: 1 },
-});
+}));

@@ -1,8 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useAuthStore } from '@/features/auth/store';
-import type { EditarUsuario } from '@/features/perfil/schemas';
-import { perfilService } from '@/features/perfil/services/perfilService';
+import type { EditarUsuario, ImagenPerfil, MiPerfil } from '@/features/perfil/schemas';
+import { perfilService, type ImagenLocal } from '@/features/perfil/services/perfilService';
 
 export function useMiPerfil() {
   const userId = useAuthStore((state) => state.session?.user_id);
@@ -48,4 +48,16 @@ export function useEditarUsuario() {
 export function useCambiarMiNombre() {
   const refrescar = useRefrescarTodo();
   return useMutation({ mutationFn: perfilService.cambiarMiNombre, onSuccess: refrescar });
+}
+
+/** Cambia (con una imagen) o quita (con null) la foto de perfil o la portada. El perfil que
+ *  devuelve el backend reemplaza al de la caché, así la imagen nueva aparece enseguida. */
+export function useImagenPerfil(imagen: ImagenPerfil) {
+  const queryClient = useQueryClient();
+  const userId = useAuthStore((state) => state.session?.user_id);
+  return useMutation({
+    mutationFn: (archivo: ImagenLocal | null) =>
+      archivo ? perfilService.cambiarImagen(imagen, archivo) : perfilService.quitarImagen(imagen),
+    onSuccess: (perfil: MiPerfil) => queryClient.setQueryData(['perfil', userId], perfil),
+  });
 }

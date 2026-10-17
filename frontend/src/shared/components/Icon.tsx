@@ -1,7 +1,7 @@
 import { SymbolView, type AndroidSymbol, type SFSymbol } from 'expo-symbols';
 import type { StyleProp, ViewStyle } from 'react-native';
+import { useTema } from '@/theme';
 
-import { palette } from '@/config/constants';
 
 // Cada icono se define una vez: SF Symbols en iOS y Material Symbols en Android y web.
 const icons = {
@@ -56,6 +56,11 @@ const icons = {
   users: { ios: 'person.2.fill', material: 'group' },
   person: { ios: 'person.crop.circle.fill', material: 'account_circle' },
   sparkle: { ios: 'sparkles', material: 'auto_awesome' },
+  edit: { ios: 'pencil', material: 'edit' },
+  trash: { ios: 'trash', material: 'delete' },
+  moon: { ios: 'moon.fill', material: 'dark_mode' },
+  sun: { ios: 'sun.max.fill', material: 'light_mode' },
+  contrast: { ios: 'circle.lefthalf.filled', material: 'contrast' },
 } satisfies Record<string, { ios: SFSymbol; material: AndroidSymbol }>;
 
 export type IconName = keyof typeof icons;
@@ -63,7 +68,7 @@ export type IconName = keyof typeof icons;
 export function Icon({
   name,
   size = 20,
-  color = palette.ink,
+  color,
   style,
 }: {
   name: IconName;
@@ -71,12 +76,13 @@ export function Icon({
   color?: string;
   style?: StyleProp<ViewStyle>;
 }) {
+  const { palette } = useTema();
   const symbol = icons[name];
   return (
     <SymbolView
       name={{ ios: symbol.ios, android: symbol.material, web: symbol.material }}
       size={size}
-      tintColor={color}
+      tintColor={color ?? palette.ink}
       style={style}
     />
   );

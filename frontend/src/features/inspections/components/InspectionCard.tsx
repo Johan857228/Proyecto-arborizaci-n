@@ -1,16 +1,17 @@
 import { router, type Href } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
-import { palette } from '@/config/constants';
 import { lineaBiotica } from '@/features/inspections/bioticos';
 import type { Inspeccion } from '@/features/inspections/schemas';
 import { photoLabel } from '@/features/trees/components/PhotoSection';
 import { formatFechaHora, formatNumero } from '@/shared/format';
 import { PhotoGallery } from '@/shared/components/PhotoGallery';
 import { Badge, RevisionBadge, StateBadge } from '@/shared/components/UI';
+import { crearEstilos } from '@/theme';
 
 /** Una visita en el historial del árbol. Al tocarla se abre su detalle. */
 export function InspectionCard({ inspeccion }: { inspeccion: Inspeccion }) {
+  const styles = useStyles();
   const anulada = inspeccion.estado_revision === 'anulada';
   const bioticos = lineaBiotica(inspeccion);
   return (
@@ -68,7 +69,7 @@ export function InspectionCard({ inspeccion }: { inspeccion: Inspeccion }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = crearEstilos(({ palette }) => ({
   card: { gap: 8, padding: 14, borderRadius: 8, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.paper },
   anulada: { opacity: 0.7, borderStyle: 'dashed' },
   pressed: { opacity: 0.8 },
@@ -81,4 +82,4 @@ const styles = StyleSheet.create({
   texto: { color: palette.muted, fontSize: 13, lineHeight: 18 },
   notas: { color: palette.ink, fontSize: 13, fontStyle: 'italic' },
   motivo: { color: palette.red },
-});
+}));

@@ -1,9 +1,8 @@
 import { router, type Href } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { z } from 'zod';
 
-import { palette } from '@/config/constants';
 import { useTiposIntervencion } from '@/features/interventions/hooks/useIntervenciones';
 import { InstitucionSelector, useInstitucionElegida } from '@/features/perfil/components/InstitucionSelector';
 import { useMiPerfil } from '@/features/perfil/hooks/usePerfil';
@@ -36,11 +35,13 @@ import {
   StateBadge,
   Tabs,
 } from '@/shared/components/UI';
+import { crearEstilos } from '@/theme';
 
 const montoSchema = numero('Escribe el monto disponible.').min(0, 'No puede ser negativo.').max(100_000_000_000, 'Máximo $ 100.000.000.000.');
 const nombreSchema = z.string().trim().min(3, 'El nombre debe tener al menos 3 caracteres.').max(80);
 
 export function ScenariosScreen() {
+  const styles = useStyles();
   const perfil = useMiPerfil();
   const institucion = useInstitucionElegida();
   const tipos = useTiposIntervencion();
@@ -190,6 +191,7 @@ function EscenarioGuardado({
   admin: boolean;
   onBorrar: () => Promise<void>;
 }) {
+  const styles = useStyles();
   const [abierto, setAbierto] = useState(false);
   const [error, setError] = useState<string>();
   return (
@@ -212,6 +214,7 @@ function EscenarioGuardado({
 }
 
 function ResultadoVista({ resultado: r }: { resultado: ResultadoEscenario }) {
+  const styles = useStyles();
   const pct = r.total_requerido ? (r.total_incluido * 100) / r.total_requerido : 100;
   return (
     <>
@@ -239,6 +242,7 @@ function ResultadoVista({ resultado: r }: { resultado: ResultadoEscenario }) {
 }
 
 function Accion({ c }: { c: Candidata }) {
+  const styles = useStyles();
   return (
     <View style={styles.accion}>
       <View style={styles.flex}>
@@ -256,7 +260,7 @@ function Accion({ c }: { c: Candidata }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = crearEstilos(({ palette }) => ({
   texto: { color: palette.muted, fontSize: 13, lineHeight: 18 },
   chico: { color: palette.muted, fontSize: 11, lineHeight: 15 },
   subtitulo: { color: palette.ink, fontSize: 13, fontWeight: '800' },
@@ -266,4 +270,4 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   link: { color: palette.forest, fontSize: 13, fontWeight: '800' },
   costo: { color: palette.ink, fontSize: 13, fontWeight: '800' },
-});
+}));

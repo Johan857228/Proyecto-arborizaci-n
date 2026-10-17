@@ -36,7 +36,7 @@ describe('mensajes de error de la API', () => {
 describe('permisos en la interfaz (igual que el backend)', () => {
   const perfil = (rol: MiPerfil['rol'], institucion: string | null): MiPerfil => ({
     usuario_id: 'u', nombre: 'N', correo: null, rol, institucion_id: institucion, curso_id: null, activo: true,
-    institucion_nombre: null, curso_nombre: null,
+    institucion_nombre: null, curso_nombre: null, foto_url: null, portada_url: null,
   });
 
   it('el administrador gestiona cualquier institución y el docente solo la suya', () => {

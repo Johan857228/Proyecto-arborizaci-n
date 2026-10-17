@@ -1,15 +1,16 @@
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
-import { palette } from '@/config/constants';
 import { useRevisar } from '@/features/inspections/hooks/useInspecciones';
 import { anularSchema, confirmarSchema } from '@/features/inspections/schemas';
 import { getApiErrorMessage } from '@/services/api/client';
 import { Field, InlineMessage, PrimaryButton } from '@/shared/components/FormControls';
 import { Cell, Row } from '@/shared/components/UI';
+import { crearEstilos } from '@/theme';
 
 /** Confirmar (comentario opcional) o anular (motivo obligatorio) una inspección pendiente. */
 export function ReviewActions({ inspeccionId, onDone }: { inspeccionId: string; onDone?: (accion: 'confirmar' | 'anular') => void }) {
+  const styles = useStyles();
   const revisar = useRevisar();
   const [modo, setModo] = useState<'confirmar' | 'anular' | null>(null);
   const [texto, setTexto] = useState('');
@@ -78,8 +79,8 @@ export function ReviewActions({ inspeccionId, onDone }: { inspeccionId: string; 
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = crearEstilos(({ palette }) => ({
   box: { gap: 8 },
   title: { color: palette.ink, fontSize: 15, fontWeight: '900' },
   help: { color: palette.muted, fontSize: 13, lineHeight: 18 },
-});
+}));

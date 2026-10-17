@@ -1,9 +1,8 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useState } from 'react';
 import { Controller, useForm, useWatch, type Control } from 'react-hook-form';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
-import { palette } from '@/config/constants';
 import {
   ETIQUETA_ESTADO_META,
   metaFormSchema,
@@ -36,6 +35,7 @@ import {
   Row,
   type Tono,
 } from '@/shared/components/UI';
+import { crearEstilos } from '@/theme';
 
 const TONO_ESTADO: Record<Meta['estado'], Tono> = { por_iniciar: 'neutro', en_curso: 'info', cumplida: 'sano', no_cumplida: 'critico' };
 
@@ -76,6 +76,7 @@ export function GoalsScreen() {
 }
 
 function MetaCard({ meta: m, admin }: { meta: Meta; admin: boolean }) {
+  const styles = useStyles();
   const [editando, setEditando] = useState(false);
   return (
     <Card title={m.indicador_nombre} action={<Badge label={ETIQUETA_ESTADO_META[m.estado]} tono={TONO_ESTADO[m.estado]} />}>
@@ -102,6 +103,7 @@ function CamposMeta({ control, indicadores, fijo }: {
   indicadores?: IndicadorInfo[];
   fijo?: boolean;
 }) {
+  const styles = useStyles();
   const indicador = useWatch({ control, name: 'indicador' });
   const info = indicadores?.find((i) => i.codigo === indicador);
   return (
@@ -183,6 +185,7 @@ function NuevaMeta({ institucionId, indicadores }: { institucionId: string; indi
 }
 
 function EditarMeta({ meta, onListo }: { meta: Meta; onListo: () => void }) {
+  const styles = useStyles();
   const { editar, borrar } = useGuardarMeta();
   const [error, setError] = useState<string>();
   const { control, handleSubmit } = useForm<MetaForm>({
@@ -229,9 +232,9 @@ function EditarMeta({ meta, onListo }: { meta: Meta; onListo: () => void }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = crearEstilos(({ palette }) => ({
   texto: { color: palette.muted, fontSize: 13, lineHeight: 18 },
   avance: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 },
   valor: { color: palette.ink, fontSize: 20, fontWeight: '900' },
   editar: { gap: 4, marginTop: 6 },
-});
+}));

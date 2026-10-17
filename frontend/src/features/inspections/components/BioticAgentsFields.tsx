@@ -1,7 +1,7 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { useController, useWatch, type Control, type FieldValues, type Path } from 'react-hook-form';
 
-import { fonts, palette } from '@/config/constants';
+import { fonts } from '@/config/constants';
 import {
   COBERTURA_BEJUCOS,
   ENFERMEDADES,
@@ -19,6 +19,7 @@ import {
 } from '@/features/inspections/bioticos';
 import { ChoiceChip, Field, SelectField } from '@/shared/components/FormControls';
 import { NumberField } from '@/shared/components/UI';
+import { crearEstilos } from '@/theme';
 
 const NINGUNO = 'ninguno';
 
@@ -34,6 +35,7 @@ export function BioticAgentsFields<T extends FieldValues>({
   /** Para sugerir el rótulo de la muestra de laboratorio. */
   codigoArbol?: string;
 }) {
+  const styles = useStyles();
   const campo = (nombre: string) => nombre as Path<T>;
   const insecto = useWatch({ control, name: campo('insectos') }) as string | null;
   const enfermedad = useWatch({ control, name: campo('enfermedad') }) as string | null;
@@ -148,6 +150,7 @@ export function BioticAgentsFields<T extends FieldValues>({
 }
 
 function Variable({ codigo, nombre, responsable, children }: { codigo: string; nombre: string; responsable: string; children: React.ReactNode }) {
+  const styles = useStyles();
   return (
     <View style={styles.variable}>
       <View style={styles.variableCabeza}>
@@ -203,6 +206,7 @@ function Escala<T extends FieldValues>({
   etiqueta: string;
   niveles: readonly string[];
 }) {
+  const styles = useStyles();
   const { field, fieldState } = useController({ control, name: nombre });
   return (
     <View style={styles.escala}>
@@ -218,6 +222,7 @@ function Escala<T extends FieldValues>({
 }
 
 function SiNo<T extends FieldValues>({ control, nombre, etiqueta }: { control: Control<T>; nombre: Path<T>; etiqueta: string }) {
+  const styles = useStyles();
   const { field } = useController({ control, name: nombre });
   return (
     <View style={styles.escala}>
@@ -257,6 +262,7 @@ function Texto<T extends FieldValues>({
 }
 
 function Multiple<T extends FieldValues>({ control, nombre }: { control: Control<T>; nombre: Path<T> }) {
+  const styles = useStyles();
   const { field } = useController({ control, name: nombre });
   const elegidas = (field.value as TipoEpifita[] | undefined) ?? [];
   return (
@@ -273,7 +279,7 @@ function Multiple<T extends FieldValues>({ control, nombre }: { control: Control
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = crearEstilos(({ palette }) => ({
   bloque: { gap: 14 },
   encabezado: { gap: 3 },
   titulo: { color: palette.ink, fontSize: 15, fontFamily: fonts.bold },
@@ -288,4 +294,4 @@ const styles = StyleSheet.create({
   etiqueta: { color: palette.ink, fontSize: 13, fontFamily: fonts.semiBold },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   error: { color: palette.red, fontSize: 13, lineHeight: 18 },
-});
+}));

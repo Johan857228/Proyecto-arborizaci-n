@@ -1,7 +1,7 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 
-import { fonts, palette } from '@/config/constants';
+import { fonts } from '@/config/constants';
 import type { GrupoObservacion, ObservacionCatalogo } from '@/features/catalogs/types';
 import { useIsWide } from '@/hooks/use-is-wide';
 import type { EstadoArbol } from '@/shared/types/entities';
@@ -9,7 +9,8 @@ import { InlineMessage } from '@/shared/components/FormControls';
 import { Grid } from '@/shared/components/Grid';
 import { Icon, type IconName } from '@/shared/components/Icon';
 import { usePop } from '@/shared/components/Motion';
-import { StatusBadge, estadoArbol } from '@/shared/components/StatusBadge';
+import { StatusBadge, useEstadosArbol } from '@/shared/components/StatusBadge';
+import { crearEstilos, useTema } from '@/theme';
 
 const grupos: { key: GrupoObservacion; label: string; icon: IconName }[] = [
   { key: 'follaje', label: 'Follaje', icon: 'leaf' },
@@ -26,6 +27,8 @@ function estadoEstimado(cantidad: number): EstadoArbol {
 }
 
 function ObservationRow({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
+  const styles = useStyles();
+  const { palette } = useTema();
   const pop = usePop(selected);
   return (
     <Pressable
@@ -55,9 +58,12 @@ export function ObservationPicker({
   onToggle: (codigo: string) => void;
   onClear: () => void;
 }) {
+  const styles = useStyles();
+  const { palette } = useTema();
   const isWide = useIsWide();
+  const estadosArbol = useEstadosArbol();
   const estado = estadoEstimado(selected.length);
-  const tono = estadoArbol[estado];
+  const tono = estadosArbol[estado];
   const bloques = grupos
     .map((grupo) => ({
       ...grupo,
@@ -130,7 +136,7 @@ export function ObservationPicker({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = crearEstilos(({ palette }) => ({
   container: { gap: 14 },
   header: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 },
   headerText: { flexGrow: 1, flexShrink: 1, flexBasis: 220, gap: 2 },
@@ -142,7 +148,7 @@ const styles = StyleSheet.create({
   estimateMain: { flex: 1, minWidth: 0, gap: 2 },
   estimateLabel: { color: palette.ink, fontSize: 14, fontFamily: fonts.bold },
   estimateRule: { color: palette.muted, fontSize: 12 },
-  group: { flexGrow: 1, gap: 10, padding: 14, borderRadius: 14, borderWidth: 1, borderColor: palette.line, backgroundColor: '#FAFCFA' },
+  group: { flexGrow: 1, gap: 10, padding: 14, borderRadius: 14, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.tile },
   groupHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   groupIcon: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 10, backgroundColor: palette.forestSoft },
   groupTitle: { flex: 1, color: palette.ink, fontSize: 14, fontFamily: fonts.bold },
@@ -152,8 +158,8 @@ const styles = StyleSheet.create({
   row: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 10, borderWidth: 1, borderColor: 'transparent', backgroundColor: palette.paper },
   rowSelected: { borderColor: 'rgba(27, 107, 74, 0.35)', backgroundColor: palette.forestSoft },
   pressed: { opacity: 0.75 },
-  checkbox: { width: 20, height: 20, alignItems: 'center', justifyContent: 'center', borderRadius: 6, borderWidth: 1.5, borderColor: '#B7C4BC', backgroundColor: palette.paper },
+  checkbox: { width: 20, height: 20, alignItems: 'center', justifyContent: 'center', borderRadius: 6, borderWidth: 1.5, borderColor: palette.placeholder, backgroundColor: palette.paper },
   checkboxSelected: { borderColor: palette.forest, backgroundColor: palette.forest },
   rowText: { flex: 1, color: palette.ink, fontSize: 14 },
-  rowTextSelected: { color: palette.forestDark, fontFamily: fonts.semiBold },
-});
+  rowTextSelected: { color: palette.forest, fontFamily: fonts.semiBold },
+}));

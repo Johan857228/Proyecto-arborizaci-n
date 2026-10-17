@@ -2,10 +2,9 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { router, type Href } from 'expo-router';
 import { useState } from 'react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import type { z } from 'zod';
 
-import { palette } from '@/config/constants';
 import { useCatalogs } from '@/features/catalogs/hooks/useCatalogs';
 import type { Catalogos } from '@/features/catalogs/types';
 import { useMiPerfil } from '@/features/perfil/hooks/usePerfil';
@@ -21,6 +20,7 @@ import { SimulacionResultado } from '@/features/settings/components/SimulacionRe
 import { getApiErrorMessage } from '@/services/api/client';
 import { Field, InlineMessage, PrimaryButton, Section } from '@/shared/components/FormControls';
 import { AppHeader, Cell, ErrorState, LoadingState, Notice, NumberField, Page, Row } from '@/shared/components/UI';
+import { crearEstilos } from '@/theme';
 
 const PESOS = [
   ['peso_follaje', 'Follaje'],
@@ -44,6 +44,7 @@ export function MethodNewScreen() {
 }
 
 function Formulario({ base, catalogos }: { base?: Metodo; catalogos: Catalogos }) {
+  const styles = useStyles();
   const { crearMetodo, simular } = useGuardarConfiguracion();
   const [error, setError] = useState<string>();
   const { control, handleSubmit, setValue } = useForm<MetodoCampos, unknown, z.output<typeof metodoCamposSchema>>({
@@ -172,8 +173,8 @@ function Formulario({ base, catalogos }: { base?: Metodo; catalogos: Catalogos }
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = crearEstilos(({ palette }) => ({
   texto: { color: palette.muted, fontSize: 13, lineHeight: 18 },
   subtitulo: { color: palette.ink, fontSize: 14, fontWeight: '800' },
   preview: { padding: 12, borderRadius: 8, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.paper },
-});
+}));

@@ -1,8 +1,7 @@
 import { router, type Href } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
-import { palette } from '@/config/constants';
 import { useTiposIntervencion } from '@/features/interventions/hooks/useIntervenciones';
 import { InstitucionSelector, useInstitucionElegida } from '@/features/perfil/components/InstitucionSelector';
 import { useReporte, type Reporte } from '@/features/reports/api';
@@ -23,11 +22,13 @@ import {
   StateBadge,
   Tabs,
 } from '@/shared/components/UI';
+import { crearEstilos } from '@/theme';
 
 type Seccion = 'inventario' | 'riesgo' | 'cobertura' | 'productividad' | 'intervenciones';
 const GRUPOS: Record<string, string> = { follaje: 'Follaje', tronco: 'Tronco y ramas', raiz: 'Raíz', plagas: 'Plagas' };
 
 export function ReportsScreen() {
+  const styles = useStyles();
   const institucion = useInstitucionElegida();
   const [desde, setDesde] = useState('');
   const [hasta, setHasta] = useState('');
@@ -93,6 +94,7 @@ export function ReportsScreen() {
 }
 
 function Barras({ items, total, sufijo = '' }: { items: { nombre: string; total: number }[]; total: number; sufijo?: string }) {
+  const styles = useStyles();
   if (!items.length) return <Text style={styles.texto}>Sin datos.</Text>;
   const maximo = Math.max(total, ...items.map((i) => i.total), 1);
   return (
@@ -130,6 +132,7 @@ function Inventario({ r }: { r: Reporte }) {
 }
 
 function Riesgo({ r }: { r: Reporte }) {
+  const styles = useStyles();
   const rg = r.riesgo;
   return (
     <>
@@ -161,6 +164,7 @@ function Riesgo({ r }: { r: Reporte }) {
 }
 
 function Cobertura({ r }: { r: Reporte }) {
+  const styles = useStyles();
   const c = r.cobertura;
   return (
     <>
@@ -182,6 +186,7 @@ function Cobertura({ r }: { r: Reporte }) {
 }
 
 function Productividad({ r }: { r: Reporte }) {
+  const styles = useStyles();
   const p = r.productividad;
   return (
     <>
@@ -207,6 +212,7 @@ function Productividad({ r }: { r: Reporte }) {
 }
 
 function Intervenciones({ r }: { r: Reporte }) {
+  const styles = useStyles();
   const i = r.intervenciones;
   const tipos = useTiposIntervencion();
   const nombre = (codigo: string) => tipos.data?.find((t) => t.codigo === codigo)?.nombre ?? codigo;
@@ -237,7 +243,7 @@ function Intervenciones({ r }: { r: Reporte }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = crearEstilos(({ palette }) => ({
   texto: { color: palette.muted, fontSize: 13, lineHeight: 19 },
   barras: { gap: 8 },
   barra: { gap: 4 },
@@ -246,4 +252,4 @@ const styles = StyleSheet.create({
   fila: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 },
   link: { color: palette.forest, fontSize: 13, fontWeight: '800' },
   flex: { flex: 1 },
-});
+}));

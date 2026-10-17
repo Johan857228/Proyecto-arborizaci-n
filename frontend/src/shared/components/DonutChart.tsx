@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, Text, View } from 'react-native';
 import Svg, { Circle, G } from 'react-native-svg';
 
-import { fonts, palette } from '@/config/constants';
+import { fonts } from '@/config/constants';
 import { Icon, type IconName } from '@/shared/components/Icon';
 import { useEntryProgress } from '@/shared/components/Motion';
+import { crearEstilos, useTema } from '@/theme';
 
 export interface DonutSlice {
   key: string;
@@ -35,6 +36,8 @@ export function DonutChart({
   thickness?: number;
   delay?: number;
 }) {
+  const styles = useStyles();
+  const { palette } = useTema();
   const progress = useEntryProgress(1100, delay);
   const [activeKey, setActiveKey] = useState<string>();
   const visibles = slices.filter((slice) => slice.value > 0);
@@ -128,7 +131,7 @@ export function DonutChart({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = crearEstilos(({ palette }) => ({
   // Dona y leyenda lado a lado cuando hay espacio; en tarjetas angostas la leyenda baja.
   container: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', gap: 20 },
   center: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 30 },
@@ -143,4 +146,4 @@ const styles = StyleSheet.create({
   rowLabel: { flex: 1, color: palette.ink, fontSize: 14 },
   rowValue: { color: palette.ink, fontSize: 14, fontFamily: fonts.bold },
   rowPercent: { minWidth: 42, textAlign: 'right', color: palette.muted, fontSize: 13 },
-});
+}));

@@ -7,3 +7,8 @@ import { Platform, type ViewStyle } from 'react-native';
 export function gradient(css: string): ViewStyle {
   return (Platform.OS === 'web' ? { backgroundImage: css } : { experimental_backgroundImage: css }) as ViewStyle;
 }
+
+/** Línea fina que se desvanece hacia la derecha (separador del encabezado de las tarjetas). */
+export function fadeLine(color: string): ViewStyle {
+  return gradient(`linear-gradient(90deg, ${color} 0%, ${color} 35%, rgba(0, 0, 0, 0) 100%)`);
+}

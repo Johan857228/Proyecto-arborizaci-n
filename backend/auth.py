@@ -1,6 +1,6 @@
 """Autenticación: lee el token del encabezado Authorization y comprueba que sea válido.
 También carga el perfil (rol, institución y curso) de quien hace la petición."""
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -18,6 +18,9 @@ class Sesion:
     token: str
     user_id: str
     email: str | None
+    # app_metadata de Supabase Auth: solo lo escribe el backend (la persona no puede cambiarlo).
+    # Guarda las rutas de la foto de perfil y de la portada.
+    metadatos_app: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -64,7 +67,7 @@ def usuario_actual(
     if usuario is None:
         raise HTTPException(status_code=401, detail="Token inválido o expirado.")
 
-    return Sesion(token=token, user_id=str(usuario.id), email=usuario.email)
+    return Sesion(token=token, user_id=str(usuario.id), email=usuario.email, metadatos_app=dict(usuario.app_metadata or {}))
 
 
 def _nombre_por_defecto(email: str | None) -> str:

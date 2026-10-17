@@ -1,9 +1,9 @@
 import { Image } from 'expo-image';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
-import { palette } from '@/config/constants';
 import type { FotoLocal } from '@/features/trees/types';
 import { InlineMessage, PrimaryButton, Section, Surface } from '@/shared/components/FormControls';
+import { crearEstilos } from '@/theme';
 
 export function photoLabel(tipo: FotoLocal['tipo']) {
   if (tipo === 'completo') return 'Vista general';
@@ -24,6 +24,7 @@ export function PhotoSection({
   onRemove: (photo: FotoLocal) => void;
   help: string;
 }) {
+  const styles = useStyles();
   const adicionales = photos.filter((photo) => photo.tipo === 'adicional').length;
   return (
     <Section title="Fotografías">
@@ -71,7 +72,7 @@ export function PhotoSection({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = crearEstilos(({ palette }) => ({
   helper: { color: palette.muted, fontSize: 13, lineHeight: 19 },
   actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   cell: { flexGrow: 1, flexBasis: 200 },
@@ -80,4 +81,4 @@ const styles = StyleSheet.create({
   description: { flex: 1, gap: 5 },
   title: { color: palette.ink, fontWeight: '800' },
   remove: { color: palette.red, fontSize: 13, fontWeight: '700', paddingTop: 3 },
-});
+}));

@@ -1,7 +1,6 @@
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
-import { palette } from '@/config/constants';
 import { useMiProgreso, useRanking, type FiltroRanking, type Progreso } from '@/features/gamification/api';
 import { InstitucionSelector, useInstitucionElegida } from '@/features/perfil/components/InstitucionSelector';
 import { useMiPerfil } from '@/features/perfil/hooks/usePerfil';
@@ -22,6 +21,7 @@ import {
   StatTile,
   Tabs,
 } from '@/shared/components/UI';
+import { crearEstilos } from '@/theme';
 
 export function ProgressScreen() {
   const progreso = useMiProgreso();
@@ -43,6 +43,7 @@ export function ProgressScreen() {
 }
 
 function MiProgreso({ progreso: p }: { progreso: Progreso }) {
+  const styles = useStyles();
   return (
     <>
       <Card title={`Nivel: ${p.nivel.nombre}`} action={<Badge label={`${p.puntos} puntos`} tono="sano" />}>
@@ -81,6 +82,7 @@ function MiProgreso({ progreso: p }: { progreso: Progreso }) {
 }
 
 function Rankings() {
+  const styles = useStyles();
   const perfil = useMiPerfil();
   const institucion = useInstitucionElegida();
   const [tipo, setTipo] = useState<FiltroRanking['tipo']>('individual');
@@ -148,18 +150,18 @@ function Rankings() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = crearEstilos(({ palette }) => ({
   texto: { color: palette.muted, fontSize: 13, lineHeight: 18 },
   chico: { color: palette.muted, fontSize: 11 },
   logros: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   logro: { flexGrow: 1, flexBasis: 200, gap: 4, padding: 12, borderRadius: 8, borderWidth: 1, borderColor: palette.line },
-  logroObtenido: { borderColor: palette.forest, backgroundColor: '#EEF5EA' },
+  logroObtenido: { borderColor: palette.forest, backgroundColor: palette.tile },
   logroNombre: { color: palette.muted, fontSize: 14, fontWeight: '900' },
   logroNombreObtenido: { color: palette.forest },
   fila: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8, paddingHorizontal: 6, borderTopWidth: 1, borderTopColor: palette.line },
-  filaPropia: { backgroundColor: '#EEF5EA', borderRadius: 6 },
+  filaPropia: { backgroundColor: palette.tile, borderRadius: 6 },
   posicion: { width: 28, color: palette.forest, fontSize: 16, fontWeight: '900', textAlign: 'center' },
   flex: { flex: 1 },
   nombre: { color: palette.ink, fontSize: 14, fontWeight: '800' },
   puntos: { color: palette.ink, fontSize: 16, fontWeight: '900' },
-});
+}));

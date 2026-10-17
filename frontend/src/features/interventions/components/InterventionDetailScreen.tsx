@@ -2,10 +2,9 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { router, type Href } from 'expo-router';
 import { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import type { z } from 'zod';
 
-import { palette } from '@/config/constants';
 import { useEditarIntervencion, useIntervencion } from '@/features/interventions/hooks/useIntervenciones';
 import {
   ETIQUETA_ESTADO_INTERVENCION,
@@ -33,8 +32,10 @@ import {
   Page,
   Row,
 } from '@/shared/components/UI';
+import { crearEstilos } from '@/theme';
 
 export function InterventionDetailScreen({ intervencionId }: { intervencionId: string }) {
+  const styles = useStyles();
   const consulta = useIntervencion(intervencionId);
   const perfil = useMiPerfil();
   const editar = useEditarIntervencion();
@@ -176,8 +177,8 @@ function EjecutarForm({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = crearEstilos(({ palette }) => ({
   badges: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   kvs: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   texto: { color: palette.muted, fontSize: 13, lineHeight: 18 },
-});
+}));

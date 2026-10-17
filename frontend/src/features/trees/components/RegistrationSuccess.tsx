@@ -1,10 +1,11 @@
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 import Animated, { ZoomIn } from 'react-native-reanimated';
 
-import { fonts, palette, shadows } from '@/config/constants';
+import { fonts } from '@/config/constants';
 import { InlineMessage, PrimaryButton, Screen } from '@/shared/components/FormControls';
 import { Icon } from '@/shared/components/Icon';
 import { FadeIn } from '@/shared/components/Motion';
+import { crearEstilos, useTema } from '@/theme';
 
 /**
  * Confirmación del registro dentro de la app. Reemplaza a Alert.alert, que en web no muestra nada
@@ -25,6 +26,8 @@ export function RegistrationSuccess({
   onViewTree: () => void;
   onViewInventory: () => void;
 }) {
+  const styles = useStyles();
+  const { palette } = useTema();
   return (
     <Screen>
       <ScrollView contentContainerStyle={styles.content}>
@@ -54,7 +57,7 @@ export function RegistrationSuccess({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = crearEstilos(({ palette, shadows }) => ({
   content: { flexGrow: 1, justifyContent: 'center', padding: 20 },
   card: { width: '100%', maxWidth: 440, alignSelf: 'center', alignItems: 'center', gap: 14, padding: 28, borderRadius: 20, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.paper, boxShadow: shadows.raised },
   badge: { width: 72, height: 72, alignItems: 'center', justifyContent: 'center', borderRadius: 36, backgroundColor: palette.forestSoft },
@@ -63,7 +66,7 @@ const styles = StyleSheet.create({
   subtitle: { color: palette.muted, fontSize: 15, lineHeight: 22, textAlign: 'center' },
   summary: { alignSelf: 'stretch', alignItems: 'center', gap: 4, paddingVertical: 16, borderRadius: 14, backgroundColor: palette.canvas },
   summaryLabel: { color: palette.muted, fontSize: 12, fontFamily: fonts.semiBold, textTransform: 'uppercase', letterSpacing: 1 },
-  code: { color: palette.forestDark, fontSize: 26, fontFamily: fonts.extraBold, letterSpacing: 1 },
+  code: { color: palette.forest, fontSize: 26, fontFamily: fonts.extraBold, letterSpacing: 1 },
   species: { color: palette.ink, fontSize: 15 },
   actions: { alignSelf: 'stretch', gap: 10, marginTop: 4 },
-});
+}));

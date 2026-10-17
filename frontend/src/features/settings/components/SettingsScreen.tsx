@@ -2,9 +2,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { router, type Href } from 'expo-router';
 import { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
-import { palette } from '@/config/constants';
 import { useEditarTipoIntervencion, useTiposIntervencion } from '@/features/interventions/hooks/useIntervenciones';
 import { MAX_COSTO, type TipoIntervencion } from '@/features/interventions/schemas';
 import { useMiPerfil } from '@/features/perfil/hooks/usePerfil';
@@ -37,6 +36,7 @@ import {
   Row,
   Tabs,
 } from '@/shared/components/UI';
+import { crearEstilos } from '@/theme';
 
 export function SettingsScreen() {
   const perfil = useMiPerfil();
@@ -72,6 +72,7 @@ export function SettingsScreen() {
 }
 
 function ParametrosVista({ admin }: { admin: boolean }) {
+  const styles = useStyles();
   const parametros = useParametros();
   const metodos = useMetodos();
   if (parametros.isLoading || metodos.isLoading) return <LoadingState />;
@@ -91,6 +92,7 @@ function ParametrosVista({ admin }: { admin: boolean }) {
 }
 
 function ParametrosInstitucion({ parametros: p, metodos, admin }: { parametros: Parametros; metodos: Metodo[]; admin: boolean }) {
+  const styles = useStyles();
   const { parametros: guardar } = useGuardarConfiguracion();
   const [mensaje, setMensaje] = useState<string>();
   const [error, setError] = useState<string>();
@@ -165,6 +167,7 @@ function ParametrosInstitucion({ parametros: p, metodos, admin }: { parametros: 
 }
 
 function MetodosVista({ admin }: { admin: boolean }) {
+  const styles = useStyles();
   const metodos = useMetodos();
   const { simular } = useGuardarConfiguracion();
   const [simulado, setSimulado] = useState<string>();
@@ -216,6 +219,7 @@ function MetodosVista({ admin }: { admin: boolean }) {
 }
 
 function CostosVista({ admin }: { admin: boolean }) {
+  const styles = useStyles();
   const tipos = useTiposIntervencion();
   if (tipos.isLoading) return <LoadingState />;
   if (tipos.error) return <ErrorState error={tipos.error} onRetry={() => void tipos.refetch()} />;
@@ -230,6 +234,7 @@ function CostosVista({ admin }: { admin: boolean }) {
 }
 
 function CostoTipo({ tipo, admin }: { tipo: TipoIntervencion; admin: boolean }) {
+  const styles = useStyles();
   const editar = useEditarTipoIntervencion();
   const [costo, setCosto] = useState<number | undefined>(tipo.costo_referencia);
   const [error, setError] = useState<string>();
@@ -265,8 +270,8 @@ function CostoTipo({ tipo, admin }: { tipo: TipoIntervencion; admin: boolean }) 
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = crearEstilos(({ palette }) => ({
   texto: { color: palette.muted, fontSize: 13, lineHeight: 18 },
   kvs: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   costo: { color: palette.ink, fontSize: 16, fontWeight: '900' },
-});
+}));
