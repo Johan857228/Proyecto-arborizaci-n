@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
-import { palette } from '@/config/constants';
 import { useCatalogs } from '@/features/catalogs/hooks/useCatalogs';
 import { useMiPerfil } from '@/features/perfil/hooks/usePerfil';
 import { SelectField } from '@/shared/components/FormControls';
+import { crearEstilos } from '@/theme';
 
 const TODAS = '__todas__';
 
@@ -38,6 +38,7 @@ export function InstitucionSelector({
   disabled?: boolean;
   label?: string;
 }) {
+  const styles = useStyles();
   const catalogos = useCatalogs();
   const instituciones = catalogos.data?.instituciones ?? [];
   if (disabled) {
@@ -63,8 +64,8 @@ export function InstitucionSelector({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = crearEstilos(({ palette }) => ({
   fijo: { gap: 4, marginBottom: 14 },
   label: { color: palette.ink, fontSize: 14, fontWeight: '700' },
   valor: { color: palette.muted, fontSize: 15 },
-});
+}));

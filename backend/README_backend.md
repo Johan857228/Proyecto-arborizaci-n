@@ -149,6 +149,7 @@ triggers en Supabase (para que tampoco se puedan saltar llamando a la API de Sup
 | GET | `/salud` | Público | Comprueba que el servidor responde |
 | POST | `/auth/login` | Público | Devuelve el token (`access_token`) y el `refresh_token` |
 | POST | `/auth/refresh` | Público | Cambia el `refresh_token` por una sesión nueva |
+| POST | `/auth/registro` | Público | Crea una cuenta de estudiante sin institución (nombre, correo y contraseña); devuelve la sesión o pide confirmar el correo |
 | GET | `/catalogos` | Público | Especies, instituciones y casillas fitosanitarias |
 | GET / PATCH | `/perfil` | Usuario | Mi rol, institución y curso / cambiar mi nombre |
 | GET | `/usuarios` | Docente, admin | Usuarios (el docente ve los de su institución) |

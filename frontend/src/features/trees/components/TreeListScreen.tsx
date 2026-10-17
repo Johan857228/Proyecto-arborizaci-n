@@ -4,11 +4,12 @@ import { router, type Href } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
-import { fonts, gradients, layout, palette, shadows } from '@/config/constants';
+import { fonts, layout } from '@/config/constants';
 import { useCatalogs } from '@/features/catalogs/hooks/useCatalogs';
 import { treeKeys } from '@/features/trees/hooks/useCreateTree';
 import type { FiltrosInventario, Zona } from '@/features/trees/types';
 import { treesService } from '@/features/trees/services/treesService';
+import { ESPACIO_FINAL, useEspaciado } from '@/hooks/use-espaciado';
 import { useIsWide } from '@/hooks/use-is-wide';
 import { getApiErrorMessage } from '@/services/api/client';
 import { formatFecha } from '@/shared/format';
@@ -20,6 +21,7 @@ import { FadeIn } from '@/shared/components/Motion';
 import { StatusBadge } from '@/shared/components/StatusBadge';
 import { RevisionBadge } from '@/shared/components/UI';
 import { gradient } from '@/shared/styles/gradient';
+import { crearEstilos, useTema } from '@/theme';
 
 const PAGE_SIZE = 50;
 const TODAS = '__todas__';
@@ -41,6 +43,8 @@ const estados: { label: string; value: EstadoArbol | undefined }[] = [
 ];
 
 function Detail({ icon, label, value }: { icon: IconName; label: string; value: string }) {
+  const styles = useStyles();
+  const { palette } = useTema();
   return (
     <View style={styles.detail}>
       <Icon name={icon} size={16} color={palette.muted} />
@@ -53,6 +57,8 @@ function Detail({ icon, label, value }: { icon: IconName; label: string; value: 
 }
 
 function TreeCard({ tree }: { tree: ArbolResumen }) {
+  const styles = useStyles();
+  const { palette, gradients } = useTema();
   return (
     <Pressable
       accessibilityRole="link"
@@ -120,7 +126,10 @@ function TreeCard({ tree }: { tree: ArbolResumen }) {
 }
 
 export default function TreeListScreen() {
+  const styles = useStyles();
+  const { palette } = useTema();
   const isWide = useIsWide();
+  const espacio = useEspaciado();
   const catalogs = useCatalogs();
   const [search, setSearch] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
@@ -184,7 +193,7 @@ export default function TreeListScreen() {
 
   return (
     <Screen>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={[styles.content, { paddingHorizontal: espacio.pagina, gap: espacio.separacion + 4 }]} keyboardShouldPersistTaps="handled">
         <FadeIn index={0} style={styles.header}>
           <View style={styles.heading}>
             <Text style={styles.eyebrow}>GESTIÓN AMBIENTAL</Text>
@@ -210,7 +219,7 @@ export default function TreeListScreen() {
               <TextInput
                 style={styles.searchInput}
                 placeholder="Buscar por código, especie o zona"
-                placeholderTextColor="#8A978F"
+                placeholderTextColor={palette.placeholder}
                 value={search}
                 onChangeText={setSearch}
                 onFocus={() => setSearchFocused(true)}
@@ -360,8 +369,8 @@ export default function TreeListScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  content: { width: '100%', maxWidth: layout.maxWidth, alignSelf: 'center', padding: 20, paddingTop: 24, paddingBottom: 40, gap: 18 },
+const useStyles = crearEstilos(({ palette, card }) => ({
+  content: { width: '100%', maxWidth: layout.maxWidth, alignSelf: 'center', padding: 20, paddingTop: 20, paddingBottom: ESPACIO_FINAL, gap: 18 },
   // Con espacio, el botón queda a la derecha del título; en teléfonos baja y ocupa todo el ancho.
   header: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-end', gap: 16 },
   heading: { flexGrow: 3, flexShrink: 1, flexBasis: 360, gap: 6 },
@@ -369,9 +378,9 @@ const styles = StyleSheet.create({
   eyebrow: { color: palette.forest, fontSize: 12, fontFamily: fonts.bold, letterSpacing: 1.4 },
   title: { color: palette.ink, fontSize: 28, fontFamily: fonts.extraBold, letterSpacing: -0.6 },
   subtitle: { color: palette.muted, fontSize: 15, lineHeight: 22 },
-  toolbar: { gap: 14, padding: 16, borderRadius: 20, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.paper, boxShadow: shadows.card },
+  toolbar: { gap: 12, padding: 14, ...card },
   searchRow: { flexDirection: 'row', gap: 10 },
-  search: { flex: 1, minHeight: 50, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, borderWidth: 1, borderColor: palette.line, borderRadius: 12, backgroundColor: palette.canvas },
+  search: { flex: 1, minHeight: 50, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, borderWidth: 1, borderColor: palette.line, borderRadius: 12, backgroundColor: palette.tile },
   searchFocused: { borderColor: palette.forest, backgroundColor: palette.paper, boxShadow: '0 0 0 3px rgba(27, 107, 74, 0.15)' },
   searchInput: { flex: 1, minHeight: 48, color: palette.ink, fontSize: 15, outlineWidth: 0 },
   iconButton: { width: 50, height: 50, alignItems: 'center', justifyContent: 'center', borderRadius: 12, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.paper },
@@ -387,19 +396,19 @@ const styles = StyleSheet.create({
   sectionTitle: { color: palette.ink, fontSize: 18, fontFamily: fonts.extraBold },
   clear: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   clearText: { color: palette.forest, fontSize: 13, fontFamily: fonts.bold },
-  message: { alignItems: 'center', gap: 10, padding: 32, borderWidth: 1, borderColor: palette.line, borderRadius: 20, backgroundColor: palette.paper, boxShadow: shadows.card },
+  message: { alignItems: 'center', gap: 10, padding: 28, ...card },
   messageIcon: { width: 56, height: 56, marginBottom: 4, alignItems: 'center', justifyContent: 'center', borderRadius: 18, backgroundColor: palette.forestSoft },
   messageTitle: { color: palette.ink, fontSize: 17, fontFamily: fonts.extraBold, textAlign: 'center' },
   messageText: { maxWidth: 360, color: palette.muted, fontSize: 14, lineHeight: 20, textAlign: 'center' },
-  treeCard: { overflow: 'hidden', borderRadius: 20, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.paper, boxShadow: shadows.card },
+  treeCard: { overflow: 'hidden', ...card },
   cover: { height: 190, backgroundColor: palette.forestSoft },
   coverEmpty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 6 },
   coverEmptyText: { color: palette.forestDark, fontSize: 12, fontFamily: fonts.semiBold },
   coverVeil: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
   coverTop: { position: 'absolute', top: 12, left: 12, right: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   coverBottom: { position: 'absolute', left: 16, right: 16, bottom: 12 },
-  cardBody: { gap: 14, padding: 18 },
-  treeName: { color: palette.paper, fontSize: 19, fontFamily: fonts.extraBold, letterSpacing: -0.2 },
+  cardBody: { gap: 12, padding: 14 },
+  treeName: { color: palette.white, fontSize: 19, fontFamily: fonts.extraBold, letterSpacing: -0.2 },
   scientificName: { marginTop: 2, color: '#DCE9DF', fontSize: 13, fontStyle: 'italic' },
   codeChip: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, backgroundColor: 'rgba(255, 255, 255, 0.92)' },
   code: { color: palette.forestDark, fontSize: 12, fontFamily: fonts.extraBold, letterSpacing: 0.6 },
@@ -409,9 +418,9 @@ const styles = StyleSheet.create({
   detailLabel: { color: palette.muted, fontSize: 11 },
   detailValue: { marginTop: 1, color: palette.ink, fontSize: 14, fontFamily: fonts.semiBold },
   measures: { flexDirection: 'row', gap: 8 },
-  measure: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 12, backgroundColor: palette.canvas },
+  measure: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 12, backgroundColor: palette.tile },
   measureValue: { color: palette.ink, fontSize: 15, fontFamily: fonts.extraBold },
   measureLabel: { marginTop: 2, color: palette.muted, fontSize: 11 },
   inspection: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
   inspectionText: { color: palette.muted, fontSize: 12 },
-});
+}));

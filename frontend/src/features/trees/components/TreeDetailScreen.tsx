@@ -1,9 +1,8 @@
 import { Image } from 'expo-image';
 import { router, type Href } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
-import { palette } from '@/config/constants';
 import { useAuthStore } from '@/features/auth/store';
 import { InspectionCard } from '@/features/inspections/components/InspectionCard';
 import { useHistorial } from '@/features/inspections/hooks/useInspecciones';
@@ -40,6 +39,7 @@ import {
   StateBadge,
   Cell,
 } from '@/shared/components/UI';
+import { crearEstilos } from '@/theme';
 
 const AVISOS: Record<string, { texto: string; tono: 'sano' | 'riesgo' }> = {
   registrado: {
@@ -55,6 +55,7 @@ const AVISOS: Record<string, { texto: string; tono: 'sano' | 'riesgo' }> = {
 };
 
 export function TreeDetailScreen({ arbolId, aviso: avisoRuta }: { arbolId: string; aviso?: string }) {
+  const styles = useStyles();
   const avisoGuardado = useAvisos((state) => state.avisos[arbolId]);
   const limpiarAviso = useAvisos((state) => state.limpiar);
   const aviso = avisoGuardado ?? avisoRuta;
@@ -287,6 +288,7 @@ function FotosRegistro({
   galeria: FotoGaleria[];
   puedeSubir: boolean;
 }) {
+  const styles = useStyles();
   const picker = usePhotoPicker();
   const subir = useSubirFotoArbol(arbolId);
   const [error, setError] = useState<string>();
@@ -341,7 +343,7 @@ function FotosRegistro({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = crearEstilos(({ palette }) => ({
   badges: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   kvs: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   helper: { color: palette.muted, fontSize: 12, lineHeight: 17 },
@@ -357,4 +359,4 @@ const styles = StyleSheet.create({
   fotoChica: { width: 52, height: 52, borderRadius: 6, backgroundColor: palette.line },
   flex: { flex: 1 },
   boton: { width: 110 },
-});
+}));

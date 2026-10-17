@@ -2,9 +2,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { router, type Href } from 'expo-router';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
-import { palette } from '@/config/constants';
 import {
   presupuestoFormSchema,
   useGuardarPresupuesto,
@@ -20,8 +19,10 @@ import { getApiErrorMessage } from '@/services/api/client';
 import { formatMes, formatPesos } from '@/shared/format';
 import { InlineMessage, PrimaryButton } from '@/shared/components/FormControls';
 import { AppHeader, Card, ConfirmButton, ErrorState, LoadingState, Notice, Page, ProgressBar } from '@/shared/components/UI';
+import { crearEstilos } from '@/theme';
 
 export function BudgetDetailScreen({ presupuestoId }: { presupuestoId: string }) {
+  const styles = useStyles();
   const consulta = usePresupuesto(presupuestoId);
   const perfil = useMiPerfil();
   const tipos = useTiposIntervencion();
@@ -116,10 +117,10 @@ function EditarPresupuesto({ presupuesto }: { presupuesto: Presupuesto }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = crearEstilos(({ palette }) => ({
   fila: { gap: 2, paddingVertical: 6, borderTopWidth: 1, borderTopColor: palette.line },
   nombre: { color: palette.ink, fontSize: 13, fontWeight: '800' },
   texto: { color: palette.muted, fontSize: 12, lineHeight: 17 },
   mes: { gap: 4 },
   mesHeader: { flexDirection: 'row', justifyContent: 'space-between' },
-});
+}));

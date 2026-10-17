@@ -1,12 +1,15 @@
-"""Perfil propio y gestión de usuarios (rol, institución, curso y estado)."""
+"""Perfil propio (nombre, foto y portada) y gestión de usuarios (rol, institución, curso y estado)."""
+import uuid
+from typing import Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field, field_validator
 
 import datos
 import db
 from auth import Perfil, perfil_actual, revisor_actual
+from comun import BUCKET_FOTOS, MAX_FOTO_BYTES, leer_foto, url_firmada
 from schemas import Rol
 
 router = APIRouter(tags=["Usuarios"])
@@ -25,6 +28,8 @@ class PerfilOut(BaseModel):
 class MiPerfilOut(PerfilOut):
     institucion_nombre: str | None = None
     curso_nombre: str | None = None
+    foto_url: str | None = Field(default=None, description="Foto de perfil: URL firmada temporal (1 hora)")
+    portada_url: str | None = Field(default=None, description="Foto de la portada del inicio: URL firmada temporal (1 hora)")
 
 
 class MiPerfilEditar(BaseModel):
@@ -60,6 +65,46 @@ class UsuarioEditar(BaseModel):
 COLUMNAS = "usuario_id, nombre, correo, rol, institucion_id, curso_id, activo"
 
 
+# ============================ Foto de perfil y portada ============================
+# Las imágenes van al bucket de fotos, en perfiles/<usuario>/, y su ruta se guarda en el
+# app_metadata de Supabase Auth (no hace falta cambiar la base de datos). Solo el backend sube,
+# firma y borra estos archivos, siempre dentro de la carpeta de quien hace la petición.
+ImagenPerfil = Literal["foto", "portada"]
+CLAVE_IMAGEN: dict[str, str] = {"foto": "foto_path", "portada": "portada_path"}
+
+
+def _carpeta(perfil: Perfil) -> str:
+    return f"perfiles/{perfil.usuario_id}/"
+
+
+def _ruta_imagen(perfil: Perfil, imagen: str) -> str | None:
+    """Ruta guardada de la imagen, solo si está en la carpeta de esa persona."""
+    ruta = perfil.sesion.metadatos_app.get(CLAVE_IMAGEN[imagen])
+    return ruta if isinstance(ruta, str) and ruta.startswith(_carpeta(perfil)) else None
+
+
+def _url_imagen(perfil: Perfil, imagen: str) -> str | None:
+    ruta = _ruta_imagen(perfil, imagen)
+    return url_firmada(db.get_admin(), ruta) if ruta else None
+
+
+def _borrar_archivo(ruta: str) -> None:
+    try:
+        db.get_admin().storage.from_(BUCKET_FOTOS).remove([ruta])
+    except Exception:
+        pass  # un archivo viejo que no se pudo borrar no impide el cambio
+
+
+def _guardar_ruta(perfil: Perfil, imagen: str, ruta: str | None) -> None:
+    """Guarda (o borra, con None) la ruta en el app_metadata del usuario."""
+    clave = CLAVE_IMAGEN[imagen]
+    db.get_admin().auth.admin.update_user_by_id(perfil.usuario_id, {"app_metadata": {clave: ruta}})
+    if ruta is None:
+        perfil.sesion.metadatos_app.pop(clave, None)
+    else:
+        perfil.sesion.metadatos_app[clave] = ruta
+
+
 def _mi_perfil(cliente, perfil: Perfil) -> dict:
     instituciones = datos.instituciones(cliente)
     curso = None
@@ -76,6 +121,8 @@ def _mi_perfil(cliente, perfil: Perfil) -> dict:
         "activo": perfil.activo,
         "institucion_nombre": instituciones.get(perfil.institucion_id or "", {}).get("nombre_corto"),
         "curso_nombre": curso["nombre"] if curso else None,
+        "foto_url": _url_imagen(perfil, "foto"),
+        "portada_url": _url_imagen(perfil, "portada"),
     }
 
 
@@ -91,6 +138,37 @@ def editar_mi_perfil(d: MiPerfilEditar, perfil: Perfil = Depends(perfil_actual))
     cliente.table("perfiles").update({"nombre": d.nombre}).eq("usuario_id", perfil.usuario_id).execute()
     perfil.nombre = d.nombre
     return _mi_perfil(cliente, perfil)
+
+
+@router.put("/perfil/{imagen}", response_model=MiPerfilOut)
+def cambiar_imagen(imagen: ImagenPerfil, archivo: UploadFile = File(...), perfil: Perfil = Depends(perfil_actual)):
+    """Cambia la foto de perfil (`foto`) o la portada del inicio (`portada`).
+    JPG, PNG o WebP de máximo 5 MB; reemplaza la anterior."""
+    contenido, tipo_real, extension = leer_foto(archivo, MAX_FOTO_BYTES)
+    anterior = _ruta_imagen(perfil, imagen)
+    ruta = f"{_carpeta(perfil)}{imagen}-{uuid.uuid4().hex}.{extension}"
+    db.get_admin().storage.from_(BUCKET_FOTOS).upload(ruta, contenido, {"content-type": tipo_real})
+    try:
+        _guardar_ruta(perfil, imagen, ruta)
+    except Exception:
+        _borrar_archivo(ruta)  # no dejar el archivo huérfano en Storage
+        raise HTTPException(status_code=502, detail="No se pudo guardar la imagen. Intenta de nuevo.")
+    if anterior:
+        _borrar_archivo(anterior)
+    return _mi_perfil(db.cliente_de_usuario(perfil.sesion.token), perfil)
+
+
+@router.delete("/perfil/{imagen}", response_model=MiPerfilOut)
+def quitar_imagen(imagen: ImagenPerfil, perfil: Perfil = Depends(perfil_actual)):
+    """Quita la foto de perfil o la portada (el inicio vuelve a mostrar la foto del campus)."""
+    anterior = _ruta_imagen(perfil, imagen)
+    if anterior:
+        try:
+            _guardar_ruta(perfil, imagen, None)
+        except Exception:
+            raise HTTPException(status_code=502, detail="No se pudo quitar la imagen. Intenta de nuevo.")
+        _borrar_archivo(anterior)
+    return _mi_perfil(db.cliente_de_usuario(perfil.sesion.token), perfil)
 
 
 @router.get("/usuarios", response_model=list[PerfilOut])

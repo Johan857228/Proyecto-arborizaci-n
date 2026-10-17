@@ -28,7 +28,13 @@ export type Usuario = z.infer<typeof usuarioSchema>;
 export const miPerfilSchema = usuarioSchema.extend({
   institucion_nombre: z.string().nullable(),
   curso_nombre: z.string().nullable(),
+  // URLs firmadas temporales; null si la persona no ha subido foto o portada.
+  foto_url: z.string().nullable().default(null),
+  portada_url: z.string().nullable().default(null),
 });
+
+/** Imágenes propias del perfil: la foto (avatar) y la portada del inicio. */
+export type ImagenPerfil = 'foto' | 'portada';
 export type MiPerfil = z.infer<typeof miPerfilSchema>;
 
 export const editarNombreSchema = z.object({

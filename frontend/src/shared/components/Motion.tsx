@@ -16,6 +16,7 @@ import Animated, {
   withSequence,
   withSpring,
   withTiming,
+  type SharedValue,
 } from 'react-native-reanimated';
 
 /** Entrada suave hacia arriba; `index` escalona la aparición de listas y tarjetas. */
@@ -191,4 +192,78 @@ export function usePressScale(pressedScale = 0.97) {
     onPressIn: () => scale.set(withSpring(pressedScale, { damping: 18, stiffness: 400 })),
     onPressOut: () => scale.set(withSpring(1, { damping: 14, stiffness: 300 })),
   };
+}
+
+const EASE_OUT_FUERTE = Easing.bezier(0.23, 1, 0.32, 1);
+
+/** Ondas que salen de un elemento cada pocos segundos, como un pulso; decorativas, no reciben
+ *  toques. Desaparecen si el sistema pide reducir el movimiento. */
+export function Ripples({
+  size,
+  color,
+  radius = size / 2,
+  count = 2,
+  duration = 2800,
+  maxScale = 1.6,
+  opacity = 0.45,
+}: {
+  size: number;
+  color: string;
+  radius?: number;
+  count?: number;
+  duration?: number;
+  maxScale?: number;
+  opacity?: number;
+}) {
+  const reduceMotion = useReducedMotion();
+  const progress = useSharedValue(0);
+  useEffect(() => {
+    if (reduceMotion) return;
+    progress.set(withRepeat(withTiming(1, { duration, easing: EASE_OUT_FUERTE }), -1, false));
+  }, [duration, progress, reduceMotion]);
+  if (reduceMotion) return null;
+  return (
+    <>
+      {Array.from({ length: count }, (_, index) => (
+        <Ripple
+          key={index}
+          progress={progress}
+          offset={index / count}
+          size={size}
+          radius={radius}
+          color={color}
+          maxScale={maxScale}
+          opacity={opacity}
+        />
+      ))}
+    </>
+  );
+}
+
+function Ripple({
+  progress,
+  offset,
+  size,
+  radius,
+  color,
+  maxScale,
+  opacity,
+}: {
+  progress: SharedValue<number>;
+  offset: number;
+  size: number;
+  radius: number;
+  color: string;
+  maxScale: number;
+  opacity: number;
+}) {
+  const style = useAnimatedStyle(() => {
+    const avance = (progress.get() + offset) % 1;
+    return { opacity: opacity * (1 - avance), transform: [{ scale: 1 + (maxScale - 1) * avance }] };
+  });
+  return (
+    <Animated.View
+      style={[{ position: 'absolute', width: size, height: size, borderRadius: radius, backgroundColor: color, pointerEvents: 'none' }, style]}
+    />
+  );
 }

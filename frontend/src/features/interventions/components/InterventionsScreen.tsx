@@ -1,8 +1,7 @@
 import { router, type Href } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
-import { palette } from '@/config/constants';
 import {
   useIntervenciones,
   useRecomendaciones,
@@ -32,6 +31,7 @@ import {
   StatTile,
   Tabs,
 } from '@/shared/components/UI';
+import { crearEstilos } from '@/theme';
 
 const TODOS = '__todos__';
 
@@ -59,6 +59,7 @@ export function InterventionsScreen() {
 }
 
 function Registradas({ institucionId }: { institucionId?: string }) {
+  const styles = useStyles();
   const [estado, setEstado] = useState<EstadoIntervencion>();
   const [tipo, setTipo] = useState<string>();
   const tipos = useTiposIntervencion();
@@ -131,6 +132,7 @@ function Registradas({ institucionId }: { institucionId?: string }) {
 }
 
 function Recomendadas({ institucionId }: { institucionId?: string }) {
+  const styles = useStyles();
   const [prioridad, setPrioridad] = useState(1);
   const perfil = useMiPerfil();
   const lista = useRecomendaciones(institucionId, prioridad);
@@ -180,9 +182,9 @@ function Recomendadas({ institucionId }: { institucionId?: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = crearEstilos(({ palette }) => ({
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
   titulo: { color: palette.ink, fontSize: 15, fontWeight: '900', flexShrink: 1 },
   link: { color: palette.forest, fontSize: 13, fontWeight: '800' },
   texto: { color: palette.muted, fontSize: 13, lineHeight: 18 },
-});
+}));

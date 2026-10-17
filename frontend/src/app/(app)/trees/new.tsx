@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Text, View } from 'react-native';
 import { router, type Href } from 'expo-router';
 
 import { useCatalogs } from '@/features/catalogs/hooks/useCatalogs';
@@ -8,9 +8,10 @@ import { RegistrationSuccess } from '@/features/trees/components/RegistrationSuc
 import { TreeCreateForm } from '@/features/trees/components/TreeCreateForm';
 import { getApiErrorMessage } from '@/services/api/client';
 import type { ArbolCrear, FotoLocal } from '@/features/trees/types';
-import { fonts, palette } from '@/config/constants';
+import { fonts } from '@/config/constants';
 import { PrimaryButton, Screen } from '@/shared/components/FormControls';
 import { Icon } from '@/shared/components/Icon';
+import { crearEstilos, useTema } from '@/theme';
 
 interface Registered {
   id: string;
@@ -20,6 +21,8 @@ interface Registered {
 }
 
 export default function NewTreeRoute() {
+  const styles = useStyles();
+  const { palette } = useTema();
   const catalogs = useCatalogs();
   const registerTree = useRegisterTree();
   const [submitError, setSubmitError] = useState<string>();
@@ -95,9 +98,9 @@ export default function NewTreeRoute() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = crearEstilos(({ palette }) => ({
   state: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 28, gap: 12 },
   stateIcon: { width: 60, height: 60, alignItems: 'center', justifyContent: 'center', borderRadius: 20, backgroundColor: palette.redSoft },
   stateTitle: { color: palette.ink, fontSize: 16, fontFamily: fonts.bold, textAlign: 'center' },
   stateText: { color: palette.muted, fontSize: 14, textAlign: 'center' },
-});
+}));

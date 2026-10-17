@@ -1,16 +1,18 @@
 import { isAxiosError } from 'axios';
 import { Stack } from 'expo-router';
 import { useEffect } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 
-import { palette } from '@/config/constants';
 import { useAuthStore } from '@/features/auth/store';
 import { useMiPerfil } from '@/features/perfil/hooks/usePerfil';
+import { SaviaFab } from '@/features/savia/components/SaviaFab';
 import { useIsWide } from '@/hooks/use-is-wide';
 import { AppBackground } from '@/shared/components/AppBackground';
 import { AppHeader, BottomNav } from '@/shared/components/AppNavigation';
+import { crearEstilos } from '@/theme';
 
 export default function AppLayout() {
+  const styles = useStyles();
   const isWide = useIsWide();
   const perfil = useMiPerfil();
   const signOut = useAuthStore((state) => state.signOut);
@@ -41,13 +43,15 @@ export default function AppLayout() {
           <Stack.Screen name="trees/index" />
           <Stack.Screen name="trees/new" />
         </Stack>
+        {/* Savia, la IA de la app: siempre a mano en la esquina inferior derecha. */}
+        <SaviaFab />
       </View>
       {isWide ? null : <BottomNav />}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: palette.canvas },
+const useStyles = crearEstilos(({ palette }) => ({
+  root: { flex: 1, backgroundColor: palette.sage },
   content: { flex: 1 },
-});
+}));

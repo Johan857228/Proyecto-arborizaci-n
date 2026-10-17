@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { Controller, useController, useWatch } from 'react-hook-form';
 import { Image } from 'expo-image';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 
-import { fonts, layout, palette } from '@/config/constants';
+import { fonts, layout } from '@/config/constants';
 import { useTreeCreateForm } from '@/features/trees/hooks/useTreeCreateForm';
 import type { Catalogos } from '@/features/catalogs/types';
 import type { ArbolCrear, FotoLocal } from '@/features/trees/types';
+import { ESPACIO_FINAL, useEspaciado } from '@/hooks/use-espaciado';
 import { useIsWide } from '@/hooks/use-is-wide';
 import { ObservationPicker } from '@/features/trees/components/ObservationPicker';
 import { BioticAgentsFields } from '@/features/inspections/components/BioticAgentsFields';
@@ -23,6 +24,7 @@ import {
 import { Icon } from '@/shared/components/Icon';
 import { parseDecimal, sanitizeDecimal } from '@/shared/utils/forms';
 import { DISTANCIA_INSTITUCION_MAX_KM, PRECISION_GPS_MAX_M, distanceKm } from '@/shared/utils/geo';
+import { crearEstilos, useTema } from '@/theme';
 
 interface Props {
   catalogs: Catalogos;
@@ -57,6 +59,8 @@ function PhotoSlot({
   onPick: () => void;
   onRemove?: () => void;
 }) {
+  const styles = useStyles();
+  const { palette } = useTema();
   if (photo) {
     return (
       <View style={styles.slotFilled}>
@@ -93,7 +97,10 @@ function PhotoSlot({
 }
 
 export function TreeCreateForm({ catalogs, submitting, submitError, onCancel, onSubmit }: Props) {
+  const styles = useStyles();
+  const { palette } = useTema();
   const isWide = useIsWide();
+  const espacio = useEspaciado();
   const form = useTreeCreateForm(catalogs, onSubmit);
   // Solo se muestra el prefijo; el número lo asigna la base de datos para que dos equipos no repitan código.
   const institucionId = useWatch({ control: form.control, name: 'institucion_id' });
@@ -109,7 +116,7 @@ export function TreeCreateForm({ catalogs, submitting, submitError, onCancel, on
 
   return (
     <Screen>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={[styles.content, { paddingHorizontal: espacio.pagina, gap: espacio.separacion + 4 }]} keyboardShouldPersistTaps="handled">
         <View style={styles.backAction}>
           <PrimaryButton title="Inventario" icon="back" variant="ghost" compact onPress={onCancel} />
         </View>
@@ -154,7 +161,7 @@ export function TreeCreateForm({ catalogs, submitting, submitError, onCancel, on
             </View>
           </View>
           <View style={styles.codePreview} accessible accessibilityLabel={prefijo ? `Código del árbol: ${prefijo} seguido del número que asigna el sistema` : 'Código del árbol: selecciona una institución'}>
-            <View style={styles.codeIcon}><Icon name="lock" size={18} color={palette.forestDark} /></View>
+            <View style={styles.codeIcon}><Icon name="lock" size={18} color={palette.forest} /></View>
             <View style={styles.codeText}>
               <Text style={styles.codeLabel}>Código del árbol (no editable)</Text>
               <Text style={styles.codeValue}>{prefijo ? `${prefijo}-····` : 'Selecciona una institución'}</Text>
@@ -268,7 +275,7 @@ export function TreeCreateForm({ catalogs, submitting, submitError, onCancel, on
                     onPress={() => form.removePhoto(photo)}
                     style={styles.extraRemove}
                   >
-                    <Icon name="close" size={14} color={palette.paper} />
+                    <Icon name="close" size={14} color={palette.white} />
                   </Pressable>
                 </View>
               ))}
@@ -439,25 +446,25 @@ function NumericField({
   );
 }
 
-const styles = StyleSheet.create({
-  content: { width: '100%', maxWidth: layout.formWidth, alignSelf: 'center', padding: 20, paddingTop: 16, paddingBottom: 40, gap: 18 },
+const useStyles = crearEstilos(({ palette }) => ({
+  content: { width: '100%', maxWidth: layout.formWidth, alignSelf: 'center', padding: 20, paddingTop: 16, paddingBottom: ESPACIO_FINAL, gap: 18 },
   backAction: { alignSelf: 'flex-start', marginLeft: -8 },
   // Campos relacionados lado a lado cuando hay espacio; en teléfonos se apilan.
   row: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 12 },
   cell: { flexGrow: 1, flexBasis: 180 },
-  codePreview: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 14, borderWidth: 1, borderStyle: 'dashed', borderColor: '#C9D6C4', backgroundColor: palette.canvas },
+  codePreview: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 14, borderWidth: 1, borderStyle: 'dashed', borderColor: palette.placeholder, backgroundColor: palette.canvas },
   codeIcon: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 12, backgroundColor: palette.forestSoft },
   codeText: { flex: 1, minWidth: 0, gap: 2 },
   codeLabel: { color: palette.muted, fontSize: 12, fontFamily: fonts.semiBold },
-  codeValue: { color: palette.forestDark, fontSize: 20, fontFamily: fonts.extraBold, letterSpacing: 1 },
+  codeValue: { color: palette.ink, fontSize: 20, fontFamily: fonts.extraBold, letterSpacing: 1 },
   codeCaption: { color: palette.muted, fontSize: 12, lineHeight: 17 },
   gpsCaptured: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 12, backgroundColor: palette.forestSoft },
   gpsIcon: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 20, backgroundColor: palette.paper },
   gpsText: { flex: 1, minWidth: 0 },
-  gpsTitle: { color: palette.forestDark, fontSize: 14, fontFamily: fonts.bold },
+  gpsTitle: { color: palette.forest, fontSize: 14, fontFamily: fonts.bold },
   gpsCoords: { marginTop: 2, color: palette.muted, fontSize: 13 },
   photoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  slotEmpty: { minHeight: 150, alignItems: 'center', justifyContent: 'center', gap: 6, padding: 16, borderRadius: 14, borderWidth: 1.5, borderStyle: 'dashed', borderColor: '#B9CDBF', backgroundColor: '#F8FBF8' },
+  slotEmpty: { minHeight: 150, alignItems: 'center', justifyContent: 'center', gap: 6, padding: 16, borderRadius: 14, borderWidth: 1.5, borderStyle: 'dashed', borderColor: palette.placeholder, backgroundColor: palette.tile },
   slotDisabled: { opacity: 0.5 },
   slotIcon: { width: 46, height: 46, marginBottom: 4, alignItems: 'center', justifyContent: 'center', borderRadius: 14, backgroundColor: palette.forestSoft },
   slotFilled: { overflow: 'hidden', borderRadius: 14, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.paper },
@@ -476,4 +483,4 @@ const styles = StyleSheet.create({
   actions: { gap: 10 },
   actionsWide: { flexDirection: 'row', justifyContent: 'flex-end' },
   actionWide: { minWidth: 180 },
-});
+}));

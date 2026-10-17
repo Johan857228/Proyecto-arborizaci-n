@@ -62,6 +62,33 @@ class LoginIn(BaseModel):
         return v.strip().lower() if isinstance(v, str) else v
 
 
+class RegistroIn(BaseModel):
+    """Cuenta nueva: queda como estudiante y sin institución hasta que un docente o un
+    administrador se la asigne (el perfil lo crea el trigger de la migración 001)."""
+
+    nombre: str = Field(min_length=2, max_length=120)
+    email: str = Field(max_length=254, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+    # Supabase guarda la contraseña con bcrypt, que solo usa los primeros 72 bytes.
+    password: str = Field(min_length=8, max_length=72)
+
+    @field_validator("nombre", mode="before")
+    @classmethod
+    def _limpiar_nombre(cls, v):
+        return " ".join(v.split()) if isinstance(v, str) else v
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def _normalizar_email(cls, v):
+        return v.strip().lower() if isinstance(v, str) else v
+
+    @field_validator("password")
+    @classmethod
+    def _contrasena_segura(cls, v: str) -> str:
+        if not any(c.isalpha() for c in v) or not any(c.isdigit() for c in v):
+            raise ValueError("La contraseña debe tener letras y números")
+        return v
+
+
 class RefrescarIn(BaseModel):
     refresh_token: str = Field(min_length=10)
 
@@ -73,6 +100,14 @@ class SesionOut(BaseModel):
     expires_in: int | None = None
     user_id: str
     email: str | None = None
+
+
+class RegistroOut(BaseModel):
+    """Si Supabase pide confirmar el correo, no hay sesión hasta que la persona abra el enlace."""
+
+    requiere_confirmacion: bool
+    sesion: SesionOut | None = None
+    mensaje: str
 
 
 # --------------------------------- Catálogos ---------------------------------

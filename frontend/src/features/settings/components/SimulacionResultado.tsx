@@ -1,13 +1,14 @@
 import { router, type Href } from 'expo-router';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
-import { palette } from '@/config/constants';
 import type { Simulacion } from '@/features/settings/api';
 import { StatGrid, StatTile, StateBadge } from '@/shared/components/UI';
+import { crearEstilos } from '@/theme';
 
 const ESTADOS = [['sano', 'Sanos'], ['riesgo', 'En riesgo'], ['critico', 'Críticos']] as const;
 
 export function SimulacionResultado({ simulacion }: { simulacion: Simulacion }) {
+  const styles = useStyles();
   return (
     <View style={styles.box}>
       <Text style={styles.titulo}>
@@ -39,7 +40,7 @@ export function SimulacionResultado({ simulacion }: { simulacion: Simulacion }) 
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = crearEstilos(({ palette }) => ({
   box: { gap: 8 },
   titulo: { color: palette.ink, fontSize: 13, fontWeight: '800' },
   fila: { flexDirection: 'row', alignItems: 'center', gap: 6 },
@@ -47,4 +48,4 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   flecha: { color: palette.muted },
   texto: { color: palette.muted, fontSize: 12 },
-});
+}));

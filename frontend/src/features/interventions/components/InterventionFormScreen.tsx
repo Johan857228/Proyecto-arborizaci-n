@@ -2,9 +2,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { router, type Href } from 'expo-router';
 import { useState } from 'react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
-import { StyleSheet, Text } from 'react-native';
+import { Text } from 'react-native';
 
-import { palette } from '@/config/constants';
 import { useCrearIntervencion, useTiposIntervencion } from '@/features/interventions/hooks/useIntervenciones';
 import {
   ETIQUETA_RESULTADO,
@@ -22,6 +21,7 @@ import { useAvisos } from '@/shared/avisos';
 import { formatPesos, hoyIso } from '@/shared/format';
 import { Field, InlineMessage, PrimaryButton, Section, SelectField } from '@/shared/components/FormControls';
 import { AppHeader, Cell, ErrorState, LoadingState, Notice, NumberField, Page, Row, Tabs } from '@/shared/components/UI';
+import { crearEstilos } from '@/theme';
 
 export function InterventionFormScreen({ arbolId, tipoInicial }: { arbolId: string; tipoInicial?: string }) {
   const arbol = useArbol(arbolId);
@@ -42,6 +42,7 @@ export function InterventionFormScreen({ arbolId, tipoInicial }: { arbolId: stri
 }
 
 function Formulario({ arbol, tipos, tipoInicial }: { arbol: ArbolDetalle; tipos: TipoIntervencion[]; tipoInicial?: string }) {
+  const styles = useStyles();
   const crear = useCrearIntervencion();
   const avisar = useAvisos((state) => state.avisar);
   const [error, setError] = useState<string>();
@@ -228,6 +229,6 @@ function Formulario({ arbol, tipos, tipoInicial }: { arbol: ArbolDetalle; tipos:
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = crearEstilos(({ palette }) => ({
   helper: { color: palette.muted, fontSize: 13, lineHeight: 18 },
-});
+}));

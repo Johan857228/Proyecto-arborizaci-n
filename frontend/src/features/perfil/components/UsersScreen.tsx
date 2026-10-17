@@ -1,7 +1,6 @@
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
-import { palette } from '@/config/constants';
 import { useCatalogs } from '@/features/catalogs/hooks/useCatalogs';
 import { useCursos } from '@/features/courses/api';
 import { InstitucionSelector, useInstitucionElegida } from '@/features/perfil/components/InstitucionSelector';
@@ -10,10 +9,12 @@ import { ETIQUETA_ROL, esAdmin, esRevisor, rolSchema, type Rol, type Usuario } f
 import { getApiErrorMessage } from '@/services/api/client';
 import { InlineMessage, PrimaryButton, SelectField } from '@/shared/components/FormControls';
 import { AppHeader, Badge, Card, EmptyState, ErrorState, LoadingState, Notice, Page, Tabs } from '@/shared/components/UI';
+import { crearEstilos } from '@/theme';
 
 const SIN = '__sin__';
 
 export function UsersScreen() {
+  const styles = useStyles();
   const perfil = useMiPerfil();
   const institucion = useInstitucionElegida({ soloPropiaSiNoAdmin: true });
   const habilitado = esRevisor(perfil.data);
@@ -70,6 +71,7 @@ export function UsersScreen() {
 }
 
 function UsuarioCard({ usuario, admin, propio }: { usuario: Usuario; admin: boolean; propio: boolean }) {
+  const styles = useStyles();
   const catalogos = useCatalogs();
   const editar = useEditarUsuario();
   const [institucion, setInstitucion] = useState<string | null>(usuario.institucion_id);
@@ -145,10 +147,10 @@ function UsuarioCard({ usuario, admin, propio }: { usuario: Usuario; admin: bool
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = crearEstilos(({ palette }) => ({
   nuevas: { gap: 12 },
   header: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   flex: { flex: 1 },
   nombre: { color: palette.ink, fontSize: 15, fontWeight: '900' },
   texto: { color: palette.muted, fontSize: 12 },
-});
+}));

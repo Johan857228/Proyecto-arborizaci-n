@@ -1,8 +1,7 @@
 import { router, type Href } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
-import { palette } from '@/config/constants';
 import { useAvanceCurso, useCurso, useGuardarCurso } from '@/features/courses/api';
 import { ZONAS, type CursoDetalle, type Zona } from '@/features/courses/schemas';
 import { useEditarUsuario, useUsuarios } from '@/features/perfil/hooks/usePerfil';
@@ -27,6 +26,7 @@ import {
   StatTile,
   StateBadge,
 } from '@/shared/components/UI';
+import { crearEstilos } from '@/theme';
 
 export function CourseDetailScreen({ cursoId }: { cursoId: string }) {
   const curso = useCurso(cursoId);
@@ -38,6 +38,7 @@ export function CourseDetailScreen({ cursoId }: { cursoId: string }) {
 }
 
 function Detalle({ curso }: { curso: CursoDetalle }) {
+  const styles = useStyles();
   const [mensaje, setMensaje] = useState<string>();
   return (
     <Page>
@@ -66,6 +67,7 @@ function Detalle({ curso }: { curso: CursoDetalle }) {
 }
 
 function AvanceCurso({ cursoId }: { cursoId: string }) {
+  const styles = useStyles();
   const [desde, setDesde] = useState('');
   const [hasta, setHasta] = useState('');
   const [filtro, setFiltro] = useState<{ desde?: string; hasta?: string }>({});
@@ -145,6 +147,7 @@ function AvanceCurso({ cursoId }: { cursoId: string }) {
 }
 
 function ZonasCurso({ curso, onGuardado }: { curso: CursoDetalle; onGuardado: () => void }) {
+  const styles = useStyles();
   const { zonas } = useGuardarCurso();
   const [seleccion, setSeleccion] = useState<Zona[]>(curso.zonas.filter((z): z is Zona => (ZONAS as readonly string[]).includes(z)));
   const [error, setError] = useState<string>();
@@ -178,6 +181,7 @@ function ZonasCurso({ curso, onGuardado }: { curso: CursoDetalle; onGuardado: ()
 }
 
 function IntegrantesCurso({ curso, onCambio }: { curso: CursoDetalle; onCambio: (mensaje: string) => void }) {
+  const styles = useStyles();
   const usuarios = useUsuarios(curso.institucion_id);
   const editar = useEditarUsuario();
   const [elegido, setElegido] = useState<string>();
@@ -297,7 +301,7 @@ function DatosCurso({ curso, onCambio }: { curso: CursoDetalle; onCambio: (mensa
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = crearEstilos(({ palette }) => ({
   texto: { color: palette.muted, fontSize: 13, lineHeight: 18 },
   subtitulo: { marginTop: 4, color: palette.ink, fontSize: 14, fontWeight: '900' },
   zona: { gap: 6 },
@@ -308,4 +312,4 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   quitar: { color: palette.red, fontSize: 13, fontWeight: '800' },
-});
+}));

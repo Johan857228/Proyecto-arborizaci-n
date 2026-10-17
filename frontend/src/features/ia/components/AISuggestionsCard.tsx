@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
-import { fonts, gradients, palette } from '@/config/constants';
+import { fonts } from '@/config/constants';
 import type { Catalogos } from '@/features/catalogs/types';
 import { useAnalizarFotos, useEstadoIA } from '@/features/ia/hooks';
+import { SaviaMark } from '@/features/savia/components/SaviaMark';
 import type { Confianza } from '@/features/ia/schemas';
 import { sugerenciasDeAnalisis, type SugerenciaIA } from '@/features/ia/sugerencias';
 import type { ArbolFormInput } from '@/features/trees/schemas';
@@ -11,15 +12,17 @@ import type { FotoLocal } from '@/features/trees/types';
 import { getApiErrorMessage } from '@/services/api/client';
 import { InlineMessage, PrimaryButton } from '@/shared/components/FormControls';
 import { Icon } from '@/shared/components/Icon';
-import { gradient } from '@/shared/styles/gradient';
+import { crearEstilos, useTema, type Paleta } from '@/theme';
 
-const confianzas: Record<Confianza, { label: string; color: string; background: string }> = {
+function confianzasDe(palette: Paleta): Record<Confianza, { label: string; color: string; background: string }> {
+  return {
   alta: { label: 'Confianza alta', color: palette.forest, background: palette.forestSoft },
   media: { label: 'Confianza media', color: palette.amber, background: palette.amberSoft },
   baja: { label: 'Confianza baja', color: palette.muted, background: palette.line },
-};
+  };
+}
 
-/** Tarjeta "Identificación con IA" del registro: analiza las fotos y muestra sugerencias que
+/** Tarjeta de Savia (identificación con IA) en el registro: analiza las fotos y muestra sugerencias que
  *  la persona aplica una a una (o todas). Nada se guarda sin que la persona lo confirme. */
 export function AISuggestionsCard({
   catalogs,
@@ -32,6 +35,7 @@ export function AISuggestionsCard({
   fotoDetalle?: FotoLocal;
   onApply: (valores: Partial<ArbolFormInput>) => void;
 }) {
+  const styles = useStyles();
   const estado = useEstadoIA();
   const analisis = useAnalizarFotos();
   const [aplicadas, setAplicadas] = useState<ReadonlySet<string>>(new Set());
@@ -64,11 +68,9 @@ export function AISuggestionsCard({
   return (
     <View style={styles.card}>
       <View style={styles.header}>
-        <View style={[styles.headerIcon, gradient(gradients.canopy)]}>
-          <Icon name="sparkle" size={20} color={palette.leaf} />
-        </View>
+        <SaviaMark size={40} />
         <View style={styles.headerText}>
-          <Text style={styles.title}>Identificación con IA</Text>
+          <Text style={styles.title}>Savia · Identificación con IA</Text>
           <Text style={styles.caption}>
             Sugiere especie, etapa, interferencias y estado fitosanitario a partir de las fotos. Tú decides qué aplicar.
           </Text>
@@ -82,7 +84,7 @@ export function AISuggestionsCard({
       ) : null}
 
       <PrimaryButton
-        title={analisis.data ? 'Analizar de nuevo' : 'Analizar con IA'}
+        title={analisis.data ? 'Analizar de nuevo' : 'Analizar con Savia'}
         icon="sparkle"
         variant={analisis.data ? 'secondary' : 'primary'}
         loading={analisis.isPending}
@@ -129,8 +131,11 @@ export function AISuggestionsCard({
   );
 }
 
-function SuggestionRow({ sugerencia, aplicada, onApply }: { sugerencia: SugerenciaIA; aplicada: boolean; onApply: () => void }) {
-  const confianza = confianzas[sugerencia.confianza];
+/** Una sugerencia con su confianza y su razón; sin `onApply` es solo informativa. */
+export function SuggestionRow({ sugerencia, aplicada = false, onApply }: { sugerencia: SugerenciaIA; aplicada?: boolean; onApply?: () => void }) {
+  const styles = useStyles();
+  const { palette } = useTema();
+  const confianza = confianzasDe(palette)[sugerencia.confianza];
   return (
     <View style={styles.row}>
       <View style={styles.rowText}>
@@ -143,7 +148,7 @@ function SuggestionRow({ sugerencia, aplicada, onApply }: { sugerencia: Sugerenc
         <Text style={styles.rowValue}>{sugerencia.valor}</Text>
         {sugerencia.razon ? <Text style={styles.caption}>{sugerencia.razon}</Text> : null}
       </View>
-      {sugerencia.valores ? (
+      {sugerencia.valores && onApply ? (
         aplicada ? (
           <View style={styles.applied} accessibilityLabel={`${sugerencia.campo}: sugerencia aplicada`}>
             <Icon name="check" size={16} color={palette.forest} />
@@ -157,17 +162,16 @@ function SuggestionRow({ sugerencia, aplicada, onApply }: { sugerencia: Sugerenc
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = crearEstilos(({ palette }) => ({
   card: {
     gap: 12,
     padding: 16,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#CFE3C6',
-    backgroundColor: '#F3F8EE',
+    borderColor: palette.line,
+    backgroundColor: palette.tile,
   },
   header: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
-  headerIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   headerText: { flex: 1, minWidth: 0, gap: 3 },
   title: { color: palette.ink, fontSize: 16, fontFamily: fonts.extraBold },
   caption: { color: palette.muted, fontSize: 13, lineHeight: 19 },
@@ -193,4 +197,4 @@ const styles = StyleSheet.create({
   applied: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10 },
   appliedText: { color: palette.forest, fontSize: 13, fontFamily: fonts.bold },
   disclaimer: { color: palette.muted, fontSize: 12, lineHeight: 17, fontStyle: 'italic' },
-});
+}));

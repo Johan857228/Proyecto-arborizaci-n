@@ -18,7 +18,8 @@ export function usePhotoPicker() {
   const [photos, setPhotos] = useState<FotoLocal[]>([]);
   const [photoError, setPhotoError] = useState<string>();
 
-  function savePhoto(tipo: FotoLocal['tipo'], asset: ImagePicker.ImagePickerAsset) {
+  /** Valida y guarda la foto; devuelve la foto guardada o undefined si no cumple las reglas. */
+  function savePhoto(tipo: FotoLocal['tipo'], asset: ImagePicker.ImagePickerAsset): FotoLocal | undefined {
     if (tipo === 'adicional' && photos.filter((photo) => photo.tipo === 'adicional').length >= MAX_ADICIONALES) {
       setPhotoError('Puedes agregar hasta tres fotografías adicionales.');
       return;
@@ -44,14 +45,14 @@ export function usePhotoPicker() {
       tipo === 'adicional' ? [...current, nueva] : [...current.filter((photo) => photo.tipo !== tipo), nueva],
     );
     setPhotoError(undefined);
+    return nueva;
   }
 
-  async function pickPhoto(tipo: FotoLocal['tipo']) {
+  async function pickPhoto(tipo: FotoLocal['tipo']): Promise<FotoLocal | undefined> {
     if (Platform.OS === 'web') {
       const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.85 });
       if (result.canceled || !result.assets[0]) return;
-      savePhoto(tipo, result.assets[0]);
-      return;
+      return savePhoto(tipo, result.assets[0]);
     }
     const permission = await ImagePicker.requestCameraPermissionsAsync();
     if (!permission.granted) {
@@ -60,7 +61,7 @@ export function usePhotoPicker() {
     }
     const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.85 });
     if (result.canceled || !result.assets[0]) return;
-    savePhoto(tipo, result.assets[0]);
+    return savePhoto(tipo, result.assets[0]);
   }
 
   function removePhoto(photoToRemove: FotoLocal) {

@@ -1,8 +1,7 @@
 import { router, type Href } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
-import { palette } from '@/config/constants';
 import { lineaBiotica } from '@/features/inspections/bioticos';
 import { ReviewActions } from '@/features/inspections/components/ReviewActions';
 import { usePendientes } from '@/features/inspections/hooks/useInspecciones';
@@ -26,8 +25,10 @@ import {
   Row,
   StateBadge,
 } from '@/shared/components/UI';
+import { crearEstilos } from '@/theme';
 
 export function ReviewScreen() {
+  const styles = useStyles();
   const perfil = useMiPerfil();
   const institucion = useInstitucionElegida({ soloPropiaSiNoAdmin: true });
   const [pagina, setPagina] = useState(0);
@@ -138,7 +139,7 @@ export function ReviewScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = crearEstilos(({ palette }) => ({
   total: { color: palette.muted, fontSize: 12, textAlign: 'center' },
   header: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
   flex: { flex: 1 },
@@ -148,4 +149,4 @@ const styles = StyleSheet.create({
   texto: { color: palette.ink, fontSize: 13, lineHeight: 18 },
   notas: { color: palette.ink, fontSize: 13, fontStyle: 'italic' },
   aviso: { color: palette.amber, fontSize: 12, fontWeight: '700' },
-});
+}));

@@ -2,9 +2,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { router, type Href } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
-import { palette } from '@/config/constants';
 import { useCatalogs } from '@/features/catalogs/hooks/useCatalogs';
 import type { Catalogos } from '@/features/catalogs/types';
 import { payloadBiotico, valoresBioticosIniciales } from '@/features/inspections/bioticos';
@@ -27,6 +26,7 @@ import { useAvisos } from '@/shared/avisos';
 import { ChoiceChip, Field, InlineMessage, PrimaryButton, Section, SelectField } from '@/shared/components/FormControls';
 import { AppHeader, Cell, ErrorState, LoadingState, NumberField, Page, Row } from '@/shared/components/UI';
 import { DISTANCIA_INSTITUCION_MAX_KM, PRECISION_GPS_MAX_M, distanceKm } from '@/shared/utils/geo';
+import { crearEstilos } from '@/theme';
 
 const GRUPOS: Record<string, string> = { follaje: 'Follaje', tronco: 'Tronco y ramas', raiz: 'Raíz', plagas: 'Plagas' };
 
@@ -42,6 +42,7 @@ export function InspectionFormScreen({ arbolId }: { arbolId: string }) {
 }
 
 function Formulario({ arbol, catalogos }: { arbol: ArbolDetalle; catalogos: Catalogos }) {
+  const styles = useStyles();
   const schema = useMemo(() => crearInspeccionFormSchema(catalogos), [catalogos]);
   const gps = useCaptureLocation();
   const fotos = usePhotoPicker();
@@ -261,9 +262,9 @@ function Formulario({ arbol, catalogos }: { arbol: ArbolDetalle; catalogos: Cata
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = crearEstilos(({ palette }) => ({
   helper: { color: palette.muted, fontSize: 13, lineHeight: 19 },
   grupo: { gap: 6 },
   grupoTitulo: { color: palette.ink, fontSize: 13, fontWeight: '800' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-});
+}));

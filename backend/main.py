@@ -22,7 +22,7 @@ from fastapi import Depends, FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from postgrest.exceptions import APIError
-from supabase_auth.errors import AuthApiError, AuthError
+from supabase_auth.errors import AuthApiError, AuthError, AuthWeakPasswordError
 
 import datos
 import db
@@ -68,6 +68,8 @@ from schemas import (
     ObservacionOut,
     Promedios,
     RefrescarIn,
+    RegistroIn,
+    RegistroOut,
     SesionOut,
     TipoFoto,
     TotalesAmbientales,
@@ -169,6 +171,51 @@ def login(datos_login: LoginIn):
     except AuthApiError:
         raise HTTPException(status_code=401, detail="Correo o contraseña incorrectos")
     return _sesion(res)
+
+
+# Errores de Supabase Auth al registrar → (código HTTP, mensaje para la persona)
+ERRORES_REGISTRO = {
+    "user_already_exists": (409, "Ya existe una cuenta con ese correo. Inicia sesión."),
+    "email_exists": (409, "Ya existe una cuenta con ese correo. Inicia sesión."),
+    "weak_password": (422, "La contraseña es muy débil. Prueba con una más larga que combine letras, números y símbolos."),
+    "email_address_invalid": (422, "Ese correo no se puede usar para registrarse."),
+    "email_address_not_authorized": (422, "Ese correo no se puede usar para registrarse."),
+    "signup_disabled": (403, "El registro de cuentas está desactivado. Pide al administrador que te cree la cuenta."),
+    "email_provider_disabled": (403, "El registro de cuentas está desactivado. Pide al administrador que te cree la cuenta."),
+    "over_email_send_rate_limit": (429, "Se hicieron muchos registros seguidos. Espera unos minutos e intenta de nuevo."),
+    "over_request_rate_limit": (429, "Se hicieron muchos registros seguidos. Espera unos minutos e intenta de nuevo."),
+}
+
+
+@app.post("/auth/registro", response_model=RegistroOut, status_code=201, tags=["Autenticación"])
+def registrar(d: RegistroIn):
+    """Crea una cuenta nueva como estudiante y sin institución; un docente o un administrador
+    le asigna institución y rol después (Usuarios). Si el proyecto de Supabase pide confirmar el
+    correo, la sesión llega solo después de abrir el enlace."""
+    try:
+        res = db.nuevo_cliente_anon().auth.sign_up(
+            {"email": d.email, "password": d.password, "options": {"data": {"nombre": d.nombre}}}
+        )
+    except (AuthApiError, AuthWeakPasswordError) as error:
+        estado, mensaje = ERRORES_REGISTRO.get(
+            str(error.code or ""), (400, "No se pudo crear la cuenta. Revisa los datos e intenta de nuevo.")
+        )
+        raise HTTPException(status_code=estado, detail=mensaje)
+
+    if res is None or res.user is None:
+        raise HTTPException(status_code=400, detail="No se pudo crear la cuenta. Intenta de nuevo.")
+    if res.session is None:
+        # También pasa si el correo ya estaba registrado: Supabase no lo revela para no exponer
+        # qué correos tienen cuenta.
+        return RegistroOut(
+            requiere_confirmacion=True,
+            mensaje=f"Te enviamos un correo a {d.email} para confirmar la cuenta. Ábrelo y después inicia sesión.",
+        )
+    return RegistroOut(
+        requiere_confirmacion=False,
+        sesion=_sesion(res),
+        mensaje="Cuenta creada. Un docente o un administrador te asignará tu institución.",
+    )
 
 
 @app.post("/auth/refresh", response_model=SesionOut, tags=["Autenticación"])

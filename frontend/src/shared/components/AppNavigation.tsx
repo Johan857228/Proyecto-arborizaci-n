@@ -1,15 +1,17 @@
 import { router, usePathname, type Href } from 'expo-router';
-import { Platform, Pressable, StyleSheet, Text, View, type ViewStyle } from 'react-native';
+import { Platform, Pressable, Text, View, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { fonts, gradients, layout, palette } from '@/config/constants';
+import { fonts, layout } from '@/config/constants';
 import { useAuthStore } from '@/features/auth/store';
+import { Avatar } from '@/features/perfil/components/Avatar';
+import { useMiPerfil } from '@/features/perfil/hooks/usePerfil';
 import { esRutaDeModulo } from '@/features/modules/modulos';
 import { useIsWide } from '@/hooks/use-is-wide';
 import { queryClient } from '@/services/api/queryClient';
 import { BrandMark } from '@/shared/components/BrandMark';
 import { Icon, type IconName } from '@/shared/components/Icon';
-import { gradient } from '@/shared/styles/gradient';
+import { crearEstilos, useTema, useTemaStore } from '@/theme';
 
 const navItems: { label: string; icon: IconName; href: Href; isActive: (path: string) => boolean }[] = [
   { label: 'Inicio', icon: 'home', href: '/(app)' as Href, isActive: (path) => path === '/' },
@@ -27,10 +29,15 @@ async function signOut() {
 }
 
 export function AppHeader() {
+  const styles = useStyles();
+  const { palette } = useTema();
   const isWide = useIsWide();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
   const email = useAuthStore((state) => state.session?.email);
+  const perfil = useMiPerfil();
+  const { oscuro } = useTema();
+  const elegirTema = useTemaStore((state) => state.elegir);
 
   return (
     <View style={[styles.header, { paddingTop: insets.top }]}>
@@ -71,12 +78,21 @@ export function AppHeader() {
         <View style={styles.account}>
           {isWide && email ? <Text style={styles.email} numberOfLines={1}>{email}</Text> : null}
           <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={oscuro ? 'Usar tema claro' : 'Usar tema oscuro'}
+            onPress={() => void elegirTema(oscuro ? 'claro' : 'oscuro')}
+            hitSlop={6}
+            style={({ pressed }) => [styles.themeToggle, pressed && styles.pressed]}
+          >
+            <Icon name={oscuro ? 'sun' : 'moon'} size={18} color={palette.muted} />
+          </Pressable>
+          <Pressable
             accessibilityRole="link"
             accessibilityLabel="Mi perfil"
             onPress={() => router.navigate('/(app)/profile' as Href)}
             style={({ pressed }) => [styles.avatar, pressed && styles.pressed]}
           >
-            <Text style={styles.avatarText}>{email?.[0]?.toUpperCase() ?? 'A'}</Text>
+            <Avatar url={perfil.data?.foto_url} nombre={perfil.data?.nombre ?? email ?? undefined} size={34} />
           </Pressable>
           <Pressable
             accessibilityRole="button"
@@ -94,6 +110,8 @@ export function AppHeader() {
 }
 
 export function BottomNav() {
+  const styles = useStyles();
+  const { palette } = useTema();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
 
@@ -123,9 +141,9 @@ export function BottomNav() {
 // Desenfoque del fondo detrás de las barras (solo web; en nativo basta la transparencia).
 const glass = (Platform.OS === 'web' ? { backdropFilter: 'saturate(160%) blur(14px)' } : {}) as ViewStyle;
 
-const styles = StyleSheet.create({
+const useStyles = crearEstilos(({ palette }) => ({
   // Barra translúcida; en web desenfoca el fondo que pasa por detrás (efecto vidrio).
-  header: { backgroundColor: 'rgba(255, 255, 255, 0.78)', borderBottomWidth: 1, borderBottomColor: 'rgba(232, 228, 216, 0.9)', ...glass },
+  header: { backgroundColor: palette.chrome, borderBottomWidth: 1, borderBottomColor: palette.chromeLine, ...glass },
   headerInner: { width: '100%', maxWidth: layout.maxWidth, alignSelf: 'center', minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: 16, paddingHorizontal: 20 },
   brand: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   brandName: { color: palette.ink, fontSize: 16, fontFamily: fonts.extraBold, letterSpacing: -0.2 },
@@ -137,15 +155,15 @@ const styles = StyleSheet.create({
   headerLinkTextActive: { color: palette.forest, fontFamily: fonts.bold },
   account: { marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: 10 },
   email: { maxWidth: 200, color: palette.muted, fontSize: 13 },
-  avatar: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center', borderRadius: 17, backgroundColor: palette.leaf, ...gradient(gradients.lime) },
-  avatarText: { color: palette.forestDark, fontSize: 14, fontFamily: fonts.extraBold },
+  avatar: { borderRadius: 19, padding: 2, borderWidth: 1, borderColor: palette.leaf },
+  themeToggle: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 18, borderWidth: 1, borderColor: palette.line },
   logout: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 10, borderWidth: 1, borderColor: palette.line },
   logoutText: { color: palette.muted, fontSize: 13, fontFamily: fonts.semiBold },
   pressed: { opacity: 0.7 },
-  bottomNav: { flexDirection: 'row', paddingTop: 8, paddingHorizontal: 8, backgroundColor: 'rgba(255, 255, 255, 0.86)', borderTopWidth: 1, borderTopColor: 'rgba(232, 228, 216, 0.9)', boxShadow: '0 -6px 20px rgba(15, 61, 38, 0.06)', ...glass },
+  bottomNav: { flexDirection: 'row', paddingTop: 8, paddingHorizontal: 8, backgroundColor: palette.chrome, borderTopWidth: 1, borderTopColor: palette.chromeLine, boxShadow: '0 -6px 20px rgba(15, 61, 38, 0.06)', ...glass },
   bottomItem: { flex: 1, alignItems: 'center', gap: 2 },
   bottomIcon: { width: 56, height: 30, alignItems: 'center', justifyContent: 'center', borderRadius: 15 },
   bottomIconActive: { backgroundColor: palette.forestSoft },
   bottomLabel: { color: palette.muted, fontSize: 12, fontFamily: fonts.semiBold },
   bottomLabelActive: { color: palette.forest, fontFamily: fonts.bold },
-});
+}));

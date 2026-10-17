@@ -1,14 +1,16 @@
 import { type Href } from 'expo-router';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
-import { fonts, palette } from '@/config/constants';
+import { fonts } from '@/config/constants';
 import { useStats } from '@/features/dashboard/hooks/useDashboard';
 import { GRUPOS, modulosPara } from '@/features/modules/modulos';
 import { useCuentasSinInstitucion, useMiPerfil } from '@/features/perfil/hooks/usePerfil';
 import { ETIQUETA_ROL, esAdmin } from '@/features/perfil/schemas';
 import { AppHeader, Badge, NavCard, Page } from '@/shared/components/UI';
+import { crearEstilos } from '@/theme';
 
 export function ModulesScreen() {
+  const styles = useStyles();
   const perfil = useMiPerfil();
   const stats = useStats();
   const modulos = modulosPara(perfil.data);
@@ -62,9 +64,9 @@ export function ModulesScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = crearEstilos(({ palette }) => ({
   badges: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   grupo: { gap: 12, marginTop: 4 },
   grupoTitulo: { color: palette.ink, fontSize: 18, fontFamily: fonts.extraBold, letterSpacing: -0.3 },
   tarjetas: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-});
+}));

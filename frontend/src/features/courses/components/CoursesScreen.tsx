@@ -2,9 +2,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { router, type Href } from 'expo-router';
 import { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
-import { palette } from '@/config/constants';
 import { useCursos, useGuardarCurso } from '@/features/courses/api';
 import { ZONAS, cursoFormSchema, type CursoFormInput } from '@/features/courses/schemas';
 import { InstitucionSelector, useInstitucionElegida } from '@/features/perfil/components/InstitucionSelector';
@@ -14,8 +13,10 @@ import { getApiErrorMessage } from '@/services/api/client';
 import { hoyIso } from '@/shared/format';
 import { ChoiceChip, Field, InlineMessage, PrimaryButton } from '@/shared/components/FormControls';
 import { AppHeader, Badge, Card, EmptyState, ErrorState, LoadingState, NumberField, Page } from '@/shared/components/UI';
+import { crearEstilos } from '@/theme';
 
 export function CoursesScreen() {
+  const styles = useStyles();
   const perfil = useMiPerfil();
   const institucion = useInstitucionElegida();
   const cursos = useCursos(institucion.institucionId);
@@ -58,6 +59,7 @@ export function CoursesScreen() {
 }
 
 function NuevoCurso({ institucionId }: { institucionId: string }) {
+  const styles = useStyles();
   const { crear } = useGuardarCurso();
   const [abierto, setAbierto] = useState(false);
   const [error, setError] = useState<string>();
@@ -107,10 +109,10 @@ function NuevoCurso({ institucionId }: { institucionId: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = crearEstilos(({ palette }) => ({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   titulo: { color: palette.forest, fontSize: 16, fontWeight: '900', flexShrink: 1 },
   texto: { color: palette.muted, fontSize: 13, lineHeight: 18 },
   link: { color: palette.forest, fontSize: 13, fontWeight: '800' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 },
-});
+}));
