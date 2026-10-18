@@ -3,14 +3,16 @@ from datetime import date, datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
+from postgrest.exceptions import APIError
 from pydantic import BaseModel, Field, field_validator
 
 import datos
 import db
 from auth import Perfil, perfil_actual
-from comun import hoy, validar_periodo
+from comun import es_columna_faltante, hoy, validar_periodo
 from schemas import ZONAS, Zona
 from servicios import indicadores
+from servicios.servicio_social import grado_de_curso
 
 router = APIRouter(tags=["Cursos"])
 
@@ -19,6 +21,7 @@ class CursoBase(BaseModel):
     nombre: str = Field(min_length=1, max_length=60)
     anio: int = Field(ge=2000, le=2100)
     docente_id: UUID | None = None
+    grado: int | None = Field(default=None, ge=0, le=11, description="Grado (0 a 11); 10 y 11 prestan servicio social")
 
     @field_validator("nombre")
     @classmethod
@@ -39,6 +42,7 @@ class CursoEditar(BaseModel):
     anio: int | None = Field(default=None, ge=2000, le=2100)
     docente_id: UUID | None = None
     activo: bool | None = None
+    grado: int | None = Field(default=None, ge=0, le=11)
 
     @field_validator("nombre")
     @classmethod
@@ -68,6 +72,8 @@ class CursoOut(BaseModel):
     anio: int
     docente_id: str | None = None
     docente_nombre: str | None = None
+    # El guardado o, si no tiene, el que dice el nombre ("10-A", "Once B").
+    grado: int | None = None
     activo: bool
     creado_en: datetime
     zonas: list[str]
@@ -88,6 +94,7 @@ def _armar(curso: dict, perfiles: dict[str, dict], perfil: Perfil) -> dict:
         **curso,
         "docente_id": str(curso["docente_id"]) if curso.get("docente_id") else None,
         "docente_nombre": docente["nombre"] if docente else None,
+        "grado": grado_de_curso(curso),
         "integrantes": len(miembros),
         "puede_gestionar": perfil.gestiona(curso["institucion_id"]),
         "miembros": [{"usuario_id": p["usuario_id"], "nombre": p["nombre"], "rol": p["rol"]} for p in miembros],
@@ -151,7 +158,15 @@ def crear(d: CursoCrear, perfil: Perfil = Depends(perfil_actual)):
         "anio": d.anio,
         "docente_id": str(d.docente_id) if d.docente_id else None,
     }
-    creado = cliente.table("cursos").insert(fila).execute().data[0]
+    if d.grado is not None:
+        fila["grado"] = d.grado
+    try:
+        creado = cliente.table("cursos").insert(fila).execute().data[0]
+    except APIError as error:
+        if not (es_columna_faltante(error) and "grado" in fila):
+            raise
+        # Sin la migración 009 el grado se deduce del nombre del curso.
+        creado = cliente.table("cursos").insert({k: v for k, v in fila.items() if k != "grado"}).execute().data[0]
     zonas = sorted(set(d.zonas))
     if zonas:
         try:
@@ -178,7 +193,12 @@ def editar(curso_id: UUID, d: CursoEditar, perfil: Perfil = Depends(perfil_actua
         raise HTTPException(status_code=422, detail="Indica si el curso está activo")
     if cambios.get("docente_id"):
         _validar_docente(cliente, UUID(cambios["docente_id"]), curso["institucion_id"])
-    filas = cliente.table("cursos").update(cambios).eq("id", str(curso_id)).execute().data
+    try:
+        filas = cliente.table("cursos").update(cambios).eq("id", str(curso_id)).execute().data
+    except APIError as error:
+        if es_columna_faltante(error) and "grado" in cambios:
+            raise HTTPException(status_code=503, detail="Para guardar el grado del curso aplica la migración backend/sql/009_servicio_social.sql")
+        raise
     if not filas:
         raise HTTPException(status_code=403, detail="No tienes permiso para editar este curso")
     return _armar({**filas[0], "zonas": curso["zonas"]}, datos.perfiles_publicos(cliente), perfil)

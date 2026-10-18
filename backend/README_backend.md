@@ -54,6 +54,7 @@ estos archivos, que se pegan completos en **Supabase → SQL Editor → Run**, e
 6. `sql/006_dane.sql` (código DANE, DIVIPOLA y municipio de cada sede)
 7. `sql/007_sin_conexion.sql` (registros hechos sin señal: no se duplican al reenviarse)
 8. `sql/008_riesgo_caida.sql` (tamizaje de riesgo de caída, alertas y contactos de emergencia de cada sede)
+9. `sql/009_servicio_social.sql` (grado de cada curso, bitácora de servicio social, meta de horas y certificados)
 
 No borran datos: a cada árbol ya registrado le crean su inspección de registro (con los
 hallazgos que tenía) y a cada usuario de Supabase Auth su perfil. Se pueden ejecutar más de
@@ -116,6 +117,10 @@ CORS_ORIGINS=http://localhost:5173,http://localhost:3000
 ```
 
 `CORS_ORIGINS` son las direcciones del frontend que pueden llamar a la API.
+
+Opcional: `URL_PUBLICA_API=https://tu-backend.up.railway.app` es la dirección pública de la API
+que lleva el QR de los certificados de servicio social (`/verificar/<código>`). Si no está, se
+toma de la petición (encabezados `X-Forwarded-Proto` y `X-Forwarded-Host` detrás de un proxy).
 
 ## Ejecutar
 
@@ -216,6 +221,13 @@ triggers en Supabase (para que tampoco se puedan saltar llamando a la API de Sup
 | GET | `/alertas?estado=abiertas\|cerradas\|todas` | Usuario | Alertas de riesgo alto o inminente de la institución (el admin, de todas) |
 | POST | `/alertas/{id}/confirmar` · `/descartar` · `/aviso` · `/atender` | Docente o admin | Confirmar el riesgo, descartarlo con motivo, dejar constancia del aviso a rectoría y cerrarla |
 | GET / PUT | `/instituciones/{id}/contactos` | Usuario / docente o admin | Contactos de emergencia de la sede (rectoría, gestión del riesgo, autoridad ambiental) |
+| GET | `/servicio-social/resumen?estudiante_id=` | Estudiante / docente o admin | Horas aprobadas, por revisar y esperadas, por tipo, y bitácora |
+| POST | `/servicio-social/actividades` · `/actividades/{id}/foto` | Estudiante de 10.° y 11.° | Registrar una actividad (siembra, riego, jornada…) y su foto de evidencia |
+| GET / POST | `/servicio-social/actividades/pendientes` · `/{id}/aprobar` · `/{id}/rechazar` | Docente o admin | Revisar las actividades de la institución |
+| GET | `/servicio-social/estudiantes?curso_id=` | Docente o admin | Estudiantes de 10.° y 11.° con sus horas, los atrasados primero |
+| GET / PUT | `/servicio-social/parametros/{institucion_id}` | Usuario / docente o admin | Meta de horas (80) y horas por inspección confirmada (1) |
+| GET / POST | `/servicio-social/certificados` · `/{id}/descarga` · `/{id}/anular` | Docente o admin (descarga también el estudiante) | Emitir el PDF con QR, descargarlo (enlace de 10 min) y anularlo |
+| GET | `/verificar/{código}` · `/servicio-social/verificar/{código}` | Público | Página (y JSON) a la que lleva el QR: válido o anulado, con las iniciales del estudiante |
 
 ## Identificación con IA
 
@@ -315,6 +327,17 @@ El cuerpo trae `detail` con el mensaje. Los errores que vienen de la base de dat
 - Una foto `completo`, una `detalle` y hasta 3 `adicional`; JPG, PNG o WebP; máximo 5 MB. El formato se comprueba con los primeros bytes del archivo, no con lo que declara el navegador.
 - Solo quien registró un árbol puede subirle fotos (el RLS impide además editar árboles ajenos).
 - El código `IE001-0001` y el campo `registrado_por` los asigna la base de datos; el frontend nunca los envía.
+- **Servicio social** (`servicios/servicio_social.py`, Resolución MEN 4210 de 1996): lo prestan los
+  estudiantes de cursos de 10.° y 11.° (el grado se guarda en el curso o se deduce del nombre: "10-A",
+  "1102", "Once B"), del 1 de febrero de 10.° al 30 de noviembre de 11.°. Cuentan las inspecciones
+  propias confirmadas (1 h cada una por defecto, una por árbol y día) y las actividades con foto que
+  aprueba un docente; máximo 8 h por día y actividades de máximo 90 días atrás. No se registran
+  trabajos en altura, con herramientas cortantes o motorizadas, ni con agroquímicos. Las horas
+  esperadas reparten la meta en los 20 meses de clase de los dos años; con menos del 75 % de lo
+  esperado el estudiante va atrasado. El certificado (PDF con código y QR) lo emite un docente de la
+  institución o el administrador cuando se cumple la meta, con autorización de rectoría y el nombre de
+  quien firma; hay uno vigente por estudiante y se anula para corregirlo. La verificación pública
+  muestra solo las iniciales del estudiante.
 - **Riesgo de caída** (`servicios/riesgo_caida.py`): el registro y cada inspección pueden traer un
   `tamizaje` (inclinación, raíces, ramas secas, cavidades, hongos, grietas y qué hay debajo, que es
   obligatorio). La categoría (bajo, medio, alto o inminente) la calcula el backend cruzando la

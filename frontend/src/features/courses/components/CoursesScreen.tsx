@@ -5,13 +5,13 @@ import { Controller, useForm } from 'react-hook-form';
 import { Text, View } from 'react-native';
 
 import { useCursos, useGuardarCurso } from '@/features/courses/api';
-import { ZONAS, cursoFormSchema, type CursoFormInput } from '@/features/courses/schemas';
+import { GRADOS, ZONAS, cursoFormSchema, type CursoFormInput } from '@/features/courses/schemas';
 import { InstitucionSelector, useInstitucionElegida } from '@/features/perfil/components/InstitucionSelector';
 import { useMiPerfil } from '@/features/perfil/hooks/usePerfil';
 import { gestiona } from '@/features/perfil/schemas';
 import { getApiErrorMessage } from '@/services/api/client';
 import { hoyIso } from '@/shared/format';
-import { ChoiceChip, Field, InlineMessage, PrimaryButton } from '@/shared/components/FormControls';
+import { ChoiceChip, Field, InlineMessage, PrimaryButton, SelectField } from '@/shared/components/FormControls';
 import { AppHeader, Badge, Card, EmptyState, ErrorState, LoadingState, NumberField, Page } from '@/shared/components/UI';
 import { crearEstilos } from '@/theme';
 
@@ -73,7 +73,7 @@ function NuevoCurso({ institucionId }: { institucionId: string }) {
   const enviar = handleSubmit(async (v) => {
     setError(undefined);
     try {
-      const creado = await crear.mutateAsync({ institucion_id: institucionId, nombre: v.nombre.trim(), anio: v.anio, zonas: v.zonas });
+      const creado = await crear.mutateAsync({ institucion_id: institucionId, nombre: v.nombre.trim(), anio: v.anio, zonas: v.zonas, grado: v.grado ?? null });
       reset();
       setAbierto(false);
       router.push(`/(app)/courses/${creado.id}` as Href);
@@ -90,6 +90,10 @@ function NuevoCurso({ institucionId }: { institucionId: string }) {
       <Controller name="anio" control={control} render={({ field, fieldState }) => (
         <NumberField label="Año escolar" value={field.value} onChange={field.onChange} error={fieldState.error?.message} />
       )} />
+      <Controller name="grado" control={control} render={({ field }) => (
+        <SelectField label="Grado" value={field.value} placeholder="Según el nombre del curso" options={GRADOS} onChange={field.onChange} />
+      )} />
+      <Text style={styles.texto}>10.° y 11.° prestan servicio social. Si no eliges el grado, se toma del nombre (por ejemplo, 10-A).</Text>
       <Controller name="zonas" control={control} render={({ field }) => (
         <View style={styles.chips}>
           {ZONAS.map((zona) => (

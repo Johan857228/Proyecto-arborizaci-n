@@ -1,6 +1,6 @@
 import { router, type Href } from 'expo-router';
 import { useState } from 'react';
-import { Linking, Platform, Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import { fonts } from '@/config/constants';
 import { useDiccionario, useExportar, useInstituciones, type Conjunto, type Exportacion, type Formato } from '@/features/exportar/api';
@@ -10,6 +10,7 @@ import { esAdmin, esRevisor } from '@/features/perfil/schemas';
 import { getApiErrorMessage } from '@/services/api/client';
 import { InlineMessage, PrimaryButton } from '@/shared/components/FormControls';
 import { Icon, type IconName } from '@/shared/components/Icon';
+import { abrirDescarga } from '@/shared/utils/descarga';
 import { AppHeader, Card, EmptyState, LoadingState, Page } from '@/shared/components/UI';
 import { crearEstilos, useTema } from '@/theme';
 
@@ -45,16 +46,6 @@ const OPCIONES: { conjunto: Conjunto; titulo: string; texto: string; icono: Icon
     formatos: ['csv'],
   },
 ];
-
-/** En web la descarga empieza sin salir de la app (el enlace trae Content-Disposition); en el
- *  teléfono se abre en el navegador, que la guarda en Descargas. */
-async function abrirDescarga(url: string) {
-  if (Platform.OS === 'web') {
-    window.location.assign(url);
-    return;
-  }
-  await Linking.openURL(url);
-}
 
 function Diccionario() {
   const styles = useStyles();

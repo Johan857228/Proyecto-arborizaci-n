@@ -23,6 +23,9 @@ DEFECTOS = {
     "alertas_riesgo": lambda: {"estado": "por_confirmar", "creada_en": _ahora(), "actualizada_en": _ahora(),
                                "revisada_en": None, "comentario_revision": None, "rectoria_avisada_en": None,
                                "rectoria_medio": None, "atendida_en": None, "nota_cierre": None, "intervencion_id": None},
+    "actividades_servicio": lambda: {"estado": "pendiente", "creado_en": _ahora(), "foto_path": None, "revisado_en": None,
+                                     "revisado_por": None, "comentario": None, "arbol_id": None, "lat": None, "lng": None},
+    "certificados_servicio": lambda: {"emitido_en": _ahora(), "anulado_en": None, "anulado_por": None, "anulado_motivo": None},
 }
 UNICOS = {
     "cursos": [("institucion_id", "nombre", "anio")],
@@ -31,7 +34,7 @@ UNICOS = {
     "inspeccion_observaciones": [("inspeccion_id", "observacion_codigo")],
 }
 SIN_ID = {"curso_zonas", "inspeccion_observaciones", "parametros_institucionales", "perfiles", "tipos_intervencion",
-          "tamizajes_riesgo", "contactos_emergencia"}
+          "tamizajes_riesgo", "contactos_emergencia", "servicio_social_parametros"}
 
 
 def _ahora():
@@ -164,7 +167,7 @@ class Almacen:
         for r in rutas:
             self.base.archivos.pop(r, None)
 
-    def create_signed_url(self, ruta, segundos):
+    def create_signed_url(self, ruta, segundos, opciones=None):
         return {"signedURL": f"https://memoria/{ruta}"}
 
     def create_signed_urls(self, rutas, segundos):

@@ -11,6 +11,8 @@ import { useCuentasSinInstitucion } from '@/features/perfil/hooks/usePerfil';
 import { esAdmin, esRevisor, type MiPerfil } from '@/features/perfil/schemas';
 import { useReporte } from '@/features/reports/api';
 import { useAlertas } from '@/features/riesgo/api';
+import { useEstudiantesServicio, usePendientesServicio, useResumenServicio } from '@/features/servicio/api';
+import { horasTexto } from '@/features/servicio/schemas';
 import { getApiErrorMessage } from '@/services/api/client';
 import { formatFecha, formatPesos } from '@/shared/format';
 import { InlineMessage, PrimaryButton } from '@/shared/components/FormControls';
@@ -159,6 +161,29 @@ function TuZona({ perfil }: { perfil: MiPerfil }) {
   );
 }
 
+/** Estudiante de 10.° y 11.°: cómo va su servicio social. */
+function ServicioHoy() {
+  const resumen = useResumenServicio();
+  const r = resumen.data;
+  if (!r?.en_servicio) return null;
+  const detalle = r.estado === 'completo'
+    ? 'Completaste la meta: tu docente puede emitir tu certificado'
+    : r.estado === 'atrasado'
+      ? `Vas atrasado: a esta fecha se llevarían ${horasTexto(r.horas_esperadas)} h`
+      : r.horas_pendientes ? `${horasTexto(r.horas_pendientes)} h esperan aprobación` : 'Registra tus actividades con foto';
+  return (
+    <Card title="Servicio social" icon="school">
+      <FilaTarea
+        icon="school"
+        tono={r.estado === 'atrasado' ? 'critico' : r.estado === 'completo' ? 'sano' : 'info'}
+        texto={`${horasTexto(r.horas_aprobadas)} de ${horasTexto(r.meta)} horas`}
+        detalle={detalle}
+        href={'/(app)/service' as Href}
+      />
+    </Card>
+  );
+}
+
 /** Docente y administrador: lo que necesita atención (revisión, riesgo, mantenimiento, cobertura). */
 function ParaAtender({ perfil }: { perfil: MiPerfil }) {
   const styles = useStyles();
@@ -167,6 +192,9 @@ function ParaAtender({ perfil }: { perfil: MiPerfil }) {
   const reporte = useReporte({ institucionId: a.institucionId }, a.revisor);
   const cuentas = useCuentasSinInstitucion(a.admin);
   const alertas = useAlertas('abiertas', a.institucionId, a.revisor);
+  const servicio = useEstudiantesServicio(a.institucionId, a.revisor && Boolean(a.institucionId));
+  const actividadesPorRevisar = usePendientesServicio(a.institucionId, a.revisor).data?.length ?? 0;
+  const atrasados = (servicio.data ?? []).filter((e) => e.estado === 'atrasado').length;
 
   // Las alertas de riesgo de caída van primero y no dependen de que carguen los demás pendientes.
   const abiertas = alertas.data ?? [];
@@ -183,12 +211,26 @@ function ParaAtender({ perfil }: { perfil: MiPerfil }) {
     />
   ) : null;
 
+  // El servicio social tampoco depende del reporte.
+  const filaServicio = actividadesPorRevisar > 0 || atrasados > 0 ? (
+    <FilaTarea
+      key="servicio"
+      icon="school"
+      tono={atrasados > 0 ? 'riesgo' : 'info'}
+      valor={actividadesPorRevisar || atrasados}
+      texto={actividadesPorRevisar ? `${actividadesPorRevisar === 1 ? 'actividad' : 'actividades'} de servicio social por revisar` : `${atrasados === 1 ? 'estudiante atrasado' : 'estudiantes atrasados'} en servicio social`}
+      detalle={actividadesPorRevisar && atrasados ? `${atrasados} ${atrasados === 1 ? 'estudiante va atrasado' : 'estudiantes van atrasados'} en sus horas` : undefined}
+      href={'/(app)/service' as Href}
+    />
+  ) : null;
+
   const error = revision.error ?? reporte.error;
   if (revision.isLoading || reporte.isLoading || error) {
     return (
       <Card title="Para atender" icon="flag">
         <View style={styles.lista}>
           {filaAlertas}
+          {filaServicio}
           {error ? <InlineMessage>{getApiErrorMessage(error)}</InlineMessage> : <Cargando texto="Revisando pendientes…" />}
         </View>
       </Card>
@@ -246,6 +288,7 @@ function ParaAtender({ perfil }: { perfil: MiPerfil }) {
   if (sinInspeccion > 0 && r) {
     filas.push(<FilaTarea key="cobertura" icon="calendar" tono="neutro" valor={sinInspeccion} texto={`${sinInspeccion === 1 ? 'árbol' : 'árboles'} sin inspección en ${r.cobertura.dias_revisita} días`} href={'/(app)/reports?seccion=cobertura' as Href} />);
   }
+  if (filaServicio) filas.push(filaServicio);
   if (a.admin && cuentas > 0) {
     filas.push(<FilaTarea key="cuentas" icon="users" tono="info" valor={cuentas} texto={cuentas === 1 ? 'cuenta nueva sin institución' : 'cuentas nuevas sin institución'} href={'/(app)/users' as Href} />);
   }
@@ -333,6 +376,7 @@ export function ParaHoy({ perfil }: { perfil: MiPerfil }) {
         <Text style={styles.titulo}>Para hoy</Text>
       </View>
       {perfil.rol === 'estudiante' ? <TuZona perfil={perfil} /> : <ParaAtender perfil={perfil} />}
+      {perfil.rol === 'estudiante' ? <ServicioHoy /> : null}
       {perfil.rol === 'docente' ? <TusCursos perfil={perfil} /> : null}
       {perfil.rol !== 'administrador' ? <ProgresoCompacto /> : null}
     </View>

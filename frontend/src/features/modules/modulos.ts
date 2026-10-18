@@ -28,6 +28,7 @@ export const GRUPOS: { clave: GrupoModulo; titulo: string }[] = [
 
 export const MODULOS: Modulo[] = [
   { clave: 'alertas', titulo: 'Alertas de riesgo de caída', corto: 'Alertas', texto: 'Árboles con riesgo alto o inminente, ruta de emergencia y aviso a rectoría.', icono: 'warning', href: '/(app)/alerts' as Href, ruta: '/alerts', grupo: 'campo' },
+  { clave: 'servicio', titulo: 'Servicio social', corto: 'Servicio', texto: 'Horas de 10.° y 11.°: bitácora con evidencia, aprobación docente y certificado con QR.', icono: 'school', href: '/(app)/service' as Href, ruta: '/service', grupo: 'campo' },
   { clave: 'revision', titulo: 'Revisión', corto: 'Revisión', texto: 'Confirma o anula las inspecciones pendientes de tu institución.', icono: 'review', href: '/(app)/review' as Href, ruta: '/review', grupo: 'campo', soloRevisores: true },
   { clave: 'intervenciones', titulo: 'Intervenciones', corto: 'Cuidados', texto: 'Mantenimiento realizado, programado y recomendado por árbol.', icono: 'tools', href: '/(app)/interventions' as Href, ruta: '/interventions', grupo: 'campo' },
   { clave: 'cursos', titulo: 'Cursos y zonas', corto: 'Cursos', texto: 'Zonas asignadas a cada curso, cobertura y productividad.', icono: 'school', href: '/(app)/courses' as Href, ruta: '/courses', grupo: 'campo' },
