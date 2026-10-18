@@ -1,43 +1,82 @@
 import { useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
 
-import { useCreateTree } from '@/features/trees/hooks/useCreateTree';
-import { useUploadPhoto } from '@/features/trees/hooks/useUploadPhoto';
+import type { ArbolEnCola } from '@/features/sincronizacion/cola';
+import { guardarArbolParaDespues } from '@/features/sincronizacion/colaStore';
 import { fotosRegistroSchema } from '@/features/trees/schemas';
+import { photosService } from '@/features/trees/services/photosService';
+import { treesService } from '@/features/trees/services/treesService';
 import { ApiContractError } from '@/services/api/client';
+import { esErrorDeRed, hayConexion } from '@/services/offline/conexion';
 import type { ArbolResumen } from '@/shared/types/entities';
+import { nuevoId } from '@/shared/utils/id';
 import type { ArbolCrear, FotoLocal } from '@/features/trees/types';
 
-interface RegistrationResult {
-  tree: ArbolResumen;
-  photoError?: unknown;
+export type RegistrationResult =
+  | { estado: 'enviado'; tree: ArbolResumen; photoError?: unknown; fotosEnCola?: number }
+  /** Sin conexión: quedó guardado en el teléfono y se envía solo cuando vuelva la señal. */
+  | { estado: 'en_cola'; registro: ArbolEnCola };
+
+/** Para reconocer el registro en la lista de pendientes (especie, institución y zona). */
+export interface EtiquetaRegistro {
+  titulo: string;
+  detalle: string;
 }
 
 export function useRegisterTree() {
-  const createTree = useCreateTree();
-  const uploadPhoto = useUploadPhoto();
   const queryClient = useQueryClient();
+  const [isPending, setIsPending] = useState(false);
 
-  async function submit(values: ArbolCrear, photos: FotoLocal[]): Promise<RegistrationResult> {
+  async function submit(values: ArbolCrear, photos: FotoLocal[], etiqueta: EtiquetaRegistro): Promise<RegistrationResult> {
     const validatedPhotos = fotosRegistroSchema.safeParse(photos);
     if (!validatedPhotos.success) {
       throw new ApiContractError('Revisa las fotografías: agrega una vista general y respeta formato y tamaño permitidos.');
     }
+    // Cada envío lleva su id_cliente: si se corta y se repite desde la cola, no se duplica.
+    const idCliente = nuevoId();
+    const fotos = validatedPhotos.data.map((foto) => ({ ...foto, id: nuevoId() }));
+    const guardarParaDespues = async (pendientes = fotos, creado?: ArbolResumen) =>
+      guardarArbolParaDespues({
+        idCliente,
+        payload: values,
+        fotos: pendientes,
+        ...etiqueta,
+        registroId: creado?.id,
+        codigo: creado?.codigo,
+      });
 
-    const tree = await createTree.mutateAsync(values);
+    setIsPending(true);
     try {
-      for (const photo of validatedPhotos.data) {
-        await uploadPhoto.mutateAsync({ treeId: tree.id, photo });
+      if (!hayConexion()) return { estado: 'en_cola', registro: await guardarParaDespues() };
+
+      let tree: ArbolResumen;
+      try {
+        tree = await treesService.create(values, { idCliente, capturadoEn: new Date().toISOString() });
+      } catch (error) {
+        // Sin señal (o se agotó el tiempo): se guarda para enviarlo después. Si el servidor alcanzó
+        // a guardarlo, el reenvío con el mismo id_cliente devuelve ese mismo árbol.
+        if (esErrorDeRed(error)) return { estado: 'en_cola', registro: await guardarParaDespues() };
+        throw error;
       }
-      return { tree };
-    } catch (photoError) {
-      return { tree, photoError };
+
+      for (let i = 0; i < fotos.length; i += 1) {
+        try {
+          await photosService.upload(tree.id, fotos[i], fotos[i].id);
+        } catch (photoError) {
+          if (esErrorDeRed(photoError)) {
+            const pendientes = fotos.slice(i);
+            await guardarParaDespues(pendientes, tree);
+            return { estado: 'enviado', tree, fotosEnCola: pendientes.length };
+          }
+          return { estado: 'enviado', tree, photoError };
+        }
+      }
+      return { estado: 'enviado', tree };
     } finally {
-      await queryClient.invalidateQueries();
+      setIsPending(false);
+      void queryClient.invalidateQueries();
     }
   }
 
-  return {
-    submit,
-    isPending: createTree.isPending || uploadPhoto.isPending,
-  };
+  return { submit, isPending };
 }

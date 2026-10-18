@@ -18,7 +18,7 @@ import uuid
 from collections import Counter
 from uuid import UUID
 
-from fastapi import Depends, FastAPI, File, HTTPException, Query, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, Query, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from postgrest.exceptions import APIError
@@ -32,7 +32,10 @@ from comun import (
     MAX_FOTOS_ADICIONALES,
     POLITICA_VERSION,
     ahora,
+    ajeno,
+    buscar_por_id_cliente,
     escapar_like,
+    insertar_sin_duplicar,
     leer_foto,
     portadas_de_arboles,
     resumen_por_id,
@@ -262,11 +265,18 @@ def catalogos():
 
 # ==================================== Árboles ====================================
 @app.post("/arboles", response_model=ArbolResumen, status_code=201, tags=["Árboles"])
-def crear_arbol(datos_arbol: ArbolCrear, perfil: Perfil = Depends(perfil_actual)):
+def crear_arbol(datos_arbol: ArbolCrear, respuesta: Response, perfil: Perfil = Depends(perfil_actual)):
     """Registra un árbol con sus observaciones y crea su primera inspección (origen
     'registro'), que queda pendiente de revisión. El código (IE001-0001) y el usuario que
-    lo registra los asigna la base de datos."""
+    lo registra los asigna la base de datos. Si la app lo reenvía con el mismo id_cliente
+    (se guardó sin conexión), responde 200 con el árbol que ya existe."""
     cliente = db.cliente_de_usuario(perfil.sesion.token)
+    existente = buscar_por_id_cliente(cliente, "arboles", datos_arbol.id_cliente, "id, registrado_por")
+    if existente:
+        if ajeno(existente, "registrado_por", perfil.usuario_id):
+            raise HTTPException(status_code=409, detail="Ese identificador ya se usó en otro registro")
+        respuesta.status_code = 200
+        return resumen_por_id(cliente, str(existente["id"]))
 
     # 1) Validar que las casillas marcadas existan en el catálogo
     codigos = sorted(set(datos_arbol.observaciones))
@@ -277,8 +287,15 @@ def crear_arbol(datos_arbol: ArbolCrear, perfil: Perfil = Depends(perfil_actual)
             raise HTTPException(status_code=422, detail=f"Observaciones no válidas: {invalidos}")
 
     # 2) Guardar el árbol (solo sus columnas: la precisión y las notas son de la inspección)
-    fila = datos_arbol.model_dump(exclude={"observaciones", "precision_gps_m", "notas", *CAMPOS_BIOTICOS})
-    creado = cliente.table("arboles").insert(fila).execute().data[0]
+    fila = datos_arbol.model_dump(
+        exclude={"observaciones", "precision_gps_m", "notas", "id_cliente", "capturado_en", *CAMPOS_BIOTICOS}
+    )
+    if datos_arbol.id_cliente:
+        fila["id_cliente"] = str(datos_arbol.id_cliente)
+    creado, nuevo = insertar_sin_duplicar(cliente, "arboles", fila)
+    if not nuevo:  # otro envío del mismo registro llegó primero
+        respuesta.status_code = 200
+        return resumen_por_id(cliente, str(creado["id"]))
 
     # 3) Guardar las observaciones y la inspección de registro; si algo falla, se borra el
     #    árbol (y en cascada lo que alcanzó a guardarse) para no dejarlo a medias.
@@ -302,6 +319,7 @@ def crear_arbol(datos_arbol: ArbolCrear, perfil: Perfil = Depends(perfil_actual)
                 interferencia_otra=datos_arbol.interferencia_otra,
                 observaciones=codigos,
                 notas=datos_arbol.notas,
+                capturado_en=datos_arbol.capturado_en,
                 **datos_arbol.model_dump(include=CAMPOS_BIOTICOS),
             ),
             "registro",
@@ -394,8 +412,10 @@ def calculos_arbol(arbol_id: UUID, sesion: Sesion = Depends(usuario_actual)):
 @app.post("/arboles/{arbol_id}/fotos", status_code=201, tags=["Fotos"])
 def subir_foto(
     arbol_id: UUID,
+    respuesta: Response,
     tipo: TipoFoto = Query(..., description="completo, detalle o adicional"),
     archivo: UploadFile = File(...),
+    id_cliente: UUID | None = Query(None, description="UUID de la app: si el envío se repite, no se duplica la foto"),
     sesion: Sesion = Depends(usuario_actual),
 ):
     """Sube una foto a Storage y registra su ruta. Solo quien registró el árbol puede hacerlo.
@@ -411,6 +431,14 @@ def subir_foto(
     if arbol[0]["registrado_por"] != sesion.user_id:
         raise HTTPException(status_code=403, detail="Solo quien registró el árbol puede agregar fotos")
 
+    # Reenvío de una foto que ya se guardó (la app no alcanzó a recibir la respuesta).
+    existente = buscar_por_id_cliente(cliente, "arbol_fotos", id_cliente, "id, arbol_id, tipo, storage_path")
+    if existente:
+        if str(existente["arbol_id"]) != str(arbol_id):
+            raise HTTPException(status_code=409, detail="Ese identificador ya se usó en otra foto")
+        respuesta.status_code = 200
+        return {"id": existente["id"], "tipo": existente["tipo"], "storage_path": existente["storage_path"]}
+
     if tipo == "adicional":
         existentes = (
             cliente.table("arbol_fotos").select("id").eq("arbol_id", str(arbol_id)).eq("tipo", "adicional").execute().data
@@ -421,16 +449,27 @@ def subir_foto(
     ruta = f"{arbol_id}/{uuid.uuid4().hex}.{extension}"
     cliente.storage.from_(BUCKET_FOTOS).upload(ruta, contenido, {"content-type": tipo_real})
 
+    nueva_fila = {"arbol_id": str(arbol_id), "tipo": tipo, "storage_path": ruta}
+    if id_cliente:
+        nueva_fila["id_cliente"] = str(id_cliente)
     try:
-        fila = cliente.table("arbol_fotos").insert({"arbol_id": str(arbol_id), "tipo": tipo, "storage_path": ruta}).execute().data[0]
+        fila, nueva = insertar_sin_duplicar(cliente, "arbol_fotos", nueva_fila)
     except Exception:
-        try:  # no dejar el archivo huérfano en Storage
-            db.get_admin().storage.from_(BUCKET_FOTOS).remove([ruta])
-        except Exception:
-            pass
+        _quitar_foto(ruta)
         raise
+    if not nueva:  # otro envío de la misma foto llegó primero: sobra el archivo que se acaba de subir
+        _quitar_foto(ruta)
+        respuesta.status_code = 200
 
-    return {"id": fila["id"], "tipo": tipo, "storage_path": ruta}
+    return {"id": fila["id"], "tipo": fila["tipo"], "storage_path": fila["storage_path"]}
+
+
+def _quitar_foto(ruta: str) -> None:
+    """Borra una foto de Storage sin fallar, para no dejar archivos huérfanos."""
+    try:
+        db.get_admin().storage.from_(BUCKET_FOTOS).remove([ruta])
+    except Exception:
+        pass
 
 
 # ================================= Estadísticas ==================================

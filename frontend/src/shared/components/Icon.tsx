@@ -62,6 +62,9 @@ const icons = {
   sun: { ios: 'sun.max.fill', material: 'light_mode' },
   contrast: { ios: 'circle.lefthalf.filled', material: 'contrast' },
   download: { ios: 'arrow.down.circle', material: 'download' },
+  sinConexion: { ios: 'wifi.slash', material: 'cloud_off' },
+  sincronizar: { ios: 'arrow.triangle.2.circlepath', material: 'sync' },
+  enCola: { ios: 'icloud.and.arrow.up', material: 'cloud_upload' },
 } satisfies Record<string, { ios: SFSymbol; material: AndroidSymbol }>;
 
 export type IconName = keyof typeof icons;

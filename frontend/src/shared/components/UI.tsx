@@ -7,6 +7,7 @@ import { ESPACIO_FINAL, useEspaciado } from '@/hooks/use-espaciado';
 import { fadeLine } from '@/shared/styles/gradient';
 import { parsearNumero } from '@/shared/format';
 import { getApiErrorMessage } from '@/services/api/client';
+import { esErrorDeRed, useHayConexion } from '@/services/offline/conexion';
 import { PrimaryButton, Screen } from '@/shared/components/FormControls';
 import { Icon, type IconName } from '@/shared/components/Icon';
 import { LeafWatermark } from '@/shared/components/LeafWatermark';
@@ -253,11 +254,19 @@ export function LoadingState({ text = 'Cargando…' }: { text?: string }) {
 
 export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
   const styles = useStyles();
+  // Sin conexión la consulta queda en pausa: si no hay copia guardada en el teléfono, se explica
+  // en vez de mostrar un error genérico.
+  const enLinea = useHayConexion();
+  const sinConexion = !enLinea && (error == null || esErrorDeRed(error));
   return (
     <View style={styles.state}>
-      <IconChip icon="error" tono="critico" size={40} />
-      <Text style={styles.errorTitle}>No se pudo cargar la información</Text>
-      <Text style={styles.stateText}>{getApiErrorMessage(error)}</Text>
+      <IconChip icon={sinConexion ? 'sinConexion' : 'error'} tono={sinConexion ? 'riesgo' : 'critico'} size={40} />
+      <Text style={styles.errorTitle}>{sinConexion ? 'Sin conexión' : 'No se pudo cargar la información'}</Text>
+      <Text style={styles.stateText}>
+        {sinConexion
+          ? 'Esta información aún no está guardada en el teléfono. Se cargará sola cuando vuelva la señal.'
+          : getApiErrorMessage(error)}
+      </Text>
       {onRetry ? <PrimaryButton title="Reintentar" variant="secondary" onPress={onRetry} /> : null}
     </View>
   );

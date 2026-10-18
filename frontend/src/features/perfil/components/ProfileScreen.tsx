@@ -9,6 +9,7 @@ import { Avatar } from '@/features/perfil/components/Avatar';
 import { useImagenPropia } from '@/features/perfil/hooks/useImagenPropia';
 import { useCambiarMiNombre, useMiPerfil } from '@/features/perfil/hooks/usePerfil';
 import { ETIQUETA_ROL, editarNombreSchema } from '@/features/perfil/schemas';
+import { useContadorCola } from '@/features/sincronizacion/colaStore';
 import { getApiErrorMessage } from '@/services/api/client';
 import { ActionSheet } from '@/shared/components/ActionSheet';
 import { Field, InlineMessage, PrimaryButton } from '@/shared/components/FormControls';
@@ -97,6 +98,7 @@ export function ProfileScreen() {
   const perfil = useMiPerfil();
   const cambiar = useCambiarMiNombre();
   const signOut = useAuthStore((state) => state.signOut);
+  const porEnviar = useContadorCola().total;
   const [nombre, setNombre] = useState<string>();
   const [mensaje, setMensaje] = useState<string>();
   const [error, setError] = useState<string>();
@@ -169,6 +171,12 @@ export function ProfileScreen() {
         {error ? <InlineMessage>{error}</InlineMessage> : null}
         <PrimaryButton title="Guardar nombre" disabled={valor.trim() === p.nombre} loading={cambiar.isPending} onPress={() => void guardar()} />
       </Card>
+      {porEnviar > 0 ? (
+        <InlineMessage tone="warning">
+          Tienes {porEnviar === 1 ? 'un registro' : `${porEnviar} registros`} sin enviar en este teléfono. Si cierras sesión no se
+          pierden, pero solo se enviarán cuando vuelvas a entrar con tu cuenta aquí.
+        </InlineMessage>
+      ) : null}
       <PrimaryButton title="Cerrar sesión" icon="logout" variant="secondary" onPress={() => void signOut()} />
     </Page>
   );

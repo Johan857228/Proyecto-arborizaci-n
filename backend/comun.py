@@ -2,6 +2,7 @@
 from datetime import date, datetime, time, timedelta, timezone
 
 from fastapi import HTTPException
+from postgrest.exceptions import APIError
 
 # Colombia no tiene horario de verano: UTC-5 todo el año.
 ZONA_HORARIA = timezone(timedelta(hours=-5), "America/Bogota")
@@ -307,3 +308,68 @@ def leer_foto(archivo, max_bytes: int) -> tuple[bytes, str, str]:
     if tipo_real is None:
         raise HTTPException(status_code=422, detail="El archivo no es una imagen JPG, PNG o WebP válida.")
     return limpiar_metadatos(contenido, tipo_real), tipo_real, EXTENSIONES[tipo_real]
+
+
+# ============================ Registros sin conexión =============================
+# La app guarda en el teléfono lo que se registra sin señal y lo envía cuando vuelve la
+# conexión. Cada envío lleva un id_cliente (UUID que genera la app): si se repite porque la
+# respuesta no alcanzó a llegar, se devuelve lo que ya quedó guardado en vez de duplicarlo.
+# Las columnas son de la migración 007; sin ella, los registros se guardan igual, sin esa
+# protección.
+COLUMNAS_SIN_CONEXION = ("id_cliente", "capturado_en")
+# La hora de captura la pone el teléfono: si está fuera de este rango se descarta (el registro
+# se guarda igual, con la hora del servidor).
+CAPTURA_TOLERANCIA_FUTURO = timedelta(minutes=10)
+CAPTURA_MAX_ANTIGUEDAD = timedelta(days=90)
+
+
+def es_columna_faltante(error: APIError) -> bool:
+    """La base de datos no tiene la columna: falta aplicar una migración."""
+    return str(getattr(error, "code", "") or "") in ("PGRST204", "42703")
+
+
+def hora_de_captura(valor: datetime | None) -> datetime | None:
+    """Hora en que se tomó el registro en campo, o None si el reloj del teléfono no es creíble."""
+    if valor is None:
+        return None
+    if valor.tzinfo is None:
+        valor = valor.replace(tzinfo=timezone.utc)
+    momento = datetime.now(timezone.utc)
+    if valor > momento + CAPTURA_TOLERANCIA_FUTURO or valor < momento - CAPTURA_MAX_ANTIGUEDAD:
+        return None
+    return valor
+
+
+def buscar_por_id_cliente(cliente, tabla: str, id_cliente, columnas: str = "*") -> dict | None:
+    """El registro que ya se guardó con ese id_cliente (None si no hay o falta la migración)."""
+    if id_cliente is None:
+        return None
+    try:
+        filas = cliente.table(tabla).select(columnas).eq("id_cliente", str(id_cliente)).limit(1).execute().data
+    except APIError as error:
+        if es_columna_faltante(error):
+            return None
+        raise
+    return filas[0] if filas else None
+
+
+def insertar_sin_duplicar(cliente, tabla: str, fila: dict) -> tuple[dict, bool]:
+    """Inserta la fila y devuelve (fila guardada, True). Si otro envío con el mismo id_cliente
+    llegó primero, devuelve (esa fila, False). Sin la migración 007 inserta sin esas columnas."""
+    try:
+        return cliente.table(tabla).insert(fila).execute().data[0], True
+    except APIError as error:
+        if str(getattr(error, "code", "")) == "23505" and fila.get("id_cliente"):
+            existente = buscar_por_id_cliente(cliente, tabla, fila["id_cliente"])
+            if existente:
+                return existente, False
+            raise
+        if es_columna_faltante(error) and any(c in fila for c in COLUMNAS_SIN_CONEXION):
+            sin_columnas = {k: v for k, v in fila.items() if k not in COLUMNAS_SIN_CONEXION}
+            return cliente.table(tabla).insert(sin_columnas).execute().data[0], True
+        raise
+
+
+def ajeno(fila: dict, campo: str, usuario_id: str) -> bool:
+    """True si el registro encontrado por id_cliente es de otra persona."""
+    return fila.get(campo) is not None and str(fila[campo]) != str(usuario_id)

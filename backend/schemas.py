@@ -5,6 +5,7 @@ usuario reciba el error ANTES de llegar a Supabase, con un mensaje claro.
 """
 from datetime import datetime
 from typing import Annotated, Literal
+from uuid import UUID
 
 from pydantic import BaseModel, Field, StringConstraints, field_validator, model_validator
 
@@ -149,6 +150,18 @@ class Catalogos(BaseModel):
 
 
 # ----------------------------------- Árboles -----------------------------------
+class CamposSinConexion(BaseModel):
+    """Datos que agrega la app cuando el registro se guardó en el teléfono sin señal y se
+    envía después (comun.insertar_sin_duplicar)."""
+
+    id_cliente: UUID | None = Field(
+        default=None, description="UUID que genera la app: si el envío se repite, no se duplica el registro"
+    )
+    capturado_en: datetime | None = Field(
+        default=None, description="Cuándo se tomó en campo; se descarta si el reloj del teléfono no es creíble"
+    )
+
+
 class CamposBioticos(BaseModel):
     """Agentes bióticos observados en la visita (FB-01 a FB-06). Todos son opcionales: si no se
     observa un agente, su tipo va vacío y no se envían su parte ni su severidad (escala 0 a 4)."""
@@ -198,7 +211,7 @@ class CamposBioticos(BaseModel):
         return self
 
 
-class ArbolCrear(CamposBioticos):
+class ArbolCrear(CamposBioticos, CamposSinConexion):
     """Lo que envía el formulario del frontend (pasos 1, 3 y 4 del prototipo)."""
 
     institucion_id: str = Field(min_length=1, max_length=64)

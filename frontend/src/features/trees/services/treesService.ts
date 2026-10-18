@@ -10,10 +10,12 @@ import {
   type Calculos,
 } from '@/features/trees/schemas';
 import type { ArbolCrear, PaginaInventario } from '@/features/trees/types';
+import type { Envio } from '@/features/sincronizacion/cola';
 
 export interface TreesGateway {
   getAll(query: PaginaInventario): Promise<ArbolResumen[]>;
-  create(payload: ArbolCrear): Promise<ArbolResumen>;
+  /** `envio` identifica el registro para que un reenvío no lo duplique (ver sincronizacion/cola.ts). */
+  create(payload: ArbolCrear, envio?: Envio): Promise<ArbolResumen>;
   getById(id: string): Promise<ArbolDetalle>;
   getCalculos(id: string): Promise<Calculos>;
 }
@@ -38,13 +40,16 @@ const apiTreesGateway: TreesGateway = {
     return result.data;
   },
 
-  async create(payload: ArbolCrear) {
+  async create(payload: ArbolCrear, envio?: Envio) {
     const validatedPayload = arbolCreatePayloadSchema.safeParse(payload);
     if (!validatedPayload.success) {
       throw new ApiContractError('No se puede enviar el registro: revisa los datos ingresados.');
     }
 
-    const { data } = await api.post<unknown>('/arboles', validatedPayload.data);
+    const cuerpo = envio
+      ? { ...validatedPayload.data, id_cliente: envio.idCliente, capturado_en: envio.capturadoEn }
+      : validatedPayload.data;
+    const { data } = await api.post<unknown>('/arboles', cuerpo);
     const result = arbolResumenSchema.safeParse(data);
     if (!result.success) {
       throw new ApiContractError('El servidor no devolvió un registro de árbol válido.');

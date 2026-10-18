@@ -6,6 +6,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, 
 
 import { fonts, layout } from '@/config/constants';
 import { useCatalogs } from '@/features/catalogs/hooks/useCatalogs';
+import { useColaStore } from '@/features/sincronizacion/colaStore';
 import { treeKeys } from '@/features/trees/hooks/useCreateTree';
 import type { FiltrosInventario, Zona } from '@/features/trees/types';
 import { treesService } from '@/features/trees/services/treesService';
@@ -19,7 +20,7 @@ import { Grid } from '@/shared/components/Grid';
 import { Icon, type IconName } from '@/shared/components/Icon';
 import { FadeIn } from '@/shared/components/Motion';
 import { StatusBadge } from '@/shared/components/StatusBadge';
-import { RevisionBadge } from '@/shared/components/UI';
+import { ErrorState, Notice, RevisionBadge } from '@/shared/components/UI';
 import { gradient } from '@/shared/styles/gradient';
 import { crearEstilos, useTema } from '@/theme';
 
@@ -159,6 +160,10 @@ export default function TreeListScreen() {
       lastPage.length === PAGE_SIZE ? pages.length * PAGE_SIZE : undefined,
   });
 
+  // Sin conexión y sin copia guardada en el teléfono, la consulta queda en pausa: no es un inventario vacío.
+  const sinDatosSinConexion = inventory.isPending && inventory.fetchStatus === 'paused';
+  // Los árboles guardados sin conexión aparecen en la lista cuando se envían.
+  const arbolesEnTelefono = useColaStore((estado) => estado.registros.filter((r) => r.tipo === 'arbol' && !r.registroId).length);
   const allTrees = inventory.data?.pages.flat() ?? [];
   const searchText = search.trim().toLocaleLowerCase();
   const trees = allTrees.filter((tree) => searchText.length === 0 || [
@@ -302,7 +307,7 @@ export default function TreeListScreen() {
 
         <View style={styles.listHeading}>
           <Text style={styles.sectionTitle}>
-            {inventory.isLoading ? 'Cargando…' : `${trees.length} ${trees.length === 1 ? 'árbol' : 'árboles'}`}
+            {inventory.isLoading ? 'Cargando…' : sinDatosSinConexion ? 'Sin conexión' : `${trees.length} ${trees.length === 1 ? 'árbol' : 'árboles'}`}
           </Text>
           {filtering ? (
             <Pressable accessibilityRole="button" onPress={clearFilters} style={styles.clear}>
@@ -312,11 +317,21 @@ export default function TreeListScreen() {
           ) : null}
         </View>
 
+        {arbolesEnTelefono > 0 ? (
+          <Pressable accessibilityRole="link" onPress={() => router.navigate('/(app)/sync' as Href)}>
+            <Notice tono="info">
+              {arbolesEnTelefono === 1 ? 'Un árbol guardado' : `${arbolesEnTelefono} árboles guardados`} en este teléfono sin conexión: aparecerán aquí cuando se envíen. Toca para ver los registros por enviar.
+            </Notice>
+          </Pressable>
+        ) : null}
+
         {inventory.isLoading ? (
           <View style={styles.message}>
             <ActivityIndicator color={palette.forest} />
             <Text style={styles.messageText}>Cargando inventario desde el servidor…</Text>
           </View>
+        ) : sinDatosSinConexion ? (
+          <ErrorState error={undefined} onRetry={() => void inventory.refetch()} />
         ) : inventory.isError ? (
           <View style={styles.message}>
             <View style={[styles.messageIcon, { backgroundColor: palette.redSoft }]}>

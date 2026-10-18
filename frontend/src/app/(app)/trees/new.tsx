@@ -14,10 +14,12 @@ import { Icon } from '@/shared/components/Icon';
 import { crearEstilos, useTema } from '@/theme';
 
 interface Registered {
-  id: string;
-  codigo: string;
+  /** Sin id ni código: quedó guardado en el teléfono y se envía cuando haya conexión. */
+  id?: string;
+  codigo?: string;
   nombreComun: string;
   photoWarning?: string;
+  fotosEnCola?: number;
 }
 
 export default function NewTreeRoute() {
@@ -32,12 +34,25 @@ export default function NewTreeRoute() {
 
   async function submit(values: ArbolCrear, photos: FotoLocal[]) {
     setSubmitError(undefined);
+    const especie = catalogs.data?.especies.find((item) => item.id === values.especie_id);
+    const institucion = catalogs.data?.instituciones.find((item) => item.id === values.institucion_id);
+    const zona = values.zona === 'Otra' ? values.zona_otra : values.zona;
+    const etiqueta = {
+      titulo: especie?.nombre_comun ?? 'Árbol',
+      detalle: [institucion?.nombre_corto, zona].filter(Boolean).join(' · '),
+    };
     try {
-      const { tree, photoError } = await registerTree.submit(values, photos);
+      const resultado = await registerTree.submit(values, photos, etiqueta);
+      if (resultado.estado === 'en_cola') {
+        setRegistered({ nombreComun: etiqueta.titulo });
+        return;
+      }
+      const { tree, photoError, fotosEnCola } = resultado;
       setRegistered({
         id: tree.id,
         codigo: tree.codigo,
         nombreComun: tree.nombre_comun,
+        fotosEnCola,
         photoWarning: photoError
           ? `No se pudo subir toda la evidencia fotográfica. ${getApiErrorMessage(photoError)}`
           : undefined,
@@ -53,11 +68,13 @@ export default function NewTreeRoute() {
         codigo={registered.codigo}
         nombreComun={registered.nombreComun}
         photoWarning={registered.photoWarning}
+        fotosEnCola={registered.fotosEnCola}
         onRegisterAnother={() => {
           setRegistered(undefined);
           setFormKey((key) => key + 1);
         }}
-        onViewTree={() => router.push(`/(app)/trees/${registered.id}` as Href)}
+        onViewTree={registered.id ? () => router.push(`/(app)/trees/${registered.id}` as Href) : undefined}
+        onViewPending={() => router.push('/(app)/sync' as Href)}
         onViewInventory={() => router.navigate('/(app)/trees' as Href)}
       />
     );

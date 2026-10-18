@@ -9,6 +9,7 @@ import { usePendientes } from '@/features/inspections/hooks/useInspecciones';
 import { useCuentasSinInstitucion, useMiPerfil } from '@/features/perfil/hooks/usePerfil';
 import { esAdmin, esRevisor } from '@/features/perfil/schemas';
 import { esRutaDeModulo } from '@/features/modules/modulos';
+import { EstadoConexion } from '@/features/sincronizacion/components/EstadoConexion';
 import { useIsWide } from '@/hooks/use-is-wide';
 import { queryClient } from '@/services/api/queryClient';
 import { BrandMark } from '@/shared/components/BrandMark';
@@ -79,6 +80,7 @@ export function AppHeader() {
 
         <View style={styles.account}>
           {isWide && email ? <Text style={styles.email} numberOfLines={1}>{email}</Text> : null}
+          <EstadoConexion />
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={oscuro ? 'Usar tema claro' : 'Usar tema oscuro'}

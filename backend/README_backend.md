@@ -44,7 +44,7 @@ pip install -r requerimientos.txt
 
 Los módulos de inspecciones, revisión, intervenciones, cursos, presupuestos, configuración,
 gamificación, reportes, metas y escenarios necesitan tablas nuevas en Supabase. Se crean con
-cuatro archivos que se pegan completos en **Supabase → SQL Editor → Run**, en este orden:
+estos archivos, que se pegan completos en **Supabase → SQL Editor → Run**, en este orden:
 
 1. `sql/001_fase1_modulos.sql`
 2. `sql/002_fase2_metas_escenarios.sql`
@@ -52,6 +52,7 @@ cuatro archivos que se pegan completos en **Supabase → SQL Editor → Run**, e
 4. `sql/004_agentes_bioticos.sql`
 5. `sql/005_privacidad.sql` (autorización del acudiente, solicitudes de datos, alias y nombres protegidos en rankings)
 6. `sql/006_dane.sql` (código DANE, DIVIPOLA y municipio de cada sede)
+7. `sql/007_sin_conexion.sql` (registros hechos sin señal: no se duplican al reenviarse)
 
 No borran datos: a cada árbol ya registrado le crean su inspección de registro (con los
 hallazgos que tenía) y a cada usuario de Supabase Auth su perfil. Se pueden ejecutar más de
@@ -309,6 +310,15 @@ El cuerpo trae `detail` con el mensaje. Los errores que vienen de la base de dat
 - Una foto `completo`, una `detalle` y hasta 3 `adicional`; JPG, PNG o WebP; máximo 5 MB. El formato se comprueba con los primeros bytes del archivo, no con lo que declara el navegador.
 - Solo quien registró un árbol puede subirle fotos (el RLS impide además editar árboles ajenos).
 - El código `IE001-0001` y el campo `registrado_por` los asigna la base de datos; el frontend nunca los envía.
+- **Sin conexión**: la app guarda en el teléfono lo que se registra sin señal y lo envía después.
+  `POST /arboles`, `POST /arboles/{id}/inspecciones` y las dos rutas de fotos aceptan un
+  `id_cliente` (UUID que genera la app; en las fotos va como parámetro `?id_cliente=`). Si llega
+  otra vez el mismo `id_cliente`, la API responde **200** con lo que ya está guardado en lugar de
+  crear un duplicado (y en las fotos no cuenta para el límite de tres). Un `id_cliente` que ya usó
+  otra persona u otro árbol responde 409. `capturado_en` es la hora de la visita según el teléfono:
+  se guarda en la inspección como dato informativo y se descarta si está más de 10 minutos en el
+  futuro o tiene más de 90 días; la fecha oficial sigue siendo la del servidor. Sin la migración
+  007 todo funciona igual, sin la protección contra duplicados.
 - Un árbol tiene muchas **inspecciones** (visitas). Al registrarlo se crea la primera (`origen = registro`).
   Su estado, medidas y hallazgos actuales son los de la última inspección **no anulada**
   (vista `arboles_resumen`), así que anular una inspección devuelve el árbol al estado anterior.

@@ -12,8 +12,10 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Platform, StatusBar, Text, View } from 'react-native';
 
 import { useAuthStore } from '@/features/auth/store';
+import { useConsultasGuardadas, useSincronizacionAutomatica } from '@/features/sincronizacion/useSincronizacion';
 import { api, setSessionExpiredHandler, setSessionRenewedHandler } from '@/services/api/client';
 import { queryClient } from '@/services/api/queryClient';
+import { vigilarConexion } from '@/services/offline/conexion';
 import { BrandMark } from '@/shared/components/BrandMark';
 import '@/global.css';
 import { crearEstilos, useTema, useTemaStore } from '@/theme';
@@ -31,6 +33,9 @@ function SessionGate() {
   const temaHidratado = useTemaStore((state) => state.hidratado);
   const hidratarTema = useTemaStore((state) => state.hidratar);
   const { session, hydrated, hydrate } = useAuthStore();
+  // Sin conexión: datos de la última vez y registros que esperan en el teléfono para enviarse.
+  const consultasListas = useConsultasGuardadas(session?.user_id);
+  useSincronizacionAutomatica(session?.user_id);
   const segments = useSegments() as string[];
   const [temporaryStorage, setTemporaryStorage] = useState(false);
   // Si la fuente no carga, la app sigue con la del sistema en lugar de quedarse esperando.
@@ -71,14 +76,16 @@ function SessionGate() {
     });
   }, []);
 
+  useEffect(() => vigilarConexion(() => api.get('/salud', { timeout: 5000 })), []);
+
   useEffect(() => {
     void api.get<{ temporal?: boolean }>('/salud')
       .then(({ data }) => setTemporaryStorage(data.temporal === true))
       .catch(() => setTemporaryStorage(false));
   }, []);
 
-  // Esperar a que se compruebe la sesión y carguen las fuentes.
-  if (!hydrated || !temaHidratado || (!fontsLoaded && !fontError)) {
+  // Esperar a que se compruebe la sesión, carguen las fuentes y la copia de los datos.
+  if (!hydrated || !temaHidratado || (!fontsLoaded && !fontError) || !consultasListas) {
     return (
       <View style={styles.loading}>
         <BrandMark size={56} />

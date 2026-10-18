@@ -42,7 +42,7 @@ import {
 import { crearEstilos } from '@/theme';
 import { AvisoFotos } from '@/shared/components/AvisoFotos';
 
-const AVISOS: Record<string, { texto: string; tono: 'sano' | 'riesgo' }> = {
+const AVISOS: Record<string, { texto: string; tono: 'sano' | 'riesgo' | 'info' }> = {
   registrado: {
     texto: 'Árbol registrado. Su primera inspección quedó pendiente de revisión por un docente.',
     tono: 'sano',
@@ -52,6 +52,14 @@ const AVISOS: Record<string, { texto: string; tono: 'sano' | 'riesgo' }> = {
     tono: 'riesgo',
   },
   inspeccion: { texto: 'Inspección guardada. Quedó pendiente de revisión.', tono: 'sano' },
+  inspeccionEnCola: {
+    texto: 'Sin conexión: la inspección y sus fotos quedaron guardadas en el teléfono y se enviarán solas cuando vuelva la señal.',
+    tono: 'info',
+  },
+  inspeccionFotosEnCola: {
+    texto: 'Inspección guardada. Algunas fotos no alcanzaron a subir por falta de señal: quedaron en el teléfono y se enviarán solas.',
+    tono: 'info',
+  },
   intervencion: { texto: 'Intervención guardada.', tono: 'sano' },
 };
 

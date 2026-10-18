@@ -2,6 +2,7 @@ import { create } from 'zustand';
 
 import type { Session } from '@/features/auth/types';
 import { queryClient } from '@/services/api/queryClient';
+import { borrarConsultas } from '@/services/offline/consultasGuardadas';
 import {
   clearStoredSession,
   readStoredSession,
@@ -21,7 +22,7 @@ interface AuthState {
   expire: () => Promise<void>;
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   session: null,
   hydrated: false,
   sessionExpired: false,
@@ -38,14 +39,19 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ session, hydrated: true, sessionExpired: false, aviso: null });
   },
   signOut: async (aviso) => {
+    const usuarioId = get().session?.user_id;
     await clearStoredSession();
     // Los datos en caché pertenecen al usuario que sale: no deben verse en la siguiente sesión.
+    // Tampoco su copia en el teléfono. Lo que tenga sin enviar se queda guardado con su cuenta.
     queryClient.clear();
+    if (usuarioId) await borrarConsultas(usuarioId);
     set({ session: null, hydrated: true, sessionExpired: false, aviso: aviso ?? null });
   },
   expire: async () => {
+    const usuarioId = get().session?.user_id;
     await clearStoredSession();
     queryClient.clear();
+    if (usuarioId) await borrarConsultas(usuarioId);
     set({ session: null, hydrated: true, sessionExpired: true, aviso: null });
   },
 }));

@@ -4,14 +4,25 @@ import uuid
 from datetime import datetime
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 import comun
 import datos
 import db
 from auth import Perfil, perfil_actual, revisor_actual
-from comun import BUCKET_FOTOS, MAX_FOTOS_ADICIONALES, leer_foto, resumen_por_id, traer_todo, url_firmada
+from comun import (
+    BUCKET_FOTOS,
+    MAX_FOTOS_ADICIONALES,
+    ajeno,
+    buscar_por_id_cliente,
+    hora_de_captura,
+    insertar_sin_duplicar,
+    leer_foto,
+    resumen_por_id,
+    traer_todo,
+    url_firmada,
+)
 from schemas import (
     ALTURA_MAX_M,
     CAMPOS_BIOTICOS,
@@ -34,6 +45,7 @@ from schemas import (
     OrigenInspeccion,
     TipoFoto,
     CamposBioticos,
+    CamposSinConexion,
 )
 from servicios.calificacion import calcular_ambientales, evaluar
 
@@ -43,7 +55,7 @@ DISTANCIA_AVISO_M = 50
 
 
 # ==================================== Modelos ====================================
-class InspeccionCrear(CamposBioticos):
+class InspeccionCrear(CamposBioticos, CamposSinConexion):
     """Una visita al árbol: ubicación (opcional), medidas, hallazgos y notas. Usa los mismos
     límites que el registro del árbol (schemas.ArbolCrear)."""
 
@@ -215,7 +227,14 @@ def registrar_inspeccion(cliente, arbol: dict, d: InspeccionCrear, origen: str) 
         "puntaje_riesgo": puntaje,
         "calificacion": calificacion,
     }
-    creada = cliente.table("inspecciones").insert(fila).execute().data[0]
+    if d.id_cliente:
+        fila["id_cliente"] = str(d.id_cliente)
+    capturado_en = hora_de_captura(d.capturado_en)
+    if capturado_en:
+        fila["capturado_en"] = capturado_en.isoformat()
+    creada, nueva = insertar_sin_duplicar(cliente, "inspecciones", fila)
+    if not nueva:  # otro envío de la misma visita llegó primero: ya tiene sus hallazgos
+        return {**creada, "_advertencias": [], "_repetida": True}
 
     if d.observaciones:
         try:
@@ -342,6 +361,14 @@ def armar(cliente, inspecciones: list[dict], arboles: dict[str, dict], perfil: P
     return resultado
 
 
+def _quitar_archivo(ruta: str) -> None:
+    """Borra una foto de Storage sin fallar, para no dejar archivos huérfanos."""
+    try:
+        db.get_admin().storage.from_(BUCKET_FOTOS).remove([ruta])
+    except Exception:
+        pass
+
+
 def _inspeccion(cliente, inspeccion_id: str) -> dict:
     filas = cliente.table("inspecciones").select(datos.COLUMNAS_INSPECCION).eq("id", inspeccion_id).execute().data
     if not filas:
@@ -364,12 +391,21 @@ def historial(arbol_id: UUID, perfil: Perfil = Depends(perfil_actual)):
 
 
 @router.post("/arboles/{arbol_id}/inspecciones", response_model=InspeccionOut, status_code=201)
-def crear_inspeccion(arbol_id: UUID, d: InspeccionCrear, perfil: Perfil = Depends(perfil_actual)):
+def crear_inspeccion(arbol_id: UUID, d: InspeccionCrear, respuesta: Response, perfil: Perfil = Depends(perfil_actual)):
     """Registra una visita de seguimiento. Queda pendiente de revisión hasta que un
-    docente o administrador la confirme o la anule."""
+    docente o administrador la confirme o la anule. Si la app la reenvía con el mismo
+    id_cliente (se guardó sin conexión), responde 200 con la que ya existe."""
     cliente = db.cliente_de_usuario(perfil.sesion.token)
     arbol = resumen_por_id(cliente, str(arbol_id))
+    existente = buscar_por_id_cliente(cliente, "inspecciones", d.id_cliente)
+    if existente:
+        if ajeno(existente, "inspector_id", perfil.usuario_id) or str(existente["arbol_id"]) != str(arbol["id"]):
+            raise HTTPException(status_code=409, detail="Ese identificador ya se usó en otro registro")
+        respuesta.status_code = 200
+        return armar(cliente, [existente], {arbol["id"]: arbol})[0]
     creada = registrar_inspeccion(cliente, arbol, d, "seguimiento")
+    if creada.get("_repetida"):
+        respuesta.status_code = 200
     return armar(cliente, [creada], {arbol["id"]: arbol})[0]
 
 
@@ -384,8 +420,10 @@ def detalle_inspeccion(inspeccion_id: UUID, perfil: Perfil = Depends(perfil_actu
 @router.post("/inspecciones/{inspeccion_id}/fotos", status_code=201)
 def subir_foto_inspeccion(
     inspeccion_id: UUID,
+    respuesta: Response,
     tipo: TipoFoto = Query(..., description="completo, detalle o adicional"),
     archivo: UploadFile = File(...),
+    id_cliente: UUID | None = Query(None, description="UUID de la app: si el envío se repite, no se duplica la foto"),
     perfil: Perfil = Depends(perfil_actual),
 ):
     """Foto de una inspección. Solo quien la registró, mientras esté pendiente de revisión.
@@ -395,6 +433,13 @@ def subir_foto_inspeccion(
     inspeccion = _inspeccion(cliente, str(inspeccion_id))
     if inspeccion.get("inspector_id") != perfil.usuario_id:
         raise HTTPException(status_code=403, detail="Solo quien registró la inspección puede agregarle fotos")
+    # Reenvío de una foto que ya se guardó (la app no alcanzó a recibir la respuesta).
+    existente = buscar_por_id_cliente(cliente, "inspeccion_fotos", id_cliente, "id, inspeccion_id, tipo, storage_path")
+    if existente:
+        if str(existente["inspeccion_id"]) != str(inspeccion_id):
+            raise HTTPException(status_code=409, detail="Ese identificador ya se usó en otra foto")
+        respuesta.status_code = 200
+        return {"id": str(existente["id"]), "tipo": existente["tipo"], "storage_path": existente["storage_path"]}
     if inspeccion["estado_revision"] != "pendiente":
         raise HTTPException(status_code=409, detail="La inspección ya fue revisada: no admite fotos nuevas")
 
@@ -407,20 +452,18 @@ def subir_foto_inspeccion(
     admin = db.get_admin()
     ruta = f"{inspeccion['arbol_id']}/inspecciones/{inspeccion_id}/{uuid.uuid4().hex}.{extension}"
     admin.storage.from_(BUCKET_FOTOS).upload(ruta, contenido, {"content-type": tipo_real})
+    nueva_fila = {"inspeccion_id": str(inspeccion_id), "tipo": tipo, "storage_path": ruta}
+    if id_cliente:
+        nueva_fila["id_cliente"] = str(id_cliente)
     try:
-        fila = (
-            cliente.table("inspeccion_fotos")
-            .insert({"inspeccion_id": str(inspeccion_id), "tipo": tipo, "storage_path": ruta})
-            .execute()
-            .data[0]
-        )
+        fila, nueva = insertar_sin_duplicar(cliente, "inspeccion_fotos", nueva_fila)
     except Exception:
-        try:  # no dejar el archivo huérfano en Storage
-            admin.storage.from_(BUCKET_FOTOS).remove([ruta])
-        except Exception:
-            pass
+        _quitar_archivo(ruta)
         raise
-    return {"id": str(fila["id"]), "tipo": tipo, "storage_path": ruta}
+    if not nueva:  # otro envío de la misma foto llegó primero: sobra el archivo que se acaba de subir
+        _quitar_archivo(ruta)
+        respuesta.status_code = 200
+    return {"id": str(fila["id"]), "tipo": fila["tipo"], "storage_path": fila["storage_path"]}
 
 
 @router.get("/revision/pendientes", response_model=PendientesOut)

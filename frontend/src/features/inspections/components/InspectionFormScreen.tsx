@@ -46,7 +46,7 @@ function Formulario({ arbol, catalogos }: { arbol: ArbolDetalle; catalogos: Cata
   const schema = useMemo(() => crearInspeccionFormSchema(catalogos), [catalogos]);
   const gps = useCaptureLocation();
   const fotos = usePhotoPicker();
-  const registrar = useRegistrarInspeccion(arbol.id);
+  const registrar = useRegistrarInspeccion(arbol.id, { titulo: `Inspección de ${arbol.codigo}`, detalle: arbol.nombre_comun });
   const avisar = useAvisos((state) => state.avisar);
   const [error, setError] = useState<string>();
   const { control, handleSubmit, setValue, formState: { errors } } = useForm<InspeccionFormInput>({
@@ -117,11 +117,11 @@ function Formulario({ arbol, catalogos }: { arbol: ArbolDetalle; catalogos: Cata
     };
     try {
       const resultado = await registrar.mutateAsync({ payload, fotos: fotos.photos });
-      if (resultado.fotosFallidas > 0) {
+      if (resultado.inspeccionId && resultado.fotosFallidas > 0) {
         router.replace(`/(app)/inspections/${resultado.inspeccionId}?aviso=fotos` as Href);
       } else {
         // Se vuelve a la ficha que ya estaba abierta (sin duplicarla en el historial).
-        avisar(arbol.id, 'inspeccion');
+        avisar(arbol.id, !resultado.inspeccionId ? 'inspeccionEnCola' : resultado.fotosEnCola > 0 ? 'inspeccionFotosEnCola' : 'inspeccion');
         router.dismissTo(`/(app)/trees/${arbol.id}` as Href);
       }
     } catch (causa) {
