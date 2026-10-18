@@ -29,12 +29,13 @@ import db
 from auth import Perfil, Sesion, perfil_actual, usuario_actual
 from comun import (
     BUCKET_FOTOS,
-    EXTENSIONES,
     MAX_FOTOS_ADICIONALES,
+    POLITICA_VERSION,
+    ahora,
     escapar_like,
+    leer_foto,
     portadas_de_arboles,
     resumen_por_id,
-    tipo_real_imagen,
     traer_todo,
     url_firmada,
 )
@@ -48,6 +49,7 @@ from routers import (
     intervenciones,
     metas,
     presupuestos,
+    privacidad,
     reportes,
     usuarios,
 )
@@ -137,7 +139,7 @@ async def manejar_error_db(request, exc: APIError):
 
 
 for modulo in (inspecciones, intervenciones, cursos, usuarios, presupuestos, configuracion,
-               gamificacion, reportes, metas, escenarios, ia):
+               gamificacion, reportes, metas, escenarios, ia, privacidad):
     app.include_router(modulo.router)
 
 
@@ -187,6 +189,17 @@ ERRORES_REGISTRO = {
 }
 
 
+def _registrar_politica(usuario_id: str) -> None:
+    """Guarda en el perfil (creado por el trigger) que la persona aceptó la política al registrarse.
+    Si falla (p. ej. falta la migración 005), la app la vuelve a pedir al entrar."""
+    try:
+        db.get_admin().table("perfiles").update(
+            {"politica_version": POLITICA_VERSION, "politica_aceptada_en": ahora().isoformat()}
+        ).eq("usuario_id", usuario_id).execute()
+    except Exception:
+        pass
+
+
 @app.post("/auth/registro", response_model=RegistroOut, status_code=201, tags=["Autenticación"])
 def registrar(d: RegistroIn):
     """Crea una cuenta nueva como estudiante y sin institución; un docente o un administrador
@@ -194,7 +207,7 @@ def registrar(d: RegistroIn):
     correo, la sesión llega solo después de abrir el enlace."""
     try:
         res = db.nuevo_cliente_anon().auth.sign_up(
-            {"email": d.email, "password": d.password, "options": {"data": {"nombre": d.nombre}}}
+            {"email": d.email, "password": d.password, "options": {"data": {"nombre": d.nombre, "politica_version": POLITICA_VERSION}}}
         )
     except (AuthApiError, AuthWeakPasswordError) as error:
         estado, mensaje = ERRORES_REGISTRO.get(
@@ -204,6 +217,7 @@ def registrar(d: RegistroIn):
 
     if res is None or res.user is None:
         raise HTTPException(status_code=400, detail="No se pudo crear la cuenta. Intenta de nuevo.")
+    _registrar_politica(str(res.user.id))
     if res.session is None:
         # También pasa si el correo ya estaba registrado: Supabase no lo revela para no exponer
         # qué correos tienen cuenta.
@@ -385,20 +399,8 @@ def subir_foto(
 ):
     """Sube una foto a Storage y registra su ruta. Solo quien registró el árbol puede hacerlo.
     Reglas: una foto 'completo', una 'detalle' y hasta 3 'adicional'. JPG, PNG o WebP, máx. 5 MB."""
-    if archivo.content_type not in EXTENSIONES:
-        raise HTTPException(status_code=422, detail="Formato no permitido. Usa JPG, PNG o WebP.")
-
-    contenido = archivo.file.read(MAX_FOTO_BYTES + 1)  # no se lee más de lo necesario para saber si se pasa
-    if not contenido:
-        raise HTTPException(status_code=422, detail="El archivo está vacío")
-    if len(contenido) > MAX_FOTO_BYTES:
-        raise HTTPException(status_code=413, detail="La foto supera el máximo de 5 MB")
-
-    # El tipo declarado lo pone el navegador y se puede falsificar: manda el contenido real.
-    tipo_real = tipo_real_imagen(contenido)
-    if tipo_real is None:
-        raise HTTPException(status_code=422, detail="El archivo no es una imagen JPG, PNG o WebP válida.")
-    extension = EXTENSIONES[tipo_real]
+    # Valida tipo, tamaño y formato real (por su firma) y quita los metadatos de la foto.
+    contenido, tipo_real, extension = leer_foto(archivo, MAX_FOTO_BYTES)
 
     cliente = db.cliente_de_usuario(sesion.token)
 

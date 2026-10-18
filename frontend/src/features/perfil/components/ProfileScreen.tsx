@@ -1,3 +1,4 @@
+import { type Href } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import Animated from 'react-native-reanimated';
@@ -14,7 +15,7 @@ import { Field, InlineMessage, PrimaryButton } from '@/shared/components/FormCon
 import { Icon, type IconName } from '@/shared/components/Icon';
 import { LeafWatermark } from '@/shared/components/LeafWatermark';
 import { usePressScale } from '@/shared/components/Motion';
-import { AppHeader, Badge, Card, ErrorState, KeyValue, LoadingState, Page } from '@/shared/components/UI';
+import { AppHeader, Badge, Card, ErrorState, KeyValue, LoadingState, NavCard, Page } from '@/shared/components/UI';
 import { crearEstilos, useTema, useTemaStore, type PreferenciaTema } from '@/theme';
 
 const OPCIONES_TEMA: { valor: PreferenciaTema; label: string; icon: IconName }[] = [
@@ -141,6 +142,13 @@ export function ProfileScreen() {
           <Text style={styles.ayuda}>Toca la foto para cambiarla.</Text>
         </View>
       </View>
+
+      <NavCard
+        title="Privacidad y mis datos"
+        text="Política de datos, autorización de tu acudiente, alias en los rankings y tus solicitudes."
+        href={'/(app)/privacy' as Href}
+        icon="lock"
+      />
 
       <Card title="Apariencia" subtitle="Sistema usa el mismo tema de tu teléfono o navegador." icon="contrast">
         <SelectorTema />

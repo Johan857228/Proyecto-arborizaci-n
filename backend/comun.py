@@ -11,6 +11,10 @@ MAX_FOTO_BYTES = 5 * 1024 * 1024
 MAX_FOTOS_ADICIONALES = 3
 EXTENSIONES = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp"}
 
+# Versión vigente de la política de tratamiento de datos (la que se muestra en la app). Si cambia
+# el texto, se sube la versión y la app vuelve a pedir que se acepte.
+POLITICA_VERSION = "2026-10-v1"
+
 
 # ==================================== Fechas =====================================
 def ahora() -> datetime:
@@ -164,9 +168,134 @@ def tipo_real_imagen(contenido: bytes) -> str | None:
     return None
 
 
+# ============================= Metadatos de las fotos ==============================
+# Las fotos del teléfono traen EXIF/XMP/IPTC: coordenadas, modelo del dispositivo, fecha y a
+# veces el nombre del autor. Antes de guardarlas o enviarlas a la IA se quitan (Ley 1581: los
+# datos de los estudiantes se tratan solo para lo necesario). En JPG se conserva únicamente la
+# orientación, para que la foto no se vea girada.
+
+def _orientacion_exif(tiff: bytes) -> int | None:
+    """Lee la etiqueta Orientation (0x0112) del IFD0 de un bloque TIFF/EXIF."""
+    if len(tiff) < 8 or tiff[:2] not in (b"II", b"MM"):
+        return None
+    orden = "little" if tiff[:2] == b"II" else "big"
+    inicio = int.from_bytes(tiff[4:8], orden)
+    if inicio + 2 > len(tiff):
+        return None
+    entradas = int.from_bytes(tiff[inicio:inicio + 2], orden)
+    for k in range(entradas):
+        e = inicio + 2 + 12 * k
+        if e + 12 > len(tiff):
+            break
+        if int.from_bytes(tiff[e:e + 2], orden) == 0x0112:
+            valor = int.from_bytes(tiff[e + 8:e + 10], orden)
+            return valor if 1 <= valor <= 8 else None
+    return None
+
+
+def _app1_orientacion(valor: int) -> bytes:
+    """Segmento APP1 mínimo con solo la orientación."""
+    tiff = (
+        b"II*\x00" + (8).to_bytes(4, "little")          # cabecera TIFF, IFD0 en el byte 8
+        + (1).to_bytes(2, "little")                       # una entrada
+        + (0x0112).to_bytes(2, "little") + (3).to_bytes(2, "little")   # Orientation, SHORT
+        + (1).to_bytes(4, "little") + valor.to_bytes(2, "little") + b"\x00\x00"
+        + (0).to_bytes(4, "little")                       # no hay más IFD
+    )
+    datos = b"Exif\x00\x00" + tiff
+    return bytes([0xFF, 0xE1]) + (len(datos) + 2).to_bytes(2, "big") + datos
+
+
+def _limpiar_jpeg(data: bytes) -> bytes:
+    salida = bytearray([0xFF, 0xD8])
+    orientacion = None
+    segmentos = bytearray()
+    i, n = 2, len(data)
+    while i < n:
+        if data[i] != 0xFF:
+            segmentos += data[i:]
+            break
+        while i < n and data[i] == 0xFF:
+            i += 1
+        if i >= n:
+            break
+        marcador = data[i]
+        i += 1
+        if marcador == 0xD9:  # fin de imagen
+            segmentos += bytes([0xFF, 0xD9])
+            break
+        if marcador == 0xDA:  # inicio de los datos comprimidos: el resto va igual
+            segmentos += bytes([0xFF, 0xDA]) + data[i:]
+            break
+        if 0xD0 <= marcador <= 0xD7 or marcador == 0x01:
+            segmentos += bytes([0xFF, marcador])
+            continue
+        if i + 2 > n:
+            break
+        largo = int.from_bytes(data[i:i + 2], "big")
+        cuerpo = data[i + 2:i + largo]
+        i += largo
+        if marcador == 0xE1:  # APP1: EXIF o XMP
+            if cuerpo.startswith(b"Exif\x00\x00"):
+                orientacion = orientacion or _orientacion_exif(cuerpo[6:])
+            continue
+        if marcador in (0xED, 0xFE):  # APP13 (IPTC/Photoshop) y comentarios
+            continue
+        segmentos += bytes([0xFF, marcador]) + data[i - largo:i]
+    if orientacion and orientacion != 1:
+        salida += _app1_orientacion(orientacion)
+    return bytes(salida + segmentos)
+
+
+def _limpiar_png(data: bytes) -> bytes:
+    quitar = {b"eXIf", b"tEXt", b"zTXt", b"iTXt", b"tIME"}
+    salida = bytearray(data[:8])
+    i = 8
+    while i + 8 <= len(data):
+        largo = int.from_bytes(data[i:i + 4], "big")
+        tipo = data[i + 4:i + 8]
+        fin = i + 12 + largo
+        if tipo not in quitar:
+            salida += data[i:fin]
+        i = fin
+        if tipo == b"IEND":
+            break
+    return bytes(salida)
+
+
+def _limpiar_webp(data: bytes) -> bytes:
+    trozos = bytearray()
+    i = 12
+    while i + 8 <= len(data):
+        tipo = data[i:i + 4]
+        largo = int.from_bytes(data[i + 4:i + 8], "little")
+        fin = i + 8 + largo + (largo & 1)
+        trozo = bytearray(data[i:fin])
+        if tipo == b"VP8X" and len(trozo) > 8:
+            trozo[8] &= ~0x0C & 0xFF  # ya no hay EXIF (0x08) ni XMP (0x04)
+        if tipo not in (b"EXIF", b"XMP "):
+            trozos += trozo
+        i = fin
+    return b"RIFF" + (len(trozos) + 4).to_bytes(4, "little") + b"WEBP" + bytes(trozos)
+
+
+def limpiar_metadatos(contenido: bytes, tipo_real: str) -> bytes:
+    """Quita los metadatos de una foto ya validada. Si algo sale mal, la foto queda como llegó."""
+    try:
+        if tipo_real == "image/jpeg":
+            return _limpiar_jpeg(contenido)
+        if tipo_real == "image/png":
+            return _limpiar_png(contenido)
+        if tipo_real == "image/webp":
+            return _limpiar_webp(contenido)
+    except Exception:
+        pass
+    return contenido
+
+
 def leer_foto(archivo, max_bytes: int) -> tuple[bytes, str, str]:
     """Valida una foto subida: tipo declarado permitido, tamaño y formato real por su firma.
-    Devuelve (contenido, tipo real, extensión)."""
+    Devuelve (contenido sin metadatos, tipo real, extensión)."""
     if archivo.content_type not in EXTENSIONES:
         raise HTTPException(status_code=422, detail="Formato no permitido. Usa JPG, PNG o WebP.")
     contenido = archivo.file.read(max_bytes + 1)  # no se lee más de lo necesario para saber si se pasa
@@ -177,4 +306,4 @@ def leer_foto(archivo, max_bytes: int) -> tuple[bytes, str, str]:
     tipo_real = tipo_real_imagen(contenido)
     if tipo_real is None:
         raise HTTPException(status_code=422, detail="El archivo no es una imagen JPG, PNG o WebP válida.")
-    return contenido, tipo_real, EXTENSIONES[tipo_real]
+    return limpiar_metadatos(contenido, tipo_real), tipo_real, EXTENSIONES[tipo_real]

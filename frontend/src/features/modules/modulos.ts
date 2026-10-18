@@ -36,6 +36,7 @@ export const MODULOS: Modulo[] = [
   { clave: 'presupuestos', titulo: 'Presupuestos', corto: 'Presupuesto', texto: 'Gasto ejecutado, comprometido y proyecciones.', icono: 'wallet', href: '/(app)/budgets' as Href, ruta: '/budgets', grupo: 'gestion', soloRevisores: true },
   { clave: 'escenarios', titulo: 'Escenarios', corto: 'Escenarios', texto: 'Simula cómo repartir un presupuesto entre las acciones pendientes.', icono: 'tune', href: '/(app)/scenarios' as Href, ruta: '/scenarios', grupo: 'gestion', soloRevisores: true },
   { clave: 'configuracion', titulo: 'Configuración', corto: 'Ajustes', texto: 'Método de cálculo, pesos, umbrales y parámetros por institución.', icono: 'settings', href: '/(app)/settings' as Href, ruta: '/settings', grupo: 'gestion', soloRevisores: true },
+  { clave: 'privacidad', titulo: 'Privacidad', corto: 'Privacidad', texto: 'Política de datos, autorización del acudiente, alias y solicitudes de datos.', icono: 'lock', href: '/(app)/privacy' as Href, ruta: '/privacy', grupo: 'gestion' },
   { clave: 'usuarios', titulo: 'Usuarios', corto: 'Usuarios', texto: 'Roles, instituciones, cursos y cuentas activas.', icono: 'users', href: '/(app)/users' as Href, ruta: '/users', grupo: 'gestion', soloRevisores: true },
 ];
 

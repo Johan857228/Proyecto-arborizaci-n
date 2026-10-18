@@ -40,6 +40,7 @@ import {
   Cell,
 } from '@/shared/components/UI';
 import { crearEstilos } from '@/theme';
+import { AvisoFotos } from '@/shared/components/AvisoFotos';
 
 const AVISOS: Record<string, { texto: string; tono: 'sano' | 'riesgo' }> = {
   registrado: {
@@ -315,6 +316,7 @@ function FotosRegistro({
       <PhotoGallery fotos={galeria} vacio="Este árbol todavía no tiene fotos." />
       {puedeSubir ? (
         <>
+          <AvisoFotos />
           <Row>
             {!tiene('completo') ? (
               <Cell basis={160}><PrimaryButton title="Agregar foto general" variant="secondary" onPress={() => void picker.pickPhoto('completo')} /></Cell>

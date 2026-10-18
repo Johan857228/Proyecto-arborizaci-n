@@ -10,6 +10,7 @@ import { ParaHoy, usePendientesDeHoy } from '@/features/dashboard/components/Par
 import { useDashboard } from '@/features/dashboard/hooks/useDashboard';
 import { claveDeCache } from '@/features/perfil/components/Avatar';
 import { useImagenPropia } from '@/features/perfil/hooks/useImagenPropia';
+import { AvisoPrivacidad } from '@/features/privacidad/components/AvisoPrivacidad';
 import { useMiPerfil, useRefrescarTodo } from '@/features/perfil/hooks/usePerfil';
 import { ETIQUETA_ROL, esAdmin, type MiPerfil } from '@/features/perfil/schemas';
 import { useEspaciado, useCarrilSavia } from '@/hooks/use-espaciado';
@@ -189,6 +190,7 @@ export function DashboardScreen() {
 
         {error ? <InlineMessage>{getApiErrorMessage(error)}</InlineMessage> : null}
         {portada.error ? <InlineMessage>{portada.error}</InlineMessage> : null}
+        {p ? <AvisoPrivacidad /> : null}
         {p && !p.institucion_id ? (
           <InlineMessage tone="info">
             Tu cuenta aún no tiene institución asignada. Pídele al administrador que te la asigne para entrar a un curso y aparecer en el ranking de tu institución.

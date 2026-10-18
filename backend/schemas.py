@@ -70,6 +70,8 @@ class RegistroIn(BaseModel):
     email: str = Field(max_length=254, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
     # Supabase guarda la contraseña con bcrypt, que solo usa los primeros 72 bytes.
     password: str = Field(min_length=8, max_length=72)
+    # Ley 1581: la autorización para tratar los datos se da antes de crear la cuenta.
+    acepta_politica: bool = Field(description="Acepta la política de tratamiento de datos vigente")
 
     @field_validator("nombre", mode="before")
     @classmethod
@@ -80,6 +82,13 @@ class RegistroIn(BaseModel):
     @classmethod
     def _normalizar_email(cls, v):
         return v.strip().lower() if isinstance(v, str) else v
+
+    @field_validator("acepta_politica")
+    @classmethod
+    def _acepta(cls, v: bool) -> bool:
+        if not v:
+            raise ValueError("Debes aceptar la política de tratamiento de datos para crear la cuenta")
+        return v
 
     @field_validator("password")
     @classmethod

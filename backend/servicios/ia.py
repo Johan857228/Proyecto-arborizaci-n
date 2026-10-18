@@ -166,6 +166,8 @@ Reglas:
 - No estimes medidas (altura, diámetro del tronco ni de copa): se toman en campo.
 - interferencia: "Ninguna" si no se ve infraestructura afectada; null si la foto no lo permite saber.
 - Si las fotos no muestran un árbol, es_arbol es false y el resto queda en null o vacío.
+- Las fotos las toman estudiantes, muchos menores de edad: si aparecen personas, no las describas,
+  no las identifiques ni menciones rasgos suyos; habla solo del árbol y su entorno.
 - Escribe el resumen y las razones en español, sin tecnicismos innecesarios."""
 
 

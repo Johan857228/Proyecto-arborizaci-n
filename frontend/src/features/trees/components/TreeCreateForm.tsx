@@ -25,6 +25,7 @@ import { Icon } from '@/shared/components/Icon';
 import { parseDecimal, sanitizeDecimal } from '@/shared/utils/forms';
 import { DISTANCIA_INSTITUCION_MAX_KM, PRECISION_GPS_MAX_M, distanceKm } from '@/shared/utils/geo';
 import { crearEstilos, useTema } from '@/theme';
+import { AvisoFotos } from '@/shared/components/AvisoFotos';
 
 interface Props {
   catalogs: Catalogos;
@@ -236,6 +237,7 @@ export function TreeCreateForm({ catalogs, submitting, submitError, onCancel, on
           title="Fotografías"
           description="La foto general es obligatoria. Puedes agregar una de detalle y hasta tres adicionales."
         >
+          <AvisoFotos />
           <View style={styles.photoGrid}>
             <View style={styles.cell}>
               <PhotoSlot

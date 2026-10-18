@@ -28,6 +28,7 @@ export const authService = {
       nombre: valores.nombre,
       email: valores.email,
       password: valores.password,
+      acepta_politica: valores.acepta_politica,
     });
     return validar(registroRespuestaSchema, data);
   },

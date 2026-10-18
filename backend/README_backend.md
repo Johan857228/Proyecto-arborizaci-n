@@ -50,6 +50,7 @@ cuatro archivos que se pegan completos en **Supabase → SQL Editor → Run**, e
 2. `sql/002_fase2_metas_escenarios.sql`
 3. `sql/003_validaciones.sql`
 4. `sql/004_agentes_bioticos.sql`
+5. `sql/005_privacidad.sql` (autorización del acudiente, solicitudes de datos, alias y nombres protegidos en rankings)
 
 No borran datos: a cada árbol ya registrado le crean su inspección de registro (con los
 hallazgos que tenía) y a cada usuario de Supabase Auth su perfil. Se pueden ejecutar más de
@@ -149,7 +150,7 @@ triggers en Supabase (para que tampoco se puedan saltar llamando a la API de Sup
 | GET | `/salud` | Público | Comprueba que el servidor responde |
 | POST | `/auth/login` | Público | Devuelve el token (`access_token`) y el `refresh_token` |
 | POST | `/auth/refresh` | Público | Cambia el `refresh_token` por una sesión nueva |
-| POST | `/auth/registro` | Público | Crea una cuenta de estudiante sin institución (nombre, correo y contraseña); devuelve la sesión o pide confirmar el correo |
+| POST | `/auth/registro` | Público | Crea una cuenta de estudiante sin institución (nombre, correo, contraseña y `acepta_politica`); devuelve la sesión o pide confirmar el correo |
 | GET | `/catalogos` | Público | Especies, instituciones y casillas fitosanitarias |
 | GET / PATCH | `/perfil` | Usuario | Mi rol, institución y curso / cambiar mi nombre |
 | GET | `/usuarios` | Docente, admin | Usuarios (el docente ve los de su institución) |
@@ -192,6 +193,18 @@ triggers en Supabase (para que tampoco se puedan saltar llamando a la API de Sup
 | GET | `/estadisticas` | Usuario | Totales, semáforo, por institución, especies, promedios, ambientales e inspecciones pendientes |
 | GET | `/ia/estado` | Usuario | Si la identificación con IA está activada y con qué modelo |
 | POST | `/ia/analizar-foto` | Usuario | Sugerencias de la IA a partir de la foto `general` (y `detalle`, opcional) |
+| PUT / DELETE | `/perfil/foto` · `/perfil/portada` | Usuario | Cambiar o quitar la foto de perfil o la portada del inicio |
+| GET | `/privacidad/estado` | Usuario | Política aceptada, alias y autorización del acudiente |
+| POST | `/privacidad/politica` | Usuario | Acepta la versión vigente de la política de datos |
+| PUT | `/privacidad/alias` | Usuario | Alias para los rankings (sin alias, los demás ven las iniciales) |
+| POST | `/privacidad/consentimientos` | Usuario / docente, admin | Autorización firmada en la app (para sí, o el docente para un estudiante de su institución) |
+| POST | `/privacidad/consentimientos/documento` | Docente, admin | Sube la foto del formato firmado por el acudiente |
+| POST | `/privacidad/consentimientos/{id}/revocar` | Usuario / docente, admin | Revoca una autorización |
+| GET | `/privacidad/estudiantes` | Docente, admin | Estudiantes de la institución y el estado de su autorización |
+| GET | `/privacidad/mis-datos` | Usuario | Copia de los datos personales (derecho de consulta) |
+| GET / POST | `/privacidad/solicitudes` | Usuario | Mis solicitudes (o las de la institución con `alcance=institucion`) / crear consulta o reclamo |
+| PATCH | `/privacidad/solicitudes/{id}` | Docente, admin | Responder una solicitud (atendida o rechazada) |
+| POST | `/privacidad/anonimizar/{usuario_id}` | Admin | Anonimiza la cuenta de un egresado y le quita el acceso |
 
 ## Identificación con IA
 

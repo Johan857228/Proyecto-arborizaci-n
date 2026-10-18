@@ -43,6 +43,8 @@ function SessionGate() {
   // Pantallas sin sesión: inicio de sesión y registro.
   const inPublic = segments[0] === 'login' || segments[0] === 'registro';
   const inApp = segments[0] === '(app)';
+  // La política de datos se puede leer con o sin sesión.
+  const abierta = segments[0] === 'politica';
 
   useEffect(() => {
     void hydrate();
@@ -86,7 +88,7 @@ function SessionGate() {
   }
 
   // Si no hay sesión, dirigir al inicio de sesión.
-  if (!session && !inPublic && segments.length > 0) {
+  if (!session && !inPublic && !abierta && segments.length > 0) {
     return <Redirect href={'/login' as Href} />;
   }
 
@@ -96,7 +98,7 @@ function SessionGate() {
   }
 
   // Si hay sesión, mantener la navegación dentro de la aplicación.
-  if (session && !inApp && segments[0] !== undefined) {
+  if (session && !inApp && !abierta && segments[0] !== undefined) {
     return <Redirect href={'/(app)' as Href} />;
   }
 
