@@ -1,9 +1,10 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { router, type Href } from 'expo-router';
+import { router, useLocalSearchParams, type Href } from 'expo-router';
 import { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { Text, View } from 'react-native';
 
+import { SedesDane } from '@/features/exportar/components/SedesDane';
 import { useEditarTipoIntervencion, useTiposIntervencion } from '@/features/interventions/hooks/useIntervenciones';
 import { MAX_COSTO, type TipoIntervencion } from '@/features/interventions/schemas';
 import { useMiPerfil } from '@/features/perfil/hooks/usePerfil';
@@ -40,7 +41,9 @@ import { crearEstilos } from '@/theme';
 
 export function SettingsScreen() {
   const perfil = useMiPerfil();
-  const [vista, setVista] = useState<'parametros' | 'metodos' | 'costos'>('parametros');
+  // Exportar datos enlaza directo a las sedes (/settings?vista=sedes).
+  const params = useLocalSearchParams<{ vista?: string }>();
+  const [vista, setVista] = useState<'parametros' | 'metodos' | 'costos' | 'sedes'>(params.vista === 'sedes' ? 'sedes' : 'parametros');
   if (perfil.isLoading) return <Page><LoadingState /></Page>;
   if (!esRevisor(perfil.data)) {
     return <Page><AppHeader title="Configuración" /><Notice tono="riesgo">Esta sección es para docentes y administradores.</Notice></Page>;
@@ -61,12 +64,14 @@ export function SettingsScreen() {
           { label: 'Parámetros', value: 'parametros' },
           { label: 'Versiones del método', value: 'metodos' },
           { label: 'Costos de referencia', value: 'costos' },
+          { label: 'Sedes y código DANE', value: 'sedes' },
         ]}
         onChange={setVista}
       />
       {vista === 'parametros' ? <ParametrosVista admin={admin} /> : null}
       {vista === 'metodos' ? <MetodosVista admin={admin} /> : null}
       {vista === 'costos' ? <CostosVista admin={admin} /> : null}
+      {vista === 'sedes' ? <SedesDane admin={admin} /> : null}
     </Page>
   );
 }

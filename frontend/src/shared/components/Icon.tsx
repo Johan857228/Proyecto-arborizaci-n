@@ -61,6 +61,7 @@ const icons = {
   moon: { ios: 'moon.fill', material: 'dark_mode' },
   sun: { ios: 'sun.max.fill', material: 'light_mode' },
   contrast: { ios: 'circle.lefthalf.filled', material: 'contrast' },
+  download: { ios: 'arrow.down.circle', material: 'download' },
 } satisfies Record<string, { ios: SFSymbol; material: AndroidSymbol }>;
 
 export type IconName = keyof typeof icons;

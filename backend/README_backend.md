@@ -51,6 +51,7 @@ cuatro archivos que se pegan completos en **Supabase → SQL Editor → Run**, e
 3. `sql/003_validaciones.sql`
 4. `sql/004_agentes_bioticos.sql`
 5. `sql/005_privacidad.sql` (autorización del acudiente, solicitudes de datos, alias y nombres protegidos en rankings)
+6. `sql/006_dane.sql` (código DANE, DIVIPOLA y municipio de cada sede)
 
 No borran datos: a cada árbol ya registrado le crean su inspección de registro (con los
 hallazgos que tenía) y a cada usuario de Supabase Auth su perfil. Se pueden ejecutar más de
@@ -205,6 +206,10 @@ triggers en Supabase (para que tampoco se puedan saltar llamando a la API de Sup
 | GET / POST | `/privacidad/solicitudes` | Usuario | Mis solicitudes (o las de la institución con `alcance=institucion`) / crear consulta o reclamo |
 | PATCH | `/privacidad/solicitudes/{id}` | Docente, admin | Responder una solicitud (atendida o rechazada) |
 | POST | `/privacidad/anonimizar/{usuario_id}` | Admin | Anonimiza la cuenta de un egresado y le quita el acceso |
+| GET | `/instituciones` | Usuario | Sedes con código DANE, DIVIPOLA y municipio |
+| PATCH | `/instituciones/{id}` | Admin | Asigna el código DANE (12 dígitos), el DIVIPOLA (5) y el municipio |
+| POST | `/exportar` | Docente, admin | Genera `arboles` (CSV, GeoJSON o Shapefile), `inspecciones` o `intervenciones` (CSV), o `todo` (ZIP), y devuelve un enlace de descarga que vence en 10 minutos. Sin datos personales |
+| GET | `/exportar/diccionario` | Usuario | Qué significa cada columna exportada |
 
 ## Identificación con IA
 
