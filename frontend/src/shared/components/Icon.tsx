@@ -65,6 +65,10 @@ const icons = {
   sinConexion: { ios: 'wifi.slash', material: 'cloud_off' },
   sincronizar: { ios: 'arrow.triangle.2.circlepath', material: 'sync' },
   enCola: { ios: 'icloud.and.arrow.up', material: 'cloud_upload' },
+  map: { ios: 'map.fill', material: 'map' },
+  capas: { ios: 'square.3.layers.3d', material: 'layers' },
+  remove: { ios: 'minus', material: 'remove' },
+  encuadrar: { ios: 'viewfinder', material: 'fit_screen' },
 } satisfies Record<string, { ios: SFSymbol; material: AndroidSymbol }>;
 
 export type IconName = keyof typeof icons;

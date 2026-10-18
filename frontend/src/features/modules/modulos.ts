@@ -27,6 +27,7 @@ export const GRUPOS: { clave: GrupoModulo; titulo: string }[] = [
 ];
 
 export const MODULOS: Modulo[] = [
+  { clave: 'mapa', titulo: 'Mapa con capas', corto: 'Mapa', texto: 'Sedes y árboles por estado, riesgo de caída, especie y origen, también sin conexión.', icono: 'map', href: '/(app)/map' as Href, ruta: '/map', grupo: 'campo' },
   { clave: 'alertas', titulo: 'Alertas de riesgo de caída', corto: 'Alertas', texto: 'Árboles con riesgo alto o inminente, ruta de emergencia y aviso a rectoría.', icono: 'warning', href: '/(app)/alerts' as Href, ruta: '/alerts', grupo: 'campo' },
   { clave: 'servicio', titulo: 'Servicio social', corto: 'Servicio', texto: 'Horas de 10.° y 11.°: bitácora con evidencia, aprobación docente y certificado con QR.', icono: 'school', href: '/(app)/service' as Href, ruta: '/service', grupo: 'campo' },
   { clave: 'revision', titulo: 'Revisión', corto: 'Revisión', texto: 'Confirma o anula las inspecciones pendientes de tu institución.', icono: 'review', href: '/(app)/review' as Href, ruta: '/review', grupo: 'campo', soloRevisores: true },

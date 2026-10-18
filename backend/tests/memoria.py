@@ -115,8 +115,11 @@ class Consulta:
 
     def execute(self):
         self.base.llamadas.append((self.tabla, self.op))
-        if self.base.fallar.get(self.tabla) == self.op:
-            raise APIError({"message": "falla simulada", "code": "23503", "hint": None, "details": None})
+        # fallar[tabla] = "insert" (error 23503) o ("select", "42703") para elegir el código.
+        falla = self.base.fallar.get(self.tabla)
+        op_falla, codigo = (falla, "23503") if isinstance(falla, str) else (falla or (None, None))
+        if op_falla == self.op:
+            raise APIError({"message": "falla simulada", "code": codigo, "hint": None, "details": None})
         filas = self.base.tablas.setdefault(self.tabla, [])
         if self.op == "select":
             resultado = self._coinciden(filas)

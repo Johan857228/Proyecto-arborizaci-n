@@ -20,6 +20,7 @@ from uuid import UUID
 
 from fastapi import Depends, FastAPI, File, HTTPException, Query, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from postgrest.exceptions import APIError
 from supabase_auth.errors import AuthApiError, AuthError, AuthWeakPasswordError
@@ -51,6 +52,7 @@ from routers import (
     ia,
     inspecciones,
     intervenciones,
+    mapa,
     metas,
     prae,
     presupuestos,
@@ -84,6 +86,7 @@ from schemas import (
     TotalesAmbientales,
     Zona,
 )
+from servicios import mapa as reglas_mapa
 from servicios.calificacion import calcular_ambientales, descripcion_metodo
 
 app = FastAPI(
@@ -114,6 +117,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# El mapa y las listas grandes viajan comprimidos (el JSON de miles de árboles baja ~85 %).
+app.add_middleware(GZipMiddleware, minimum_size=2048)
 
 MAX_FOTO_BYTES = 5 * 1024 * 1024
 
@@ -146,7 +151,7 @@ async def manejar_error_db(request, exc: APIError):
 
 
 for modulo in (inspecciones, intervenciones, cursos, usuarios, presupuestos, configuracion,
-               gamificacion, reportes, metas, escenarios, ia, privacidad, exportar, riesgo, servicio_social, prae):
+               gamificacion, reportes, metas, escenarios, ia, privacidad, exportar, riesgo, servicio_social, prae, mapa):
     app.include_router(modulo.router)
 
 
@@ -256,7 +261,10 @@ def catalogos():
     Son datos públicos, por eso no piden token."""
     admin = db.get_admin()
     return Catalogos(
-        especies=admin.table("especies").select("*").order("nombre_comun").execute().data,
+        especies=[
+            {**e, "origen": reglas_mapa.origen_de(e.get("nombre_cientifico"), e.get("origen"))}
+            for e in admin.table("especies").select("*").order("nombre_comun").execute().data
+        ],
         instituciones=admin.table("instituciones")
         .select("id, nombre, nombre_corto, prefijo, lat, lng")
         .order("prefijo")

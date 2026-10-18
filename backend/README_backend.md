@@ -56,6 +56,7 @@ estos archivos, que se pegan completos en **Supabase → SQL Editor → Run**, e
 8. `sql/008_riesgo_caida.sql` (tamizaje de riesgo de caída, alertas y contactos de emergencia de cada sede)
 9. `sql/009_servicio_social.sql` (grado de cada curso, bitácora de servicio social, meta de horas y certificados)
 10. `sql/010_prae.sql` (PRAE por institución y año: plan de acción, evidencias y evaluaciones)
+11. `sql/011_mapa.sql` (origen de cada especie, nativa o exótica, para el mapa)
 
 No borran datos: a cada árbol ya registrado le crean su inspección de registro (con los
 hallazgos que tenía) y a cada usuario de Supabase Auth su perfil. Se pueden ejecutar más de
@@ -234,6 +235,8 @@ triggers en Supabase (para que tampoco se puedan saltar llamando a la API de Sup
 | POST / DELETE | `/prae/{id}/evidencias` · `/prae/evidencias/{id}` (y `/foto`) | Docente o admin | Notas, enlaces y fotos de evidencia |
 | POST / DELETE | `/prae/{id}/evaluaciones` · `/prae/evaluaciones/{id}` | Docente o admin | Evaluación del consejo directivo, la Secretaría o el comité |
 | GET / POST | `/prae/{id}/indicadores` · `/prae/{id}/informe` | Usuario de la institución | Indicadores del año y el informe anual en PDF (enlace de 10 min) |
+| GET | `/mapa?institucion_id=` | Usuario (el administrador elige la institución o todas) | Capas del mapa: sedes, árboles con estado, riesgo de caída, especie, origen, siembra reciente y alerta abierta |
+| PATCH | `/especies/{id}` | Administrador | Guarda si la especie es nativa o exótica (vacío vuelve a la lista del backend) |
 | GET | `/verificar/{código}` · `/servicio-social/verificar/{código}` | Público | Página (y JSON) a la que lleva el QR: válido o anulado, con las iniciales del estudiante |
 
 ## Identificación con IA
@@ -334,6 +337,12 @@ El cuerpo trae `detail` con el mensaje. Los errores que vienen de la base de dat
 - Una foto `completo`, una `detalle` y hasta 3 `adicional`; JPG, PNG o WebP; máximo 5 MB. El formato se comprueba con los primeros bytes del archivo, no con lo que declara el navegador.
 - Solo quien registró un árbol puede subirle fotos (el RLS impide además editar árboles ajenos).
 - El código `IE001-0001` y el campo `registrado_por` los asigna la base de datos; el frontend nunca los envía.
+- **Mapa con capas** (`servicios/mapa.py`): una sola respuesta con todo lo que dibuja el visor. El
+  origen de cada especie es el que guardó el administrador o, si no hay, el de una lista de
+  especies cuyo origen en Colombia no se discute; las demás quedan sin clasificar. Siembra reciente =
+  plántula registrada en los últimos 12 meses. El riesgo y las alertas se piden por lotes de 100
+  árboles para que el mapa de muchas sedes no alargue la URL. Las respuestas de más de 2 KB viajan
+  comprimidas (gzip).
 - **PRAE** (`servicios/prae.py`; Decreto 1743 de 1994, compilado en el Decreto 1075 de 2015): un
   expediente por institución y año sobre cualquier tema (arbolado, residuos, agua, energía,
   biodiversidad u otro) con problema, diagnóstico, objetivos, comité, plan de acción, evidencias y

@@ -154,6 +154,9 @@ export function TreeDetailScreen({ arbolId, aviso: avisoRuta }: { arbolId: strin
             />
           </Cell>
         ) : null}
+        <Cell>
+          <PrimaryButton title="Ver en el mapa" icon="map" variant="secondary" onPress={() => router.push(`/(app)/map?arbol=${a.id}` as Href)} />
+        </Cell>
       </Row>
 
       <Card title="Estado actual">

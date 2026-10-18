@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field, field_validator
 
 import db
 from auth import Perfil, perfil_actual, revisor_actual
-from comun import ahora, portadas_de_arboles
+from comun import ahora, portadas_de_arboles, traer_todo
 from schemas import CategoriaRiesgo, ResultadoTamizaje, Tamizaje
 from servicios.riesgo_caida import ACCIONES, CATEGORIAS_CON_ALERTA, evaluar_tamizaje, mayor
 
@@ -29,6 +29,27 @@ MedioAviso = Literal["whatsapp", "correo", "llamada", "en_persona", "otro"]
 
 def _falta_migracion(error: APIError) -> bool:
     return str(getattr(error, "code", "") or "") in ("PGRST205", "42P01")
+
+
+def _lotes(ids: list[str], tam: int = 100):
+    """Partes de una lista de ids para filtros `in` que no alarguen demasiado la URL."""
+    for inicio in range(0, len(ids), tam):
+        yield ids[inicio:inicio + tam]
+
+
+def alertas_abiertas(institucion_id: str | None = None) -> dict[str, str]:
+    """Estado de la alerta abierta de cada árbol (por_confirmar o confirmada). Sin la
+    migración 008 no hay alertas."""
+    filtros = [("in_", ("estado", list(ABIERTAS)))]
+    if institucion_id:
+        filtros.append(("eq", ("institucion_id", institucion_id)))
+    try:
+        filas = traer_todo(db.get_admin(), "alertas_riesgo", "id, arbol_id, estado", filtros=filtros)
+    except APIError as error:
+        if _falta_migracion(error):
+            return {}
+        raise
+    return {str(f["arbol_id"]): f["estado"] for f in filas}
 
 
 # ===================================== Modelos =====================================
@@ -247,25 +268,29 @@ def tamizajes_de_inspecciones(inspeccion_ids: list[str]) -> dict[str, dict]:
 
 
 def _tamizajes_vigentes(arbol_ids: list[str], columnas: str) -> dict[str, dict]:
-    """El último tamizaje de cada árbol, sin contar los de inspecciones anuladas."""
+    """El último tamizaje de cada árbol, sin contar los de inspecciones anuladas.
+
+    Pide los árboles por lotes (el mapa puede pedir miles) y cada lote por páginas."""
     if not arbol_ids:
         return {}
+    if columnas != "*":
+        columnas = ", ".join(dict.fromkeys([*(c.strip() for c in columnas.split(",")), "inspeccion_id", "arbol_id", "creado_en"]))
     admin = db.get_admin()
+    filas: list[dict] = []
     try:
-        filas = (
-            admin.table("tamizajes_riesgo").select(columnas).in_("arbol_id", arbol_ids)
-            .order("creado_en", desc=True).execute().data
-        )
+        for lote in _lotes(sorted(set(arbol_ids))):
+            filas += traer_todo(admin, "tamizajes_riesgo", columnas, filtros=[("in_", ("arbol_id", lote))], orden="inspeccion_id")
     except APIError as error:
         if _falta_migracion(error):
             return {}
         raise
     if not filas:
         return {}
-    ids = sorted({str(f["inspeccion_id"]) for f in filas})
+    filas.sort(key=lambda f: str(f.get("creado_en") or ""), reverse=True)
     anuladas = {
         str(i["id"])
-        for i in admin.table("inspecciones").select("id, estado_revision").in_("id", ids).execute().data
+        for lote in _lotes(sorted({str(f["inspeccion_id"]) for f in filas}))
+        for i in admin.table("inspecciones").select("id, estado_revision").in_("id", lote).execute().data
         if i["estado_revision"] == "anulada"
     }
     vigentes: dict[str, dict] = {}

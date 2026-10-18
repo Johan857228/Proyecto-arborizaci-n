@@ -125,6 +125,9 @@ class Especie(BaseModel):
     id: int
     nombre_comun: str
     nombre_cientifico: str
+    origen: Literal["nativa", "exotica"] | None = Field(
+        default=None, description="Origen en Colombia: el guardado (migración 011) o el de la lista del backend"
+    )
 
 
 class Institucion(BaseModel):
