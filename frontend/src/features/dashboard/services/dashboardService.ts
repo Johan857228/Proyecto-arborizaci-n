@@ -33,8 +33,9 @@ const estadisticasSchema = z.object({
 });
 
 export const dashboardService = {
-  async getStats(): Promise<Estadisticas> {
-    const { data } = await api.get<unknown>('/estadisticas');
+  /** Sin institución, el total de todas las que la persona puede ver. */
+  async getStats(institucionId?: string): Promise<Estadisticas> {
+    const { data } = await api.get<unknown>('/estadisticas', { params: { institucion_id: institucionId } });
     const result = estadisticasSchema.safeParse(data);
     if (!result.success) {
       throw new ApiContractError('El servidor devolvió estadísticas con un formato inválido.');
@@ -42,9 +43,9 @@ export const dashboardService = {
     return result.data;
   },
 
-  async getRecentTrees(): Promise<ArbolResumen[]> {
+  async getRecentTrees(institucionId?: string): Promise<ArbolResumen[]> {
     const { data } = await api.get<unknown>('/arboles', {
-      params: { limite: 5, desplazamiento: 0 },
+      params: { limite: 5, desplazamiento: 0, institucion_id: institucionId },
     });
     const result = arbolesResumenSchema.safeParse(data);
     if (!result.success) {

@@ -81,9 +81,10 @@ export const reporteSchema = z.object({
 });
 export type Reporte = z.infer<typeof reporteSchema>;
 
-export function useReporte(filtro: { institucionId?: string; desde?: string; hasta?: string }) {
+export function useReporte(filtro: { institucionId?: string; desde?: string; hasta?: string }, enabled = true) {
   return useQuery({
     queryKey: ['reportes', filtro],
+    enabled,
     queryFn: () =>
       getValidado('/reportes/indicadores', reporteSchema, {
         institucion_id: filtro.institucionId,

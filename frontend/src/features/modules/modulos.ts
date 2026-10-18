@@ -8,6 +8,8 @@ export type GrupoModulo = 'campo' | 'seguimiento' | 'gestion';
 export interface Modulo {
   clave: string;
   titulo: string;
+  /** Nombre corto para la cuadrícula de accesos rápidos del inicio. */
+  corto: string;
   texto: string;
   icono: IconName;
   href: Href;
@@ -25,16 +27,16 @@ export const GRUPOS: { clave: GrupoModulo; titulo: string }[] = [
 ];
 
 export const MODULOS: Modulo[] = [
-  { clave: 'revision', titulo: 'Revisión', texto: 'Confirma o anula las inspecciones pendientes de tu institución.', icono: 'review', href: '/(app)/review' as Href, ruta: '/review', grupo: 'campo', soloRevisores: true },
-  { clave: 'intervenciones', titulo: 'Intervenciones', texto: 'Mantenimiento realizado, programado y recomendado por árbol.', icono: 'tools', href: '/(app)/interventions' as Href, ruta: '/interventions', grupo: 'campo' },
-  { clave: 'cursos', titulo: 'Cursos y zonas', texto: 'Zonas asignadas a cada curso, cobertura y productividad.', icono: 'school', href: '/(app)/courses' as Href, ruta: '/courses', grupo: 'campo' },
-  { clave: 'progreso', titulo: 'Mi progreso', texto: 'Puntos, niveles, rachas, logros y rankings.', icono: 'trophy', href: '/(app)/progress' as Href, ruta: '/progress', grupo: 'seguimiento' },
-  { clave: 'reportes', titulo: 'Reportes', texto: 'Inventario, riesgo, cobertura, productividad e intervenciones por periodo.', icono: 'chart', href: '/(app)/reports' as Href, ruta: '/reports', grupo: 'seguimiento' },
-  { clave: 'metas', titulo: 'Metas', texto: 'Metas institucionales por indicador y su avance.', icono: 'flag', href: '/(app)/goals' as Href, ruta: '/goals', grupo: 'seguimiento' },
-  { clave: 'presupuestos', titulo: 'Presupuestos', texto: 'Gasto ejecutado, comprometido y proyecciones.', icono: 'wallet', href: '/(app)/budgets' as Href, ruta: '/budgets', grupo: 'gestion', soloRevisores: true },
-  { clave: 'escenarios', titulo: 'Escenarios', texto: 'Simula cómo repartir un presupuesto entre las acciones pendientes.', icono: 'tune', href: '/(app)/scenarios' as Href, ruta: '/scenarios', grupo: 'gestion', soloRevisores: true },
-  { clave: 'configuracion', titulo: 'Configuración', texto: 'Método de cálculo, pesos, umbrales y parámetros por institución.', icono: 'settings', href: '/(app)/settings' as Href, ruta: '/settings', grupo: 'gestion', soloRevisores: true },
-  { clave: 'usuarios', titulo: 'Usuarios', texto: 'Roles, instituciones, cursos y cuentas activas.', icono: 'users', href: '/(app)/users' as Href, ruta: '/users', grupo: 'gestion', soloRevisores: true },
+  { clave: 'revision', titulo: 'Revisión', corto: 'Revisión', texto: 'Confirma o anula las inspecciones pendientes de tu institución.', icono: 'review', href: '/(app)/review' as Href, ruta: '/review', grupo: 'campo', soloRevisores: true },
+  { clave: 'intervenciones', titulo: 'Intervenciones', corto: 'Cuidados', texto: 'Mantenimiento realizado, programado y recomendado por árbol.', icono: 'tools', href: '/(app)/interventions' as Href, ruta: '/interventions', grupo: 'campo' },
+  { clave: 'cursos', titulo: 'Cursos y zonas', corto: 'Cursos', texto: 'Zonas asignadas a cada curso, cobertura y productividad.', icono: 'school', href: '/(app)/courses' as Href, ruta: '/courses', grupo: 'campo' },
+  { clave: 'progreso', titulo: 'Mi progreso', corto: 'Progreso', texto: 'Puntos, niveles, rachas, logros y rankings.', icono: 'trophy', href: '/(app)/progress' as Href, ruta: '/progress', grupo: 'seguimiento' },
+  { clave: 'reportes', titulo: 'Reportes', corto: 'Reportes', texto: 'Inventario, riesgo, cobertura, productividad e intervenciones por periodo.', icono: 'chart', href: '/(app)/reports' as Href, ruta: '/reports', grupo: 'seguimiento' },
+  { clave: 'metas', titulo: 'Metas', corto: 'Metas', texto: 'Metas institucionales por indicador y su avance.', icono: 'flag', href: '/(app)/goals' as Href, ruta: '/goals', grupo: 'seguimiento' },
+  { clave: 'presupuestos', titulo: 'Presupuestos', corto: 'Presupuesto', texto: 'Gasto ejecutado, comprometido y proyecciones.', icono: 'wallet', href: '/(app)/budgets' as Href, ruta: '/budgets', grupo: 'gestion', soloRevisores: true },
+  { clave: 'escenarios', titulo: 'Escenarios', corto: 'Escenarios', texto: 'Simula cómo repartir un presupuesto entre las acciones pendientes.', icono: 'tune', href: '/(app)/scenarios' as Href, ruta: '/scenarios', grupo: 'gestion', soloRevisores: true },
+  { clave: 'configuracion', titulo: 'Configuración', corto: 'Ajustes', texto: 'Método de cálculo, pesos, umbrales y parámetros por institución.', icono: 'settings', href: '/(app)/settings' as Href, ruta: '/settings', grupo: 'gestion', soloRevisores: true },
+  { clave: 'usuarios', titulo: 'Usuarios', corto: 'Usuarios', texto: 'Roles, instituciones, cursos y cuentas activas.', icono: 'users', href: '/(app)/users' as Href, ruta: '/users', grupo: 'gestion', soloRevisores: true },
 ];
 
 /** Módulos que puede abrir el perfil. Mientras el perfil carga se muestran los de todos. */

@@ -85,8 +85,8 @@ export function useIndicadoresMeta() {
   return useQuery({ queryKey: ['metas', 'indicadores'], queryFn: metasService.indicadores, staleTime: 30 * 60_000 });
 }
 
-export function useMetas(institucionId?: string) {
-  return useQuery({ queryKey: ['metas', institucionId ?? 'todas'], queryFn: () => metasService.listar(institucionId) });
+export function useMetas(institucionId?: string, opciones: { enabled?: boolean; staleTime?: number } = {}) {
+  return useQuery({ queryKey: ['metas', institucionId ?? 'todas'], queryFn: () => metasService.listar(institucionId), ...opciones });
 }
 
 export function useGuardarMeta() {

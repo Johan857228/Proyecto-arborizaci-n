@@ -1,6 +1,6 @@
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { Image } from 'expo-image';
-import { router, type Href } from 'expo-router';
+import { router, useLocalSearchParams, type Href } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
@@ -133,7 +133,11 @@ export default function TreeListScreen() {
   const catalogs = useCatalogs();
   const [search, setSearch] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
-  const [estado, setEstado] = useState<EstadoArbol>();
+  // El inicio abre el inventario ya filtrado por estado (/trees?estado=critico).
+  const { estado: estadoInicial } = useLocalSearchParams<{ estado?: string }>();
+  const [estado, setEstado] = useState<EstadoArbol | undefined>(() =>
+    estadoInicial === 'sano' || estadoInicial === 'riesgo' || estadoInicial === 'critico' ? estadoInicial : undefined,
+  );
   const [institution, setInstitution] = useState<string>();
   const [species, setSpecies] = useState<string>();
   const [zone, setZone] = useState<Zona>();

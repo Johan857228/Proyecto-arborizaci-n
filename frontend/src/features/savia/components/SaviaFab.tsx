@@ -8,8 +8,9 @@ import { SaviaPanel } from '@/features/savia/components/SaviaPanel';
 import { useIsWide } from '@/hooks/use-is-wide';
 import { Ripples, usePressScale } from '@/shared/components/Motion';
 import { crearEstilos, useTema } from '@/theme';
+import { SAVIA_MARGEN, SAVIA_TAMANO } from '@/hooks/use-espaciado';
 
-const TAMANO = 58;
+const TAMANO = SAVIA_TAMANO;
 
 /** Botón flotante de Savia, siempre visible en la esquina inferior derecha de la app. Dos ondas
  *  suaves salen de él para que se note que está "viva"; al tocarlo abre el panel de Savia. */
@@ -62,8 +63,8 @@ export function SaviaFab() {
 
 const useStyles = crearEstilos(({ palette }) => ({
   anchor: { position: 'absolute', flexDirection: 'row', alignItems: 'center', gap: 10, pointerEvents: 'box-none' },
-  anchorPhone: { right: 16, bottom: 16 },
-  anchorWide: { right: 28, bottom: 28 },
+  anchorPhone: { right: SAVIA_MARGEN.telefono, bottom: SAVIA_MARGEN.telefono },
+  anchorWide: { right: SAVIA_MARGEN.ancho, bottom: SAVIA_MARGEN.ancho },
   label: {
     paddingVertical: 8,
     paddingHorizontal: 14,

@@ -432,13 +432,18 @@ def subir_foto(
 
 # ================================= Estadísticas ==================================
 @app.get("/estadisticas", response_model=Estadisticas, tags=["Estadísticas"])
-def estadisticas(sesion: Sesion = Depends(usuario_actual)):
-    """Datos para las pantallas de inicio y estadísticas."""
+def estadisticas(
+    institucion_id: str | None = Query(None, description="Solo los árboles de esta institución (opcional)"),
+    sesion: Sesion = Depends(usuario_actual),
+):
+    """Datos para las pantallas de inicio y estadísticas. Con institucion_id, todo (también las
+    inspecciones pendientes) se limita a los árboles de esa institución."""
     cliente = db.cliente_de_usuario(sesion.token)
     filas = traer_todo(
         cliente,
         "arboles_resumen",
         "id, prefijo, nombre_corto, nombre_comun, dap_cm, altura_m, copa_m, etapa, estado, ultimo_metodo_id",
+        filtros=[("eq", ("institucion_id", institucion_id))] if institucion_id else (),
     )
     metodos = datos.metodos(cliente)
     defecto = datos.metodo_por_defecto(metodos)
@@ -464,7 +469,10 @@ def estadisticas(sesion: Sesion = Depends(usuario_actual)):
         for clave in totales:
             totales[clave] += c[clave]
 
-    pendientes = traer_todo(cliente, "inspecciones", "id", filtros=[("eq", ("estado_revision", "pendiente"))])
+    pendientes = traer_todo(cliente, "inspecciones", "id, arbol_id", filtros=[("eq", ("estado_revision", "pendiente"))])
+    if institucion_id:
+        ids = {str(f["id"]) for f in filas}
+        pendientes = [p for p in pendientes if str(p.get("arbol_id")) in ids]
 
     return Estadisticas(
         total=total,

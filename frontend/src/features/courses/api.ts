@@ -19,16 +19,16 @@ export const cursosService = {
   },
 };
 
-export function useCursos(institucionId?: string) {
-  return useQuery({ queryKey: ['cursos', institucionId ?? 'todas'], queryFn: () => cursosService.listar(institucionId) });
+export function useCursos(institucionId?: string, enabled = true) {
+  return useQuery({ queryKey: ['cursos', institucionId ?? 'todas'], queryFn: () => cursosService.listar(institucionId), enabled });
 }
 
 export function useCurso(id: string) {
   return useQuery({ queryKey: ['cursos', 'detalle', id], queryFn: () => cursosService.detalle(id) });
 }
 
-export function useAvanceCurso(id: string, desde?: string, hasta?: string) {
-  return useQuery({ queryKey: ['cursos', 'avance', id, desde, hasta], queryFn: () => cursosService.avance(id, desde, hasta) });
+export function useAvanceCurso(id: string, desde?: string, hasta?: string, enabled = true) {
+  return useQuery({ queryKey: ['cursos', 'avance', id, desde, hasta], queryFn: () => cursosService.avance(id, desde, hasta), enabled: enabled && Boolean(id) });
 }
 
 export function useGuardarCurso() {

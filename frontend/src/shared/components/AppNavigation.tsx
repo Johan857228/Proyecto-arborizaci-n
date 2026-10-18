@@ -5,7 +5,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fonts, layout } from '@/config/constants';
 import { useAuthStore } from '@/features/auth/store';
 import { Avatar } from '@/features/perfil/components/Avatar';
-import { useMiPerfil } from '@/features/perfil/hooks/usePerfil';
+import { usePendientes } from '@/features/inspections/hooks/useInspecciones';
+import { useCuentasSinInstitucion, useMiPerfil } from '@/features/perfil/hooks/usePerfil';
+import { esAdmin, esRevisor } from '@/features/perfil/schemas';
 import { esRutaDeModulo } from '@/features/modules/modulos';
 import { useIsWide } from '@/hooks/use-is-wide';
 import { queryClient } from '@/services/api/queryClient';
@@ -51,7 +53,7 @@ export function AppHeader() {
           <BrandMark size={36} />
           <View>
             <Text style={styles.brandName}>Arbolado Escolar</Text>
-            {isWide ? <Text style={styles.brandCaption}>Inventario institucional</Text> : null}
+            {isWide ? <Text style={styles.brandCaption} numberOfLines={1}>{perfil.data?.institucion_nombre ?? 'Inventario institucional'}</Text> : null}
           </View>
         </Pressable>
 
@@ -94,19 +96,33 @@ export function AppHeader() {
           >
             <Avatar url={perfil.data?.foto_url} nombre={perfil.data?.nombre ?? email ?? undefined} size={34} />
           </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Cerrar sesión"
-            onPress={() => void signOut()}
-            style={({ pressed }) => [styles.logout, pressed && styles.pressed]}
-          >
-            <Icon name="logout" size={18} color={palette.muted} />
-            {isWide ? <Text style={styles.logoutText}>Salir</Text> : null}
-          </Pressable>
+          {/* En el teléfono, cerrar sesión está en Mi perfil: así no se sale por un toque accidental. */}
+          {isWide ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Cerrar sesión"
+              onPress={() => void signOut()}
+              style={({ pressed }) => [styles.logout, pressed && styles.pressed]}
+            >
+              <Icon name="logout" size={18} color={palette.muted} />
+              <Text style={styles.logoutText}>Salir</Text>
+            </Pressable>
+          ) : null}
         </View>
       </View>
     </View>
   );
+}
+
+/** Tareas de revisión que esperan (y cuentas nuevas para el administrador): se muestran sobre
+ *  "Inicio" mientras la persona está en otra pantalla. Misma caché que Revisión. */
+function usePendientesNav() {
+  const perfil = useMiPerfil();
+  const institucionId = perfil.data?.institucion_id ?? undefined;
+  const admin = esAdmin(perfil.data);
+  const revision = usePendientes(institucionId, 0, esRevisor(perfil.data) && (admin || Boolean(institucionId)));
+  const cuentas = useCuentasSinInstitucion(admin);
+  return (revision.data?.total ?? 0) + cuentas;
 }
 
 export function BottomNav() {
@@ -114,6 +130,7 @@ export function BottomNav() {
   const { palette } = useTema();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
+  const pendientes = usePendientesNav();
 
   return (
     <View style={[styles.bottomNav, { paddingBottom: Math.max(insets.bottom, 8) }]}>
@@ -129,6 +146,9 @@ export function BottomNav() {
           >
             <View style={[styles.bottomIcon, active && styles.bottomIconActive]}>
               <Icon name={item.icon} size={22} color={active ? palette.forest : palette.muted} />
+              {item.label === 'Inicio' && !active && pendientes > 0 ? (
+                <View style={styles.navBadge}><Text style={styles.navBadgeText}>{pendientes > 99 ? '99+' : pendientes}</Text></View>
+              ) : null}
             </View>
             <Text style={[styles.bottomLabel, active && styles.bottomLabelActive]}>{item.label}</Text>
           </Pressable>
@@ -166,4 +186,6 @@ const useStyles = crearEstilos(({ palette }) => ({
   bottomIconActive: { backgroundColor: palette.forestSoft },
   bottomLabel: { color: palette.muted, fontSize: 12, fontFamily: fonts.semiBold },
   bottomLabelActive: { color: palette.forest, fontFamily: fonts.bold },
+  navBadge: { position: 'absolute', top: -2, right: 8, minWidth: 18, height: 18, paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center', borderRadius: 9, backgroundColor: palette.amber, borderWidth: 2, borderColor: palette.paper },
+  navBadgeText: { color: palette.paper, fontSize: 10, fontFamily: fonts.extraBold },
 }));
