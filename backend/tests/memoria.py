@@ -26,12 +26,18 @@ DEFECTOS = {
     "actividades_servicio": lambda: {"estado": "pendiente", "creado_en": _ahora(), "foto_path": None, "revisado_en": None,
                                      "revisado_por": None, "comentario": None, "arbol_id": None, "lat": None, "lng": None},
     "certificados_servicio": lambda: {"emitido_en": _ahora(), "anulado_en": None, "anulado_por": None, "anulado_motivo": None},
+    "prae": lambda: {"creado_en": _ahora(), "actualizado_en": _ahora(), "diagnostico": None, "objetivo_general": None,
+                     "objetivos_especificos": [], "comite": None, "tema_otro": None},
+    "prae_acciones": lambda: {"creado_en": _ahora(), "estado": "pendiente", "orden": 0},
+    "prae_evidencias": lambda: {"creado_en": _ahora(), "foto_path": None, "accion_id": None},
+    "prae_evaluaciones": lambda: {"creado_en": _ahora()},
 }
 UNICOS = {
     "cursos": [("institucion_id", "nombre", "anio")],
     "metas": [("institucion_id", "indicador", "fecha_inicio", "fecha_fin")],
     "curso_zonas": [("curso_id", "zona")],
     "inspeccion_observaciones": [("inspeccion_id", "observacion_codigo")],
+    "prae": [("institucion_id", "anio")],
 }
 SIN_ID = {"curso_zonas", "inspeccion_observaciones", "parametros_institucionales", "perfiles", "tipos_intervencion",
           "tamizajes_riesgo", "contactos_emergencia", "servicio_social_parametros"}

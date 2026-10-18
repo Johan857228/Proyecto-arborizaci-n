@@ -55,6 +55,7 @@ estos archivos, que se pegan completos en **Supabase → SQL Editor → Run**, e
 7. `sql/007_sin_conexion.sql` (registros hechos sin señal: no se duplican al reenviarse)
 8. `sql/008_riesgo_caida.sql` (tamizaje de riesgo de caída, alertas y contactos de emergencia de cada sede)
 9. `sql/009_servicio_social.sql` (grado de cada curso, bitácora de servicio social, meta de horas y certificados)
+10. `sql/010_prae.sql` (PRAE por institución y año: plan de acción, evidencias y evaluaciones)
 
 No borran datos: a cada árbol ya registrado le crean su inspección de registro (con los
 hallazgos que tenía) y a cada usuario de Supabase Auth su perfil. Se pueden ejecutar más de
@@ -227,6 +228,12 @@ triggers en Supabase (para que tampoco se puedan saltar llamando a la API de Sup
 | GET | `/servicio-social/estudiantes?curso_id=` | Docente o admin | Estudiantes de 10.° y 11.° con sus horas, los atrasados primero |
 | GET / PUT | `/servicio-social/parametros/{institucion_id}` | Usuario / docente o admin | Meta de horas (80) y horas por inspección confirmada (1) |
 | GET / POST | `/servicio-social/certificados` · `/{id}/descarga` · `/{id}/anular` | Docente o admin (descarga también el estudiante) | Emitir el PDF con QR, descargarlo (enlace de 10 min) y anularlo |
+| GET | `/prae?anio=` · `/prae/anios` | Usuario de la institución | El PRAE del año (o null) y los años con su estado |
+| POST / PATCH | `/prae` · `/prae/{id}` · `/prae/{id}/copiar` | Docente o admin | Crear, editar y empezar otro año a partir de uno |
+| POST / PATCH / DELETE | `/prae/{id}/acciones` · `/prae/acciones/{id}` | Docente o admin | Plan de acción |
+| POST / DELETE | `/prae/{id}/evidencias` · `/prae/evidencias/{id}` (y `/foto`) | Docente o admin | Notas, enlaces y fotos de evidencia |
+| POST / DELETE | `/prae/{id}/evaluaciones` · `/prae/evaluaciones/{id}` | Docente o admin | Evaluación del consejo directivo, la Secretaría o el comité |
+| GET / POST | `/prae/{id}/indicadores` · `/prae/{id}/informe` | Usuario de la institución | Indicadores del año y el informe anual en PDF (enlace de 10 min) |
 | GET | `/verificar/{código}` · `/servicio-social/verificar/{código}` | Público | Página (y JSON) a la que lleva el QR: válido o anulado, con las iniciales del estudiante |
 
 ## Identificación con IA
@@ -327,6 +334,13 @@ El cuerpo trae `detail` con el mensaje. Los errores que vienen de la base de dat
 - Una foto `completo`, una `detalle` y hasta 3 `adicional`; JPG, PNG o WebP; máximo 5 MB. El formato se comprueba con los primeros bytes del archivo, no con lo que declara el navegador.
 - Solo quien registró un árbol puede subirle fotos (el RLS impide además editar árboles ajenos).
 - El código `IE001-0001` y el campo `registrado_por` los asigna la base de datos; el frontend nunca los envía.
+- **PRAE** (`servicios/prae.py`; Decreto 1743 de 1994, compilado en el Decreto 1075 de 2015): un
+  expediente por institución y año sobre cualquier tema (arbolado, residuos, agua, energía,
+  biodiversidad u otro) con problema, diagnóstico, objetivos, comité, plan de acción, evidencias y
+  evaluaciones. El estado sale de los datos: en formulación, en ejecución (con acciones), evaluación
+  parcial y evaluado (cuando lo evaluaron el consejo directivo y la Secretaría de Educación). El
+  informe anual en PDF suma los indicadores del arbolado, las alertas de riesgo y el servicio social
+  del año. Copiar a otro año lleva el plan con las fechas corridas y las acciones pendientes.
 - **Servicio social** (`servicios/servicio_social.py`, Resolución MEN 4210 de 1996): lo prestan los
   estudiantes de cursos de 10.° y 11.° (el grado se guarda en el curso o se deduce del nombre: "10-A",
   "1102", "Once B"), del 1 de febrero de 10.° al 30 de noviembre de 11.°. Cuentan las inspecciones

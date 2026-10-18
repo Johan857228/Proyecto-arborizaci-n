@@ -10,6 +10,8 @@ import { usePendientes } from '@/features/inspections/hooks/useInspecciones';
 import { useCuentasSinInstitucion } from '@/features/perfil/hooks/usePerfil';
 import { esAdmin, esRevisor, type MiPerfil } from '@/features/perfil/schemas';
 import { useReporte } from '@/features/reports/api';
+import { usePrae } from '@/features/prae/api';
+import { INSTANCIAS } from '@/features/prae/schemas';
 import { useAlertas } from '@/features/riesgo/api';
 import { useEstudiantesServicio, usePendientesServicio, useResumenServicio } from '@/features/servicio/api';
 import { horasTexto } from '@/features/servicio/schemas';
@@ -195,6 +197,22 @@ function ParaAtender({ perfil }: { perfil: MiPerfil }) {
   const servicio = useEstudiantesServicio(a.institucionId, a.revisor && Boolean(a.institucionId));
   const actividadesPorRevisar = usePendientesServicio(a.institucionId, a.revisor).data?.length ?? 0;
   const atrasados = (servicio.data ?? []).filter((e) => e.estado === 'atrasado').length;
+  // PRAE del año: avisa si no existe o si en el último trimestre aún falta su evaluación.
+  const anio = new Date().getFullYear();
+  const prae = usePrae(a.institucionId, anio, a.revisor && Boolean(a.institucionId));
+  const finDeAnio = new Date().getMonth() >= 8;
+  const filaPrae = prae.isSuccess && (!prae.data || (finDeAnio && prae.data.evaluaciones_faltantes.length > 0)) ? (
+    <FilaTarea
+      key="prae"
+      icon="leaf"
+      tono="riesgo"
+      texto={prae.data ? `PRAE ${anio}: falta la evaluación anual` : `Crea el PRAE ${anio}`}
+      detalle={prae.data
+        ? `De ${prae.data.evaluaciones_faltantes.map((i) => INSTANCIAS[i]).join(' y ')}`
+        : 'El Proyecto Ambiental Escolar del año, con su plan y evidencias'}
+      href={'/(app)/prae' as Href}
+    />
+  ) : null;
 
   // Las alertas de riesgo de caída van primero y no dependen de que carguen los demás pendientes.
   const abiertas = alertas.data ?? [];
@@ -231,6 +249,7 @@ function ParaAtender({ perfil }: { perfil: MiPerfil }) {
         <View style={styles.lista}>
           {filaAlertas}
           {filaServicio}
+          {filaPrae}
           {error ? <InlineMessage>{getApiErrorMessage(error)}</InlineMessage> : <Cargando texto="Revisando pendientes…" />}
         </View>
       </Card>
@@ -289,6 +308,7 @@ function ParaAtender({ perfil }: { perfil: MiPerfil }) {
     filas.push(<FilaTarea key="cobertura" icon="calendar" tono="neutro" valor={sinInspeccion} texto={`${sinInspeccion === 1 ? 'árbol' : 'árboles'} sin inspección en ${r.cobertura.dias_revisita} días`} href={'/(app)/reports?seccion=cobertura' as Href} />);
   }
   if (filaServicio) filas.push(filaServicio);
+  if (filaPrae) filas.push(filaPrae);
   if (a.admin && cuentas > 0) {
     filas.push(<FilaTarea key="cuentas" icon="users" tono="info" valor={cuentas} texto={cuentas === 1 ? 'cuenta nueva sin institución' : 'cuentas nuevas sin institución'} href={'/(app)/users' as Href} />);
   }

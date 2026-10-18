@@ -436,9 +436,14 @@ def estudiantes(
         institucion_id = perfil.institucion_id
     if not institucion_id:
         raise HTTPException(status_code=422, detail="Elige una institución")
+    return resumenes_institucion(institucion_id, str(curso_id) if curso_id else None)
+
+
+def resumenes_institucion(institucion_id: str, curso_id: str | None = None) -> list[dict]:
+    """Resumen de cada estudiante de 10.° y 11.° de la institución (sin bitácora), en el orden de la lista."""
     cursos = _cursos(institucion_id)
     if curso_id:
-        cursos = {k: v for k, v in cursos.items() if k == str(curso_id)}
+        cursos = {k: v for k, v in cursos.items() if k == curso_id}
     en_grado = {k: c for k, c in cursos.items() if ss.grado_de_curso(c) in ss.GRADOS_SERVICIO}
     perfiles = [
         p for p in db.get_admin().table("perfiles").select("usuario_id, nombre, rol, institucion_id, curso_id, activo")

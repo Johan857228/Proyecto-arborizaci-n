@@ -1,27 +1,8 @@
-"""PDF del certificado de servicio social, escrito a mano (como el Shapefile de la exportación):
-una página carta con las fuentes estándar Helvetica, que todo lector de PDF trae, y el código QR
-de verificación dibujado con cuadros. El QR lo calcula `segno` (Python puro, sin dependencias).
+"""PDF del certificado de servicio social: una página carta con el código QR de verificación.
+Las piezas del PDF (fuentes, texto, QR) están en servicios/pdf.py."""
+from servicios.pdf import ANCHO, ALTO, BLANCO, GRIS, MARGEN, TINTA, VERDE, Pagina, documento_pdf, fecha_larga, partir_url
 
-El texto va en WinAnsiEncoding (cp1252), que cubre las tildes, la ñ, ¿ ¡ y °.
-"""
-from datetime import date
-
-import segno
-
-ANCHO, ALTO = 612, 792  # carta, en puntos
-MARGEN = 60
-VERDE = (0.086, 0.396, 0.204)  # #166534
-TINTA = (0.075, 0.149, 0.110)  # #13261C
-GRIS = (0.353, 0.384, 0.345)  # #5A6258
-LINEA = (0.91, 0.894, 0.847)  # #E8E4D8
-BLANCO = (1, 1, 1)
-
-MESES = ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre",
-         "octubre", "noviembre", "diciembre")
-
-
-def fecha_larga(d: date) -> str:
-    return f"{d.day} de {MESES[d.month - 1]} de {d.year}"
+__all__ = ["certificado_pdf", "codigo_legible", "fecha_larga", "horas_texto"]
 
 
 def horas_texto(horas: float) -> str:
@@ -32,139 +13,10 @@ def codigo_legible(codigo: str) -> str:
     return f"{codigo[:4]}-{codigo[4:8]}-{codigo[8:]}"
 
 
-def _ancho_aprox(texto: str, tamano: float, negrita: bool = False) -> float:
-    """Ancho aproximado en Helvetica (para partir líneas sin pasarse del margen)."""
-    total = 0.0
-    for c in texto:
-        if c == " ":
-            total += 0.278
-        elif c in "iljtfrI.,;:'!|()[]-":
-            total += 0.30
-        elif c in "mwMW":
-            total += 0.85
-        elif c.isupper():
-            total += 0.70
-        elif c.isdigit():
-            total += 0.556
-        else:
-            total += 0.54
-    return total * tamano * (1.06 if negrita else 1)
-
-
-def partir(texto: str, tamano: float, ancho: float, negrita: bool = False) -> list[str]:
-    lineas, actual = [], ""
-    for palabra in texto.split():
-        prueba = f"{actual} {palabra}".strip()
-        if actual and _ancho_aprox(prueba, tamano, negrita) > ancho:
-            lineas.append(actual)
-            actual = palabra
-        else:
-            actual = prueba
-    if actual:
-        lineas.append(actual)
-    return lineas
-
-
-def partir_url(url: str, tamano: float, ancho: float) -> list[str]:
-    """Una dirección larga en trozos que caben en el ancho, sin agregarle espacios."""
-    trozos, actual = [], ""
-    for c in url:
-        if actual and _ancho_aprox(actual + c, tamano) > ancho:
-            trozos.append(actual)
-            actual = c
-        else:
-            actual += c
-    return trozos + [actual] if actual else trozos
-
-
-def _escapar(texto: str) -> bytes:
-    crudo = texto.encode("cp1252", errors="replace")
-    return crudo.replace(b"\\", b"\\\\").replace(b"(", b"\\(").replace(b")", b"\\)")
-
-
-def _color(rgb: tuple[float, float, float], operador: str) -> bytes:
-    return f"{rgb[0]:.3f} {rgb[1]:.3f} {rgb[2]:.3f} {operador}\n".encode()
-
-
-class _Pagina:
-    def __init__(self):
-        self.ops: list[bytes] = []
-
-    def texto(self, x: float, y: float, tamano: float, contenido: str, negrita: bool = False, color=TINTA):
-        fuente = "F2" if negrita else "F1"
-        self.ops.append(_color(color, "rg"))
-        self.ops.append(f"BT /{fuente} {tamano} Tf {x:.1f} {y:.1f} Td (".encode() + _escapar(contenido) + b") Tj ET\n")
-
-    def parrafo(self, x: float, y: float, tamano: float, contenido: str, ancho: float, interlineado: float | None = None,
-                negrita: bool = False, color=TINTA) -> float:
-        """Escribe el texto partido en líneas y devuelve la `y` donde terminó."""
-        salto = interlineado or tamano * 1.4
-        for linea in partir(contenido, tamano, ancho, negrita):
-            self.texto(x, y, tamano, linea, negrita, color)
-            y -= salto
-        return y
-
-    def rectangulo(self, x: float, y: float, ancho: float, alto: float, color):
-        self.ops.append(_color(color, "rg"))
-        self.ops.append(f"{x:.2f} {y:.2f} {ancho:.2f} {alto:.2f} re f\n".encode())
-
-    def linea(self, x1: float, y1: float, x2: float, y2: float, color=LINEA, grosor: float = 0.8):
-        self.ops.append(_color(color, "RG"))
-        self.ops.append(f"{grosor} w {x1:.1f} {y1:.1f} m {x2:.1f} {y2:.1f} l S\n".encode())
-
-    def qr(self, x: float, y: float, lado: float, contenido: str):
-        """QR con cuatro módulos de margen blanco, como pide la norma para que lo lean las cámaras."""
-        matriz = segno.make(contenido, error="m").matrix
-        n = len(matriz)
-        modulo = lado / (n + 8)
-        self.rectangulo(x, y, lado, lado, BLANCO)
-        self.ops.append(_color(TINTA, "rg"))
-        for fila, valores in enumerate(matriz):
-            yf = y + lado - (fila + 4 + 1) * modulo
-            col = 0
-            while col < n:  # cuadros oscuros seguidos de una fila en un solo rectángulo
-                if valores[col]:
-                    inicio = col
-                    while col < n and valores[col]:
-                        col += 1
-                    self.ops.append(f"{x + (inicio + 4) * modulo:.2f} {yf:.2f} {(col - inicio) * modulo:.2f} {modulo:.2f} re\n".encode())
-                else:
-                    col += 1
-        self.ops.append(b"f\n")
-
-    def contenido(self) -> bytes:
-        return b"".join(self.ops)
-
-
-def _documento(contenido: bytes, titulo: str) -> bytes:
-    objetos = [
-        b"<< /Type /Catalog /Pages 2 0 R >>",
-        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-        (f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {ANCHO} {ALTO}] "
-         "/Resources << /Font << /F1 4 0 R /F2 5 0 R >> >> /Contents 6 0 R >>").encode(),
-        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
-        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>",
-        f"<< /Length {len(contenido)} >>\nstream\n".encode() + contenido + b"\nendstream",
-        b"<< /Title (" + _escapar(titulo) + b") /Producer (Arbolado Escolar) >>",
-    ]
-    salida = bytearray(b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n")
-    posiciones = []
-    for numero, cuerpo in enumerate(objetos, start=1):
-        posiciones.append(len(salida))
-        salida += f"{numero} 0 obj\n".encode() + cuerpo + b"\nendobj\n"
-    inicio_xref = len(salida)
-    salida += f"xref\n0 {len(objetos) + 1}\n0000000000 65535 f \n".encode()
-    for posicion in posiciones:
-        salida += f"{posicion:010d} 00000 n \n".encode()
-    salida += (f"trailer\n<< /Size {len(objetos) + 1} /Root 1 0 R /Info {len(objetos)} 0 R >>\n"
-               f"startxref\n{inicio_xref}\n%%EOF\n").encode()
-    return bytes(salida)
-
-
 def certificado_pdf(d: dict, url_verificacion: str) -> bytes:
     """d: institucion, codigo_dane, municipio, estudiante, curso, horas, meta, detalle (lista de
     (actividad, horas)), inicio, fin, firmante, cargo, emitido (fechas como date) y codigo."""
-    p = _Pagina()
+    p = Pagina()
     ancho_util = ANCHO - 2 * MARGEN
 
     # Franja superior
@@ -235,4 +87,4 @@ def certificado_pdf(d: dict, url_verificacion: str) -> bytes:
         "institución educativa.",
         ANCHO - MARGEN - x, interlineado=11, color=GRIS,
     )
-    return _documento(p.contenido(), f"Certificado de servicio social {codigo_legible(d['codigo'])}")
+    return documento_pdf([p.contenido()], f"Certificado de servicio social {codigo_legible(d['codigo'])}")
