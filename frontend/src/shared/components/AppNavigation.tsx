@@ -1,5 +1,5 @@
 import { router, usePathname, type Href } from 'expo-router';
-import { Platform, Pressable, Text, View, type ViewStyle } from 'react-native';
+import { Platform, Pressable, Text, useWindowDimensions, View, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { fonts, layout } from '@/config/constants';
@@ -9,6 +9,7 @@ import { usePendientes } from '@/features/inspections/hooks/useInspecciones';
 import { useCuentasSinInstitucion, useMiPerfil } from '@/features/perfil/hooks/usePerfil';
 import { esAdmin, esRevisor } from '@/features/perfil/schemas';
 import { esRutaDeModulo } from '@/features/modules/modulos';
+import { useAlertas } from '@/features/riesgo/api';
 import { EstadoConexion } from '@/features/sincronizacion/components/EstadoConexion';
 import { useIsWide } from '@/hooks/use-is-wide';
 import { queryClient } from '@/services/api/queryClient';
@@ -24,6 +25,12 @@ const navItems: { label: string; icon: IconName; href: Href; isActive: (path: st
   { label: 'Módulos', icon: 'modules', href: '/(app)/modules' as Href, isActive: esRutaDeModulo },
 ];
 
+// En tableta y en ventanas de escritorio angostas la barra no alcanza para todo. Por debajo de
+// BARRA_HOLGADA se esconde el correo (también está en Mi perfil) y el aviso de conexión va corto;
+// por debajo de BARRA_COMPACTA, la marca queda solo con el logo y "Salir" solo con su ícono.
+const BARRA_HOLGADA = 1200;
+const BARRA_COMPACTA = 1000;
+
 async function signOut() {
   // Se limpia la caché para que la siguiente sesión no vea datos de la anterior.
   queryClient.clear();
@@ -35,6 +42,9 @@ export function AppHeader() {
   const styles = useStyles();
   const { palette } = useTema();
   const isWide = useIsWide();
+  const { width } = useWindowDimensions();
+  const holgada = width >= BARRA_HOLGADA;
+  const compacta = isWide && width < BARRA_COMPACTA;
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
   const email = useAuthStore((state) => state.session?.email);
@@ -52,10 +62,12 @@ export function AppHeader() {
           style={styles.brand}
         >
           <BrandMark size={36} />
-          <View>
-            <Text style={styles.brandName}>Arbolado Escolar</Text>
-            {isWide ? <Text style={styles.brandCaption} numberOfLines={1}>{perfil.data?.institucion_nombre ?? 'Inventario institucional'}</Text> : null}
-          </View>
+          {compacta ? null : (
+            <View style={styles.brandText}>
+              <Text style={styles.brandName} numberOfLines={1}>Arbolado Escolar</Text>
+              {isWide ? <Text style={styles.brandCaption} numberOfLines={1}>{perfil.data?.institucion_nombre ?? 'Inventario institucional'}</Text> : null}
+            </View>
+          )}
         </Pressable>
 
         {isWide ? (
@@ -71,7 +83,7 @@ export function AppHeader() {
                   style={({ pressed }) => [styles.headerLink, active && styles.headerLinkActive, pressed && styles.pressed]}
                 >
                   <Icon name={item.icon} size={18} color={active ? palette.forest : palette.muted} />
-                  <Text style={[styles.headerLinkText, active && styles.headerLinkTextActive]}>{item.label}</Text>
+                  <Text style={[styles.headerLinkText, active && styles.headerLinkTextActive]} numberOfLines={1}>{item.label}</Text>
                 </Pressable>
               );
             })}
@@ -79,8 +91,8 @@ export function AppHeader() {
         ) : null}
 
         <View style={styles.account}>
-          {isWide && email ? <Text style={styles.email} numberOfLines={1}>{email}</Text> : null}
-          <EstadoConexion />
+          {holgada && email ? <Text style={styles.email} numberOfLines={1}>{email}</Text> : null}
+          <EstadoConexion corto={!holgada} />
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={oscuro ? 'Usar tema claro' : 'Usar tema oscuro'}
@@ -107,7 +119,7 @@ export function AppHeader() {
               style={({ pressed }) => [styles.logout, pressed && styles.pressed]}
             >
               <Icon name="logout" size={18} color={palette.muted} />
-              <Text style={styles.logoutText}>Salir</Text>
+              {compacta ? null : <Text style={styles.logoutText}>Salir</Text>}
             </Pressable>
           ) : null}
         </View>
@@ -122,9 +134,11 @@ function usePendientesNav() {
   const perfil = useMiPerfil();
   const institucionId = perfil.data?.institucion_id ?? undefined;
   const admin = esAdmin(perfil.data);
-  const revision = usePendientes(institucionId, 0, esRevisor(perfil.data) && (admin || Boolean(institucionId)));
+  const revisor = esRevisor(perfil.data) && (admin || Boolean(institucionId));
+  const revision = usePendientes(institucionId, 0, revisor);
+  const alertas = useAlertas('abiertas', institucionId, revisor);
   const cuentas = useCuentasSinInstitucion(admin);
-  return (revision.data?.total ?? 0) + cuentas;
+  return (revision.data?.total ?? 0) + (alertas.data?.length ?? 0) + cuentas;
 }
 
 export function BottomNav() {
@@ -167,16 +181,19 @@ const useStyles = crearEstilos(({ palette }) => ({
   // Barra translúcida; en web desenfoca el fondo que pasa por detrás (efecto vidrio).
   header: { backgroundColor: palette.chrome, borderBottomWidth: 1, borderBottomColor: palette.chromeLine, ...glass },
   headerInner: { width: '100%', maxWidth: layout.maxWidth, alignSelf: 'center', minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: 16, paddingHorizontal: 20 },
-  brand: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  // Si falta espacio, ceden primero el nombre de la institución y el correo (se cortan con "…");
+  // los enlaces de navegación nunca se encogen.
+  brand: { flexShrink: 1, minWidth: 0, maxWidth: 280, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  brandText: { flexShrink: 1, minWidth: 0 },
   brandName: { color: palette.ink, fontSize: 16, fontFamily: fonts.extraBold, letterSpacing: -0.2 },
   brandCaption: { color: palette.muted, fontSize: 12 },
-  headerNav: { flex: 1, flexDirection: 'row', justifyContent: 'center', gap: 4 },
+  headerNav: { flexGrow: 1, flexShrink: 0, flexDirection: 'row', justifyContent: 'center', gap: 4 },
   headerLink: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 10 },
   headerLinkActive: { backgroundColor: palette.forestSoft },
   headerLinkText: { color: palette.muted, fontSize: 14, fontFamily: fonts.semiBold },
   headerLinkTextActive: { color: palette.forest, fontFamily: fonts.bold },
-  account: { marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: 10 },
-  email: { maxWidth: 200, color: palette.muted, fontSize: 13 },
+  account: { flexShrink: 1, minWidth: 0, marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: 10 },
+  email: { flexShrink: 1, minWidth: 0, maxWidth: 200, color: palette.muted, fontSize: 13 },
   avatar: { borderRadius: 19, padding: 2, borderWidth: 1, borderColor: palette.leaf },
   themeToggle: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 18, borderWidth: 1, borderColor: palette.line },
   logout: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 10, borderWidth: 1, borderColor: palette.line },

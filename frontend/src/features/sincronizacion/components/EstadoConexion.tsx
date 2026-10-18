@@ -10,8 +10,9 @@ import { useTonos, type Tono } from '@/shared/components/UI';
 import { crearEstilos } from '@/theme';
 
 /** Aviso de la barra superior: sin conexión, registros por enviar o enviando. No se muestra
- *  cuando hay conexión y todo está enviado. Lleva a la lista de registros por enviar. */
-export function EstadoConexion() {
+ *  cuando hay conexión y todo está enviado. Lleva a la lista de registros por enviar.
+ *  `corto` deja solo el ícono y el número (barras angostas). */
+export function EstadoConexion({ corto = false }: { corto?: boolean }) {
   const styles = useStyles();
   const tonos = useTonos();
   const isWide = useIsWide();
@@ -27,7 +28,7 @@ export function EstadoConexion() {
       : conError
         ? { icono: 'warning', texto: `${conError} sin poder enviar`, corto: String(conError), tono: 'critico' }
         : { icono: 'enCola', texto: `${pendientes} por enviar`, corto: String(pendientes), tono: 'info' };
-  const texto = isWide ? estado.texto : estado.corto;
+  const texto = isWide && !corto ? estado.texto : estado.corto;
 
   return (
     <Pressable

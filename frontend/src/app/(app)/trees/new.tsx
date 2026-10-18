@@ -3,6 +3,7 @@ import { ActivityIndicator, Text, View } from 'react-native';
 import { router, type Href } from 'expo-router';
 
 import { useCatalogs } from '@/features/catalogs/hooks/useCatalogs';
+import { evaluarTamizaje, type ResultadoLocal } from '@/features/riesgo/reglas';
 import { useRegisterTree } from '@/features/trees/hooks/useRegisterTree';
 import { RegistrationSuccess } from '@/features/trees/components/RegistrationSuccess';
 import { TreeCreateForm } from '@/features/trees/components/TreeCreateForm';
@@ -20,6 +21,9 @@ interface Registered {
   nombreComun: string;
   photoWarning?: string;
   fotosEnCola?: number;
+  /** Resultado del tamizaje calculado en el teléfono: orienta aunque no haya conexión. */
+  riesgo?: ResultadoLocal;
+  institucionId: string;
 }
 
 export default function NewTreeRoute() {
@@ -41,10 +45,11 @@ export default function NewTreeRoute() {
       titulo: especie?.nombre_comun ?? 'Árbol',
       detalle: [institucion?.nombre_corto, zona].filter(Boolean).join(' · '),
     };
+    const riesgo = values.tamizaje ? evaluarTamizaje(values.tamizaje, values.altura_m, values.dap_cm) : undefined;
     try {
       const resultado = await registerTree.submit(values, photos, etiqueta);
       if (resultado.estado === 'en_cola') {
-        setRegistered({ nombreComun: etiqueta.titulo });
+        setRegistered({ nombreComun: etiqueta.titulo, riesgo, institucionId: values.institucion_id });
         return;
       }
       const { tree, photoError, fotosEnCola } = resultado;
@@ -53,6 +58,8 @@ export default function NewTreeRoute() {
         codigo: tree.codigo,
         nombreComun: tree.nombre_comun,
         fotosEnCola,
+        riesgo,
+        institucionId: values.institucion_id,
         photoWarning: photoError
           ? `No se pudo subir toda la evidencia fotográfica. ${getApiErrorMessage(photoError)}`
           : undefined,
@@ -69,6 +76,8 @@ export default function NewTreeRoute() {
         nombreComun={registered.nombreComun}
         photoWarning={registered.photoWarning}
         fotosEnCola={registered.fotosEnCola}
+        riesgo={registered.riesgo}
+        institucionId={registered.institucionId}
         onRegisterAnother={() => {
           setRegistered(undefined);
           setFormKey((key) => key + 1);

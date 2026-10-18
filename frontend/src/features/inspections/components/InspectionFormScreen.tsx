@@ -22,6 +22,8 @@ import { useCaptureLocation } from '@/features/trees/hooks/useCaptureLocation';
 import { usePhotoPicker } from '@/features/trees/hooks/usePhotoPicker';
 import type { ArbolDetalle } from '@/features/trees/schemas';
 import { getApiErrorMessage } from '@/services/api/client';
+import { TamizajeFields } from '@/features/riesgo/components/TamizajeFields';
+import { abreAlerta, evaluarTamizaje, TAMIZAJE_INICIAL, type Tamizaje } from '@/features/riesgo/reglas';
 import { useAvisos } from '@/shared/avisos';
 import { ChoiceChip, Field, InlineMessage, PrimaryButton, Section, SelectField } from '@/shared/components/FormControls';
 import { AppHeader, Cell, ErrorState, LoadingState, NumberField, Page, Row } from '@/shared/components/UI';
@@ -49,6 +51,8 @@ function Formulario({ arbol, catalogos }: { arbol: ArbolDetalle; catalogos: Cata
   const registrar = useRegistrarInspeccion(arbol.id, { titulo: `Inspección de ${arbol.codigo}`, detalle: arbol.nombre_comun });
   const avisar = useAvisos((state) => state.avisar);
   const [error, setError] = useState<string>();
+  const [tamizaje, setTamizaje] = useState<Tamizaje>(TAMIZAJE_INICIAL);
+  const [tamizajeError, setTamizajeError] = useState<string>();
   const { control, handleSubmit, setValue, formState: { errors } } = useForm<InspeccionFormInput>({
     resolver: zodResolver(schema),
     mode: 'onChange',
@@ -71,6 +75,8 @@ function Formulario({ arbol, catalogos }: { arbol: ArbolDetalle; catalogos: Cata
     },
   });
   const interferencia = useWatch({ control, name: 'interferencia' });
+  const alturaM = useWatch({ control, name: 'altura_m' });
+  const dapCm = useWatch({ control, name: 'dap_cm' });
   const observaciones = useWatch({ control, name: 'observaciones' }) ?? [];
   // Avisos que no bloquean: precisión baja o punto lejos de la institución del árbol.
   const institucion = catalogos.instituciones.find((item) => item.id === arbol.institucion_id);
@@ -101,6 +107,11 @@ function Formulario({ arbol, catalogos }: { arbol: ArbolDetalle; catalogos: Cata
       setError('Agrega una fotografía general del árbol como evidencia de la visita.');
       return;
     }
+    if (!tamizaje.debajo.length) {
+      setTamizajeError('Indica qué hay debajo del árbol.');
+      setError('Completa el tamizaje de riesgo de caída: indica qué hay debajo del árbol.');
+      return;
+    }
     const payload: InspeccionPayload = {
       lat: valores.lat ?? null,
       lng: valores.lng ?? null,
@@ -114,14 +125,22 @@ function Formulario({ arbol, catalogos }: { arbol: ArbolDetalle; catalogos: Cata
       observaciones: valores.observaciones,
       notas: valores.notas?.trim() ? valores.notas.trim() : null,
       ...payloadBiotico(valores),
+      tamizaje,
     };
+    // Se calcula aquí para orientar enseguida, también si la inspección queda en el teléfono.
+    const riesgo = evaluarTamizaje(tamizaje, valores.altura_m, valores.dap_cm);
     try {
       const resultado = await registrar.mutateAsync({ payload, fotos: fotos.photos });
       if (resultado.inspeccionId && resultado.fotosFallidas > 0) {
         router.replace(`/(app)/inspections/${resultado.inspeccionId}?aviso=fotos` as Href);
       } else {
         // Se vuelve a la ficha que ya estaba abierta (sin duplicarla en el historial).
-        avisar(arbol.id, !resultado.inspeccionId ? 'inspeccionEnCola' : resultado.fotosEnCola > 0 ? 'inspeccionFotosEnCola' : 'inspeccion');
+        avisar(
+          arbol.id,
+          abreAlerta(riesgo.categoria)
+            ? `riesgo-${riesgo.categoria}${resultado.inspeccionId ? '' : '-cola'}`
+            : !resultado.inspeccionId ? 'inspeccionEnCola' : resultado.fotosEnCola > 0 ? 'inspeccionFotosEnCola' : 'inspeccion',
+        );
         router.dismissTo(`/(app)/trees/${arbol.id}` as Href);
       }
     } catch (causa) {
@@ -243,6 +262,19 @@ function Formulario({ arbol, catalogos }: { arbol: ArbolDetalle; catalogos: Cata
             <Field label="Notas (opcional)" value={field.value ?? ''} onChangeText={field.onChange} onBlur={field.onBlur}
               multiline placeholder="Cambios desde la última visita, contexto, etc." error={fieldState.error?.message} />
           )}
+        />
+      </Section>
+
+      <Section title="Riesgo de caída">
+        <TamizajeFields
+          valor={tamizaje}
+          onChange={(valor) => {
+            setTamizaje(valor);
+            if (valor.debajo.length) setTamizajeError(undefined);
+          }}
+          alturaM={alturaM}
+          dapCm={dapCm}
+          error={tamizajeError}
         />
       </Section>
 

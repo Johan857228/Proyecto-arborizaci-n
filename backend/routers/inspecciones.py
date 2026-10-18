@@ -46,7 +46,10 @@ from schemas import (
     TipoFoto,
     CamposBioticos,
     CamposSinConexion,
+    ResultadoTamizaje,
+    Tamizaje,
 )
+from routers.riesgo import descartar_alertas_de_inspeccion, registrar_tamizaje, tamizajes_de_inspecciones
 from servicios.calificacion import calcular_ambientales, evaluar
 
 router = APIRouter(tags=["Inspecciones y revisión"])
@@ -70,6 +73,7 @@ class InspeccionCrear(CamposBioticos, CamposSinConexion):
     interferencia_otra: str | None = Field(default=None, min_length=TEXTO_OTRA_MIN, max_length=TEXTO_OTRA_MAX)
     observaciones: list[CodigoObservacion] = Field(default_factory=list, max_length=MAX_OBSERVACIONES)
     notas: str | None = Field(default=None, max_length=1000)
+    tamizaje: Tamizaje | None = Field(default=None, description="Tamizaje de riesgo de caída (routers/riesgo.py)")
 
     # mode="before": se limpian los espacios ANTES de medir el largo del texto
     @field_validator("interferencia_otra", "notas", mode="before")
@@ -120,6 +124,7 @@ class InspeccionOut(BaseModel):
     comentario_revision: str | None = None
     observaciones: list[ObservacionOut] = []
     fotos: list[FotoOut] = []
+    riesgo_caida: ResultadoTamizaje | None = None
     biomasa_total_kg: float
     carbono_kg: float
     co2_kg: float
@@ -191,10 +196,10 @@ class AnularIn(BaseModel):
 
 
 # ==================================== Lógica =====================================
-def registrar_inspeccion(cliente, arbol: dict, d: InspeccionCrear, origen: str) -> dict:
-    """Califica con el método vigente de la institución y guarda la inspección y sus hallazgos.
-    Si fallan los hallazgos, borra la inspección para no dejarla a medias.
-    arbol: fila con id, institucion_id, lat y lng."""
+def registrar_inspeccion(cliente, arbol: dict, d: InspeccionCrear, origen: str, usuario_id: str | None = None) -> dict:
+    """Califica con el método vigente de la institución y guarda la inspección, sus hallazgos y
+    su tamizaje de riesgo de caída. Si algo de eso falla, borra la inspección para no dejarla a
+    medias. arbol: fila con id, institucion_id, lat y lng."""
     catalogo = datos.catalogo_observaciones(cliente)
     invalidos = [c for c in d.observaciones if c not in catalogo]
     if invalidos:
@@ -236,14 +241,16 @@ def registrar_inspeccion(cliente, arbol: dict, d: InspeccionCrear, origen: str) 
     if not nueva:  # otro envío de la misma visita llegó primero: ya tiene sus hallazgos
         return {**creada, "_advertencias": [], "_repetida": True}
 
-    if d.observaciones:
-        try:
+    try:
+        if d.observaciones:
             cliente.table("inspeccion_observaciones").insert(
                 [{"inspeccion_id": creada["id"], "observacion_codigo": c} for c in d.observaciones]
             ).execute()
-        except Exception:
-            db.get_admin().table("inspecciones").delete().eq("id", creada["id"]).execute()
-            raise
+        if d.tamizaje:
+            creada["_tamizaje"] = registrar_tamizaje(arbol, creada, d.tamizaje, usuario_id or creada.get("inspector_id"))
+    except Exception:
+        db.get_admin().table("inspecciones").delete().eq("id", creada["id"]).execute()
+        raise
 
     creada["_advertencias"] = _advertencias(d, parametros.precision_gps_max_m, arbol.get("lat"), arbol.get("lng"))
     return creada
@@ -293,6 +300,7 @@ def armar(cliente, inspecciones: list[dict], arboles: dict[str, dict], perfil: P
     catalogo = datos.catalogo_observaciones(cliente)
     observaciones = datos.observaciones_por_inspeccion(cliente, ids)
     metodos = datos.metodos(cliente)
+    tamizajes = tamizajes_de_inspecciones([str(i["id"]) for i in inspecciones if not i.get("_tamizaje")])
 
     personas = {i.get("inspector_id") for i in inspecciones} | {i.get("revisado_por") for i in inspecciones}
     personas.discard(None)
@@ -344,6 +352,7 @@ def armar(cliente, inspecciones: list[dict], arboles: dict[str, dict], perfil: P
             "co2_kg": valores["co2_kg"],
             "o2_kg": valores["o2_kg"],
             "advertencias": i.get("_advertencias", []),
+            "riesgo_caida": i.get("_tamizaje") or tamizajes.get(str(i["id"])),
             "fotos_sugeridas": ["completo", "detalle"] if codigos else ["completo"],
             "codigo": arbol["codigo"],
             "nombre_comun": arbol["nombre_comun"],
@@ -403,7 +412,7 @@ def crear_inspeccion(arbol_id: UUID, d: InspeccionCrear, respuesta: Response, pe
             raise HTTPException(status_code=409, detail="Ese identificador ya se usó en otro registro")
         respuesta.status_code = 200
         return armar(cliente, [existente], {arbol["id"]: arbol})[0]
-    creada = registrar_inspeccion(cliente, arbol, d, "seguimiento")
+    creada = registrar_inspeccion(cliente, arbol, d, "seguimiento", perfil.usuario_id)
     if creada.get("_repetida"):
         respuesta.status_code = 200
     return armar(cliente, [creada], {arbol["id"]: arbol})[0]
@@ -509,6 +518,8 @@ def _revisar(inspeccion_id: str, perfil: Perfil, estado: str, comentario: str | 
     )
     if not actualizadas:
         raise HTTPException(status_code=409, detail="La inspección ya fue revisada por otra persona")
+    if estado == "anulada":
+        descartar_alertas_de_inspeccion(inspeccion_id, perfil.usuario_id)
     revisada = _inspeccion(cliente, inspeccion_id)
     return armar(cliente, [revisada], {arbol["id"]: arbol}, perfil)[0]
 

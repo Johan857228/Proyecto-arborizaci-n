@@ -2,6 +2,8 @@ import { ScrollView, Text, View } from 'react-native';
 import Animated, { ZoomIn } from 'react-native-reanimated';
 
 import { fonts } from '@/config/constants';
+import { RutaEmergencia } from '@/features/riesgo/components/RutaEmergencia';
+import { abreAlerta, NOMBRE_CATEGORIA, type ResultadoLocal } from '@/features/riesgo/reglas';
 import { InlineMessage, PrimaryButton, Screen } from '@/shared/components/FormControls';
 import { Icon } from '@/shared/components/Icon';
 import { FadeIn } from '@/shared/components/Motion';
@@ -18,6 +20,8 @@ export function RegistrationSuccess({
   nombreComun,
   photoWarning,
   fotosEnCola,
+  riesgo,
+  institucionId,
   onRegisterAnother,
   onViewTree,
   onViewPending,
@@ -28,6 +32,8 @@ export function RegistrationSuccess({
   photoWarning?: string;
   /** Fotos que no alcanzaron a subir por falta de señal y se enviarán solas. */
   fotosEnCola?: number;
+  riesgo?: ResultadoLocal;
+  institucionId?: string;
   onRegisterAnother: () => void;
   onViewTree?: () => void;
   onViewPending: () => void;
@@ -37,6 +43,7 @@ export function RegistrationSuccess({
   const { palette } = useTema();
   const enTelefono = !codigo;
   const aviso = Boolean(photoWarning);
+  const riesgoAlto = riesgo && abreAlerta(riesgo.categoria) ? riesgo : undefined;
   const titulo = enTelefono ? 'Guardado en el teléfono' : aviso ? 'Árbol guardado, falta una foto' : 'Árbol registrado';
   return (
     <Screen>
@@ -63,6 +70,12 @@ export function RegistrationSuccess({
             <Text style={[styles.code, enTelefono && styles.codePendiente]}>{codigo ?? 'Se asigna al enviar'}</Text>
             <Text style={styles.species}>{nombreComun}</Text>
           </View>
+          {riesgoAlto ? (
+            <InlineMessage tone={riesgoAlto.categoria === 'inminente' ? 'error' : 'warning'}>
+              Riesgo de caída {NOMBRE_CATEGORIA[riesgoAlto.categoria].toLowerCase()}. {riesgoAlto.accion}
+              {enTelefono ? ' La alerta para los docentes se abre cuando el registro se envíe.' : ' Se abrió una alerta para que un docente la confirme.'}
+            </InlineMessage>
+          ) : null}
           {fotosEnCola ? (
             <InlineMessage tone="info">
               {fotosEnCola === 1 ? 'Una foto no alcanzó a subir' : `${fotosEnCola} fotos no alcanzaron a subir`} por falta de señal. Quedó guardada en el teléfono y se enviará sola.
@@ -78,13 +91,19 @@ export function RegistrationSuccess({
             <PrimaryButton title="Ver inventario" icon="list" variant="ghost" onPress={onViewInventory} />
           </View>
         </FadeIn>
+        {riesgoAlto && (riesgoAlto.categoria === 'alto' || riesgoAlto.categoria === 'inminente') ? (
+          <View style={styles.ruta}>
+            <RutaEmergencia categoria={riesgoAlto.categoria} institucionId={institucionId} />
+          </View>
+        ) : null}
       </ScrollView>
     </Screen>
   );
 }
 
 const useStyles = crearEstilos(({ palette, shadows }) => ({
-  content: { flexGrow: 1, justifyContent: 'center', padding: 20 },
+  content: { flexGrow: 1, justifyContent: 'center', padding: 20, gap: 16 },
+  ruta: { width: '100%', maxWidth: 440, alignSelf: 'center' },
   card: { width: '100%', maxWidth: 440, alignSelf: 'center', alignItems: 'center', gap: 14, padding: 28, borderRadius: 20, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.paper, boxShadow: shadows.raised },
   badge: { width: 72, height: 72, alignItems: 'center', justifyContent: 'center', borderRadius: 36, backgroundColor: palette.forestSoft },
   badgeWarning: { backgroundColor: palette.amberSoft },

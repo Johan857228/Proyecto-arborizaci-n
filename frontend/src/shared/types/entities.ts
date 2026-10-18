@@ -38,4 +38,6 @@ export interface ArbolResumen {
   ultima_revision?: 'pendiente' | 'confirmada' | 'anulada' | null;
   n_inspecciones?: number | null;
   foto_url?: string | null;
+  /** Categoría del último tamizaje de riesgo de caída (solo en la lista y al registrar). */
+  riesgo_caida?: 'bajo' | 'medio' | 'alto' | 'inminente' | null;
 }

@@ -20,6 +20,7 @@ import { useArbol, useCalculos, useSubirFotoArbol } from '@/features/trees/hooks
 import { usePhotoPicker } from '@/features/trees/hooks/usePhotoPicker';
 import type { FotoLocal } from '@/features/trees/types';
 import { getApiErrorMessage } from '@/services/api/client';
+import { RiesgoArbolCard } from '@/features/riesgo/components/RiesgoArbolCard';
 import { useAvisos } from '@/shared/avisos';
 import { formatFecha, formatFechaHora, formatNumero, formatPesos } from '@/shared/format';
 import { InlineMessage, PrimaryButton } from '@/shared/components/FormControls';
@@ -42,7 +43,7 @@ import {
 import { crearEstilos } from '@/theme';
 import { AvisoFotos } from '@/shared/components/AvisoFotos';
 
-const AVISOS: Record<string, { texto: string; tono: 'sano' | 'riesgo' | 'info' }> = {
+const AVISOS: Record<string, { texto: string; tono: 'sano' | 'riesgo' | 'info' | 'critico' }> = {
   registrado: {
     texto: 'Árbol registrado. Su primera inspección quedó pendiente de revisión por un docente.',
     tono: 'sano',
@@ -55,6 +56,22 @@ const AVISOS: Record<string, { texto: string; tono: 'sano' | 'riesgo' | 'info' }
   inspeccionEnCola: {
     texto: 'Sin conexión: la inspección y sus fotos quedaron guardadas en el teléfono y se enviarán solas cuando vuelva la señal.',
     tono: 'info',
+  },
+  'riesgo-inminente': {
+    texto: 'Inspección guardada con riesgo de caída INMINENTE. Aleja a las personas y acordona el área ahora; se abrió una alerta para los docentes. Mira abajo qué hacer.',
+    tono: 'critico',
+  },
+  'riesgo-alto': {
+    texto: 'Inspección guardada con riesgo de caída alto. Restringe el paso debajo del árbol; se abrió una alerta para los docentes.',
+    tono: 'riesgo',
+  },
+  'riesgo-inminente-cola': {
+    texto: 'Sin conexión: la inspección quedó en el teléfono. Riesgo de caída INMINENTE: aleja a las personas, acordona el área y avisa a un docente ya. Si hay peligro inmediato, llama al 123.',
+    tono: 'critico',
+  },
+  'riesgo-alto-cola': {
+    texto: 'Sin conexión: la inspección quedó en el teléfono. Riesgo de caída alto: restringe el paso debajo del árbol y avisa a un docente.',
+    tono: 'riesgo',
   },
   inspeccionFotosEnCola: {
     texto: 'Inspección guardada. Algunas fotos no alcanzaron a subir por falta de señal: quedaron en el teléfono y se enviarán solas.',
@@ -121,6 +138,8 @@ export function TreeDetailScreen({ arbolId, aviso: avisoRuta }: { arbolId: strin
         {a.ultima_revision ? <RevisionBadge estado={a.ultima_revision} /> : null}
         {a.puntaje_riesgo != null ? <Badge label={`Puntaje de riesgo ${formatNumero(a.puntaje_riesgo)}`} /> : null}
       </View>
+
+      <RiesgoArbolCard arbolId={a.id} institucionId={a.institucion_id} />
 
       <Row>
         <Cell>

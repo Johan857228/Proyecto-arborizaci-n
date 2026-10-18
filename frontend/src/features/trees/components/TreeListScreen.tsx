@@ -6,6 +6,8 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, 
 
 import { fonts, layout } from '@/config/constants';
 import { useCatalogs } from '@/features/catalogs/hooks/useCatalogs';
+import { RiesgoBadge } from '@/features/riesgo/components/RiesgoBadge';
+import { abreAlerta } from '@/features/riesgo/reglas';
 import { useColaStore } from '@/features/sincronizacion/colaStore';
 import { treeKeys } from '@/features/trees/hooks/useCreateTree';
 import type { FiltrosInventario, Zona } from '@/features/trees/types';
@@ -121,6 +123,7 @@ function TreeCard({ tree }: { tree: ArbolResumen }) {
           {tree.ultima_revision === 'pendiente' ? <RevisionBadge estado="pendiente" /> : null}
         </View>
       ) : null}
+      {tree.riesgo_caida && abreAlerta(tree.riesgo_caida) ? <RiesgoBadge categoria={tree.riesgo_caida} /> : null}
       </View>
     </Pressable>
   );

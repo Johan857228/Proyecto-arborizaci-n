@@ -53,6 +53,7 @@ estos archivos, que se pegan completos en **Supabase → SQL Editor → Run**, e
 5. `sql/005_privacidad.sql` (autorización del acudiente, solicitudes de datos, alias y nombres protegidos en rankings)
 6. `sql/006_dane.sql` (código DANE, DIVIPOLA y municipio de cada sede)
 7. `sql/007_sin_conexion.sql` (registros hechos sin señal: no se duplican al reenviarse)
+8. `sql/008_riesgo_caida.sql` (tamizaje de riesgo de caída, alertas y contactos de emergencia de cada sede)
 
 No borran datos: a cada árbol ya registrado le crean su inspección de registro (con los
 hallazgos que tenía) y a cada usuario de Supabase Auth su perfil. Se pueden ejecutar más de
@@ -211,6 +212,10 @@ triggers en Supabase (para que tampoco se puedan saltar llamando a la API de Sup
 | PATCH | `/instituciones/{id}` | Admin | Asigna el código DANE (12 dígitos), el DIVIPOLA (5) y el municipio |
 | POST | `/exportar` | Docente, admin | Genera `arboles` (CSV, GeoJSON o Shapefile), `inspecciones` o `intervenciones` (CSV), o `todo` (ZIP), y devuelve un enlace de descarga que vence en 10 minutos. Sin datos personales |
 | GET | `/exportar/diccionario` | Usuario | Qué significa cada columna exportada |
+| GET | `/arboles/{id}/riesgo` | Usuario | Último tamizaje de riesgo de caída del árbol y su alerta abierta |
+| GET | `/alertas?estado=abiertas\|cerradas\|todas` | Usuario | Alertas de riesgo alto o inminente de la institución (el admin, de todas) |
+| POST | `/alertas/{id}/confirmar` · `/descartar` · `/aviso` · `/atender` | Docente o admin | Confirmar el riesgo, descartarlo con motivo, dejar constancia del aviso a rectoría y cerrarla |
+| GET / PUT | `/instituciones/{id}/contactos` | Usuario / docente o admin | Contactos de emergencia de la sede (rectoría, gestión del riesgo, autoridad ambiental) |
 
 ## Identificación con IA
 
@@ -310,6 +315,16 @@ El cuerpo trae `detail` con el mensaje. Los errores que vienen de la base de dat
 - Una foto `completo`, una `detalle` y hasta 3 `adicional`; JPG, PNG o WebP; máximo 5 MB. El formato se comprueba con los primeros bytes del archivo, no con lo que declara el navegador.
 - Solo quien registró un árbol puede subirle fotos (el RLS impide además editar árboles ajenos).
 - El código `IE001-0001` y el campo `registrado_por` los asigna la base de datos; el frontend nunca los envía.
+- **Riesgo de caída** (`servicios/riesgo_caida.py`): el registro y cada inspección pueden traer un
+  `tamizaje` (inclinación, raíces, ramas secas, cavidades, hongos, grietas y qué hay debajo, que es
+  obligatorio). La categoría (bajo, medio, alto o inminente) la calcula el backend cruzando la
+  probabilidad de falla con la ocupación de lo que hay debajo; un árbol pequeño (≤ 3 m y DAP ≤ 10 cm)
+  baja un nivel. La app usa las mismas reglas sin conexión (`frontend/src/features/riesgo/reglas.ts`).
+  Alto o inminente abre una alerta por árbol (`por_confirmar` → `confirmada` → `atendida`, o
+  `descartada`); otra inspección la actualiza sin bajarle la categoría y anular la inspección que la
+  abrió la descarta. Es un tamizaje, no un dictamen: la poda o tala la autoriza la autoridad ambiental
+  previa visita técnica (Decreto 1076 de 2015, art. 2.2.1.1.9.3). Sin la migración 008 la categoría se
+  calcula y se devuelve, pero no se guarda ni abre alertas.
 - **Sin conexión**: la app guarda en el teléfono lo que se registra sin señal y lo envía después.
   `POST /arboles`, `POST /arboles/{id}/inspecciones` y las dos rutas de fotos aceptan un
   `id_cliente` (UUID que genera la app; en las fotos va como parámetro `?id_cliente=`). Si llega

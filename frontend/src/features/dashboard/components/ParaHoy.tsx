@@ -10,6 +10,7 @@ import { usePendientes } from '@/features/inspections/hooks/useInspecciones';
 import { useCuentasSinInstitucion } from '@/features/perfil/hooks/usePerfil';
 import { esAdmin, esRevisor, type MiPerfil } from '@/features/perfil/schemas';
 import { useReporte } from '@/features/reports/api';
+import { useAlertas } from '@/features/riesgo/api';
 import { getApiErrorMessage } from '@/services/api/client';
 import { formatFecha, formatPesos } from '@/shared/format';
 import { InlineMessage, PrimaryButton } from '@/shared/components/FormControls';
@@ -34,6 +35,7 @@ export function usePendientesDeHoy(perfil: MiPerfil | undefined) {
   const revision = usePendientes(a.institucionId, 0, a.revisor);
   const reporte = useReporte({ institucionId: a.institucionId }, a.revisor);
   const cuentas = useCuentasSinInstitucion(a.admin);
+  const alertas = useAlertas('abiertas', a.institucionId, a.revisor);
   if (a.estudiante) {
     const c = avance.data?.cobertura;
     return { total: c ? Math.max(0, c.arboles_asignados - c.arboles_inspeccionados) : undefined };
@@ -41,7 +43,7 @@ export function usePendientesDeHoy(perfil: MiPerfil | undefined) {
   if (a.revisor) {
     if (!revision.data || !reporte.data) return { total: undefined };
     return {
-      total: revision.data.total + reporte.data.riesgo.total_prioritarios + reporte.data.intervenciones.programadas_vencidas + cuentas,
+      total: revision.data.total + reporte.data.riesgo.total_prioritarios + reporte.data.intervenciones.programadas_vencidas + cuentas + (alertas.data?.length ?? 0),
     };
   }
   return { total: undefined };
@@ -164,10 +166,34 @@ function ParaAtender({ perfil }: { perfil: MiPerfil }) {
   const revision = usePendientes(a.institucionId, 0, a.revisor);
   const reporte = useReporte({ institucionId: a.institucionId }, a.revisor);
   const cuentas = useCuentasSinInstitucion(a.admin);
+  const alertas = useAlertas('abiertas', a.institucionId, a.revisor);
 
-  if (revision.isLoading || reporte.isLoading) return <Card title="Para atender" icon="flag"><Cargando texto="Revisando pendientes…" /></Card>;
+  // Las alertas de riesgo de caída van primero y no dependen de que carguen los demás pendientes.
+  const abiertas = alertas.data ?? [];
+  const inminentes = abiertas.filter((x) => x.categoria === 'inminente').length;
+  const filaAlertas = abiertas.length > 0 ? (
+    <FilaTarea
+      key="alertas"
+      icon="warning"
+      tono="critico"
+      valor={abiertas.length}
+      texto={abiertas.length === 1 ? 'alerta de riesgo de caída' : 'alertas de riesgo de caída'}
+      detalle={inminentes ? `${inminentes} ${inminentes === 1 ? 'inminente' : 'inminentes'}: atiéndela hoy` : 'Confírmalas y avisa a rectoría'}
+      href={'/(app)/alerts' as Href}
+    />
+  ) : null;
+
   const error = revision.error ?? reporte.error;
-  if (error) return <Card title="Para atender" icon="flag"><InlineMessage>{getApiErrorMessage(error)}</InlineMessage></Card>;
+  if (revision.isLoading || reporte.isLoading || error) {
+    return (
+      <Card title="Para atender" icon="flag">
+        <View style={styles.lista}>
+          {filaAlertas}
+          {error ? <InlineMessage>{getApiErrorMessage(error)}</InlineMessage> : <Cargando texto="Revisando pendientes…" />}
+        </View>
+      </Card>
+    );
+  }
 
   const pendientes = revision.data?.total ?? 0;
   const r = reporte.data;
@@ -175,7 +201,7 @@ function ParaAtender({ perfil }: { perfil: MiPerfil }) {
   const vencidas = r?.intervenciones.programadas_vencidas ?? 0;
   const programadas = r?.intervenciones.programadas ?? 0;
   const sinInspeccion = r?.cobertura.sin_inspeccion_reciente ?? 0;
-  const filas: ReactNode[] = [];
+  const filas: ReactNode[] = filaAlertas ? [filaAlertas] : [];
   if (pendientes > 0) {
     filas.push(<FilaTarea key="revision" icon="review" tono="riesgo" valor={pendientes} texto={pendientes === 1 ? 'inspección espera revisión' : 'inspecciones esperan revisión'} href={'/(app)/review' as Href} />);
   }

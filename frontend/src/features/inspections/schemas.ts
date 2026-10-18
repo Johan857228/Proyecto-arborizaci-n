@@ -11,6 +11,7 @@ import {
   TIPOS_INSECTO,
   PARTES_ARBOL,
 } from '@/features/inspections/bioticos';
+import { resultadoTamizajeSchema, tamizajeSchema } from '@/features/riesgo/schemas';
 import { fotoOutSchema, observacionOutSchema } from '@/features/trees/schemas';
 import { COLOMBIA, isInColombia } from '@/shared/utils/geo';
 import { numero, textoOpcional } from '@/shared/validacion';
@@ -64,6 +65,7 @@ export const inspeccionSchema = z.object({
   o2_kg: z.number(),
   advertencias: z.array(z.string()),
   fotos_sugeridas: z.array(z.enum(['completo', 'detalle', 'adicional'])),
+  riesgo_caida: resultadoTamizajeSchema.nullable().optional(),
   ...bioticosSalidaSchema.shape,
 });
 export type Inspeccion = z.infer<typeof inspeccionSchema>;
@@ -161,6 +163,7 @@ export const inspeccionPayloadSchema = z.object({
   pct_hemiparasitas: z.number().gt(0).max(100).nullable().optional(),
   bejucos: z.number().int().min(0).max(4).optional(),
   epifitas: z.array(z.enum(TIPOS_EPIFITA)).max(5).optional(),
+  tamizaje: tamizajeSchema.optional(),
 }).strict();
 export type InspeccionPayload = z.infer<typeof inspeccionPayloadSchema>;
 

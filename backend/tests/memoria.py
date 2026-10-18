@@ -19,6 +19,10 @@ DEFECTOS = {
     "metas": lambda: {"creado_en": _ahora(), "descripcion": None},
     "escenarios_presupuestales": lambda: {"creado_en": _ahora()},
     "metodos_calculo": lambda: {"creado_en": _ahora()},
+    "tamizajes_riesgo": lambda: {"creado_en": _ahora()},
+    "alertas_riesgo": lambda: {"estado": "por_confirmar", "creada_en": _ahora(), "actualizada_en": _ahora(),
+                               "revisada_en": None, "comentario_revision": None, "rectoria_avisada_en": None,
+                               "rectoria_medio": None, "atendida_en": None, "nota_cierre": None, "intervencion_id": None},
 }
 UNICOS = {
     "cursos": [("institucion_id", "nombre", "anio")],
@@ -26,7 +30,8 @@ UNICOS = {
     "curso_zonas": [("curso_id", "zona")],
     "inspeccion_observaciones": [("inspeccion_id", "observacion_codigo")],
 }
-SIN_ID = {"curso_zonas", "inspeccion_observaciones", "parametros_institucionales", "perfiles", "tipos_intervencion"}
+SIN_ID = {"curso_zonas", "inspeccion_observaciones", "parametros_institucionales", "perfiles", "tipos_intervencion",
+          "tamizajes_riesgo", "contactos_emergencia"}
 
 
 def _ahora():

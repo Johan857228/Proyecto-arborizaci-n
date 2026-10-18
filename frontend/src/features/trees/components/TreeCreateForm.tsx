@@ -26,6 +26,7 @@ import { parseDecimal, sanitizeDecimal } from '@/shared/utils/forms';
 import { DISTANCIA_INSTITUCION_MAX_KM, PRECISION_GPS_MAX_M, distanceKm } from '@/shared/utils/geo';
 import { crearEstilos, useTema } from '@/theme';
 import { AvisoFotos } from '@/shared/components/AvisoFotos';
+import { TamizajeFields } from '@/features/riesgo/components/TamizajeFields';
 
 interface Props {
   catalogs: Catalogos;
@@ -111,6 +112,8 @@ export function TreeCreateForm({ catalogs, submitting, submitError, onCancel, on
   const ubicacion = form.gps.location;
   const precisionBaja = ubicacion?.accuracy != null && ubicacion.accuracy > PRECISION_GPS_MAX_M;
   const distancia = ubicacion && institucion ? distanceKm(ubicacion, institucion) : null;
+  const alturaM = useWatch({ control: form.control, name: 'altura_m' });
+  const dapCm = useWatch({ control: form.control, name: 'dap_cm' });
   const fotoGeneral = form.photos.find((photo) => photo.tipo === 'completo');
   const fotoDetalle = form.photos.find((photo) => photo.tipo === 'detalle');
   const adicionales = form.photos.filter((photo) => photo.tipo === 'adicional');
@@ -390,6 +393,21 @@ export function TreeCreateForm({ catalogs, submitting, submitError, onCancel, on
                 error={fieldState.error?.message}
               />
             )}
+          />
+        </Section>
+
+        <Section
+          step={5}
+          icon="warning"
+          title="Riesgo de caída"
+          description="Lista visual de señales de falla y qué hay debajo. Orienta qué hacer y avisa a un docente si el riesgo es alto."
+        >
+          <TamizajeFields
+            valor={form.tamizaje}
+            onChange={form.cambiarTamizaje}
+            alturaM={alturaM}
+            dapCm={dapCm}
+            error={form.tamizajeError}
           />
         </Section>
 

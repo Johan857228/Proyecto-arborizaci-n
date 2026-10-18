@@ -12,7 +12,8 @@ const VERSION = 1;
 const MAX_EDAD_MS = 7 * 24 * 60 * 60 * 1000;
 const ESPERA_ESCRITURA_MS = 3000;
 // Lo necesario para trabajar en campo. Lo demás (reportes, presupuestos, usuarios…) se consulta en línea.
-const RAICES = new Set(['catalogs', 'perfil', 'trees', 'arbol', 'dashboard', 'instituciones', 'intervenciones', 'inspeccion']);
+// Las alertas y los contactos de emergencia van para que la ruta de emergencia funcione sin señal.
+const RAICES = new Set(['catalogs', 'perfil', 'trees', 'arbol', 'dashboard', 'instituciones', 'intervenciones', 'inspeccion', 'alertas', 'contactos']);
 
 interface Copia {
   version: number;

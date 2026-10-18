@@ -55,6 +55,7 @@ from routers import (
     presupuestos,
     privacidad,
     reportes,
+    riesgo,
     usuarios,
 )
 from routers.inspecciones import InspeccionCrear, registrar_inspeccion
@@ -143,7 +144,7 @@ async def manejar_error_db(request, exc: APIError):
 
 
 for modulo in (inspecciones, intervenciones, cursos, usuarios, presupuestos, configuracion,
-               gamificacion, reportes, metas, escenarios, ia, privacidad, exportar):
+               gamificacion, reportes, metas, escenarios, ia, privacidad, exportar, riesgo):
     app.include_router(modulo.router)
 
 
@@ -288,7 +289,7 @@ def crear_arbol(datos_arbol: ArbolCrear, respuesta: Response, perfil: Perfil = D
 
     # 2) Guardar el árbol (solo sus columnas: la precisión y las notas son de la inspección)
     fila = datos_arbol.model_dump(
-        exclude={"observaciones", "precision_gps_m", "notas", "id_cliente", "capturado_en", *CAMPOS_BIOTICOS}
+        exclude={"observaciones", "precision_gps_m", "notas", "id_cliente", "capturado_en", "tamizaje", *CAMPOS_BIOTICOS}
     )
     if datos_arbol.id_cliente:
         fila["id_cliente"] = str(datos_arbol.id_cliente)
@@ -304,7 +305,7 @@ def crear_arbol(datos_arbol: ArbolCrear, respuesta: Response, perfil: Perfil = D
             cliente.table("arbol_observaciones").insert(
                 [{"arbol_id": creado["id"], "observacion_codigo": c} for c in codigos]
             ).execute()
-        registrar_inspeccion(
+        registro = registrar_inspeccion(
             cliente,
             creado,
             InspeccionCrear(
@@ -320,15 +321,19 @@ def crear_arbol(datos_arbol: ArbolCrear, respuesta: Response, perfil: Perfil = D
                 observaciones=codigos,
                 notas=datos_arbol.notas,
                 capturado_en=datos_arbol.capturado_en,
+                tamizaje=datos_arbol.tamizaje,
                 **datos_arbol.model_dump(include=CAMPOS_BIOTICOS),
             ),
             "registro",
+            perfil.usuario_id,
         )
     except Exception:
         db.get_admin().table("arboles").delete().eq("id", creado["id"]).execute()
         raise
 
-    return resumen_por_id(cliente, creado["id"])
+    resumen = resumen_por_id(cliente, creado["id"])
+    tamizaje = registro.get("_tamizaje")
+    return {**resumen, "riesgo_caida": tamizaje["categoria"] if tamizaje else None}
 
 
 @app.get("/arboles", response_model=list[ArbolResumen], tags=["Árboles"])
@@ -354,7 +359,8 @@ def listar_arboles(
         q = q.ilike("nombre_comun", f"%{escapar_like(especie.strip())}%")
     filas = q.order("registrado_en", desc=True).range(desplazamiento, desplazamiento + limite - 1).execute().data
     portadas = portadas_de_arboles(cliente, [f["id"] for f in filas])
-    return [{**f, "foto_url": portadas.get(f["id"])} for f in filas]
+    riesgos = riesgo.categorias_actuales([str(f["id"]) for f in filas])
+    return [{**f, "foto_url": portadas.get(f["id"]), "riesgo_caida": riesgos.get(str(f["id"]))} for f in filas]
 
 
 @app.get("/arboles/{arbol_id}", response_model=ArbolDetalle, tags=["Árboles"])

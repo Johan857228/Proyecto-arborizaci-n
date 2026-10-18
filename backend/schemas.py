@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field, StringConstraints, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator, model_validator
 
 # Límites del formulario (el frontend usa los mismos en src/features/trees/schemas.ts)
 DAP_MAX_CM = 500       # 5 m de diámetro de tronco
@@ -162,6 +162,42 @@ class CamposSinConexion(BaseModel):
     )
 
 
+# ------------------------------ Riesgo de caída ------------------------------
+DebajoDelArbol = Literal["aulas", "paso", "recreo", "cancha", "parqueadero", "via", "cables", "poco_uso", "cerrada"]
+CategoriaRiesgo = Literal["bajo", "medio", "alto", "inminente"]
+
+
+class Tamizaje(BaseModel):
+    """Tamizaje visual del riesgo de caída: lo que se ve del árbol y qué hay debajo. La categoría
+    la calcula servicios/riesgo_caida.py (no la envía la app)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    inclinacion: Literal["ninguna", "leve", "marcada", "reciente"] = "ninguna"
+    raices: Literal["sanas", "expuestas", "danadas"] = "sanas"
+    ramas_secas: Literal["ninguna", "pequenas", "grandes", "colgando"] = "ninguna"
+    cavidades: Literal["ninguna", "pequena", "grande"] = "ninguna"
+    hongos: Literal["ninguno", "en_ramas", "en_tronco_o_base"] = "ninguno"
+    grietas: Literal["ninguna", "en_ramas", "en_tronco_o_union", "abriendose"] = "ninguna"
+    debajo: list[DebajoDelArbol] = Field(
+        min_length=1, max_length=9, description="Qué hay debajo o al alcance si el árbol o una rama cae"
+    )
+
+    @field_validator("debajo")
+    @classmethod
+    def _sin_repetir(cls, v: list[str]) -> list[str]:
+        return sorted(set(v))
+
+
+class ResultadoTamizaje(BaseModel):
+    categoria: CategoriaRiesgo
+    probabilidad: Literal["improbable", "posible", "probable", "inminente"]
+    ocupacion: Literal["rara", "ocasional", "frecuente", "constante"]
+    motivos: list[str]
+    accion: str
+    respuestas: Tamizaje
+
+
 class CamposBioticos(BaseModel):
     """Agentes bióticos observados en la visita (FB-01 a FB-06). Todos son opcionales: si no se
     observa un agente, su tipo va vacío y no se envían su parte ni su severidad (escala 0 a 4)."""
@@ -235,6 +271,7 @@ class ArbolCrear(CamposBioticos, CamposSinConexion):
         default=None, ge=0, le=10000, description="Precisión que reporta el GPS del dispositivo, en metros"
     )
     notas: str | None = Field(default=None, max_length=1000, description="Notas de la primera inspección")
+    tamizaje: Tamizaje | None = Field(default=None, description="Tamizaje de riesgo de caída de la primera inspección")
 
     # mode="before": se limpian los espacios ANTES de medir el largo del texto
     @field_validator("zona_otra", "interferencia_otra", "notas", mode="before")
@@ -285,6 +322,9 @@ class ArbolResumen(BaseModel):
     ultima_revision: EstadoRevision | None = None
     n_inspecciones: int | None = None
     foto_url: str | None = Field(default=None, description="Foto general más reciente (URL firmada por 1 hora)")
+    riesgo_caida: CategoriaRiesgo | None = Field(
+        default=None, description="Categoría del último tamizaje de riesgo de caída (inspecciones no anuladas)"
+    )
 
 
 class ObservacionOut(BaseModel):
