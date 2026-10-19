@@ -16,9 +16,11 @@ import db
 from auth import Perfil, perfil_actual, revisor_actual
 from comun import BUCKET_FOTOS, MAX_FOTO_BYTES, ahora, fecha_local, hoy, leer_foto, url_firmada
 from routers import reportes
+from routers import siembras as router_siembras
 from routers.servicio_social import resumenes_institucion
 from servicios import indicadores
 from servicios import prae as reglas
+from servicios import siembras as reglas_siembras
 
 router = APIRouter(prefix="/prae", tags=["PRAE"])
 
@@ -579,6 +581,7 @@ def _indicadores(perfil: Perfil, prae: dict) -> dict:
         "alertas": None,
         "servicio_social": None,
         "pedagogia": None,
+        "siembras": None,
     }
     try:
         alertas = db.get_admin().table("alertas_riesgo").select("estado, creada_en").eq("institucion_id", institucion_id).execute().data
@@ -612,6 +615,17 @@ def _indicadores(perfil: Perfil, prae: dict) -> dict:
         }
     except APIError:
         pass  # sin la migración 012
+    try:
+        jornadas, plantas, controles = router_siembras._datos(institucion_id)
+        del_anio = [s for s in plantas if str(s["fecha"])[:4] == str(anio)]
+        res = reglas_siembras.resumen(del_anio, controles, router_siembras._origenes(del_anio, router_siembras._especies()), hoy())
+        resultado["siembras"] = {
+            "jornadas": sum(1 for j in jornadas if str(j["fecha"])[:4] == str(anio)),
+            "sembradas": res["sembradas"], "pct_nativas": res["pct_nativas"],
+            "evaluadas": res["evaluadas"], "supervivencia_pct": res["supervivencia_pct"],
+        }
+    except APIError:
+        pass  # sin la migración 013
     return resultado
 
 
@@ -621,6 +635,7 @@ class IndicadoresOut(BaseModel):
     alertas: dict | None = None
     servicio_social: dict | None = None
     pedagogia: dict | None = Field(default=None, description="Clases dictadas con las guías de Arbolado Escolar en el año")
+    siembras: dict | None = Field(default=None, description="Jornadas y plántulas sembradas en el año, nativas y supervivencia")
 
 
 @router.get("/{prae_id}/indicadores", response_model=IndicadoresOut)

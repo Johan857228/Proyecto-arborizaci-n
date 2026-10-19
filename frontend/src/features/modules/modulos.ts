@@ -28,6 +28,7 @@ export const GRUPOS: { clave: GrupoModulo; titulo: string }[] = [
 
 export const MODULOS: Modulo[] = [
   { clave: 'mapa', titulo: 'Mapa con capas', corto: 'Mapa', texto: 'Sedes y árboles por estado, riesgo de caída, especie y origen, también sin conexión.', icono: 'map', href: '/(app)/map' as Href, ruta: '/map', grupo: 'campo' },
+  { clave: 'siembras', titulo: 'Siembras', corto: 'Siembras', texto: 'Jornadas, plántulas georreferenciadas, controles a los 3, 6, 12 y 24 meses y lista para el certificado Siembra Vida.', icono: 'siembra', href: '/(app)/plantings' as Href, ruta: '/plantings', grupo: 'campo' },
   { clave: 'guias', titulo: 'Guías de clase', corto: 'Guías', texto: 'Secuencias por grado con los árboles del colegio (DBA de Ciencias y Matemáticas), ficha para imprimir y bitácora.', icono: 'guia', href: '/(app)/guides' as Href, ruta: '/guides', grupo: 'campo' },
   { clave: 'alertas', titulo: 'Alertas de riesgo de caída', corto: 'Alertas', texto: 'Árboles con riesgo alto o inminente, ruta de emergencia y aviso a rectoría.', icono: 'warning', href: '/(app)/alerts' as Href, ruta: '/alerts', grupo: 'campo' },
   { clave: 'servicio', titulo: 'Servicio social', corto: 'Servicio', texto: 'Horas de 10.° y 11.°: bitácora con evidencia, aprobación docente y certificado con QR.', icono: 'school', href: '/(app)/service' as Href, ruta: '/service', grupo: 'campo' },

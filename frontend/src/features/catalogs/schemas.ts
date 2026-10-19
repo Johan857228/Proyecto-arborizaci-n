@@ -5,6 +5,7 @@ export const catalogosSchema = z.object({
     id: z.number().int().positive(),
     nombre_comun: z.string().min(1),
     nombre_cientifico: z.string().min(1),
+    origen: z.enum(['nativa', 'exotica']).nullable().optional(),
   })),
   instituciones: z.array(z.object({
     id: z.string().min(1),

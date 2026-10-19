@@ -32,6 +32,14 @@ DEFECTOS = {
     "prae_evidencias": lambda: {"creado_en": _ahora(), "foto_path": None, "accion_id": None},
     "prae_evaluaciones": lambda: {"creado_en": _ahora()},
     "clases_guia": lambda: {"creado_en": _ahora(), "curso_id": None, "asistentes": None, "notas": None},
+    "jornadas_siembra": lambda: {"creado_en": _ahora(), "actualizado_en": _ahora(), "lugar": None, "organizador": "colegio",
+                                 "oficial": False, "area_de_vida": None, "patrocinador": None, "notas": None},
+    "siembras": lambda: {"creado_en": _ahora(), "especie_otra": None, "precision_gps_m": None, "vivero": None,
+                         "vivero_registro_ica": None, "altura_inicial_cm": None, "padrino_curso_id": None,
+                         "padrino_usuario_id": None, "padrino_nombre": None, "arbol_id": None, "reemplaza_id": None, "notas": None},
+    "controles_siembra": lambda: {"creado_en": _ahora(), "altura_cm": None, "mantenimiento": False, "observaciones": None},
+    "asistentes_jornada": lambda: {"creado_en": _ahora(), "arboles_sembrados": None, "autoriza_certificado": False,
+                                   "autorizacion_registrada_por": None, "autorizacion_registrada_en": None},
 }
 UNICOS = {
     "cursos": [("institucion_id", "nombre", "anio")],

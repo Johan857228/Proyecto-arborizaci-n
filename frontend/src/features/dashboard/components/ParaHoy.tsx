@@ -14,6 +14,7 @@ import { usePrae } from '@/features/prae/api';
 import { INSTANCIAS } from '@/features/prae/schemas';
 import { useAlertas } from '@/features/riesgo/api';
 import { useEstudiantesServicio, usePendientesServicio, useResumenServicio } from '@/features/servicio/api';
+import { useResumenSiembras } from '@/features/siembras/api';
 import { horasTexto } from '@/features/servicio/schemas';
 import { getApiErrorMessage } from '@/services/api/client';
 import { formatFecha, formatPesos } from '@/shared/format';
@@ -214,6 +215,21 @@ function ParaAtender({ perfil }: { perfil: MiPerfil }) {
     />
   ) : null;
 
+  // Controles de supervivencia de las plántulas (migración 013): por hacer o vencidos.
+  const siembras = useResumenSiembras(a.institucionId, a.revisor && Boolean(a.institucionId)).data?.total;
+  const controlesPorHacer = siembras ? siembras.controles_pendientes + siembras.controles_vencidos : 0;
+  const filaSiembras = controlesPorHacer > 0 && siembras ? (
+    <FilaTarea
+      key="siembras"
+      icon="siembra"
+      tono={siembras.controles_vencidos ? 'critico' : 'riesgo'}
+      valor={controlesPorHacer}
+      texto={controlesPorHacer === 1 ? 'control de siembra por hacer' : 'controles de siembra por hacer'}
+      detalle={siembras.controles_vencidos ? `${siembras.controles_vencidos} ${siembras.controles_vencidos === 1 ? 'vencido' : 'vencidos'}` : 'Los estudiantes también pueden registrarlos'}
+      href={'/(app)/plantings' as Href}
+    />
+  ) : null;
+
   // Las alertas de riesgo de caída van primero y no dependen de que carguen los demás pendientes.
   const abiertas = alertas.data ?? [];
   const inminentes = abiertas.filter((x) => x.categoria === 'inminente').length;
@@ -249,6 +265,7 @@ function ParaAtender({ perfil }: { perfil: MiPerfil }) {
         <View style={styles.lista}>
           {filaAlertas}
           {filaServicio}
+          {filaSiembras}
           {filaPrae}
           {error ? <InlineMessage>{getApiErrorMessage(error)}</InlineMessage> : <Cargando texto="Revisando pendientes…" />}
         </View>
@@ -308,6 +325,7 @@ function ParaAtender({ perfil }: { perfil: MiPerfil }) {
     filas.push(<FilaTarea key="cobertura" icon="calendar" tono="neutro" valor={sinInspeccion} texto={`${sinInspeccion === 1 ? 'árbol' : 'árboles'} sin inspección en ${r.cobertura.dias_revisita} días`} href={'/(app)/reports?seccion=cobertura' as Href} />);
   }
   if (filaServicio) filas.push(filaServicio);
+  if (filaSiembras) filas.push(filaSiembras);
   if (filaPrae) filas.push(filaPrae);
   if (a.admin && cuentas > 0) {
     filas.push(<FilaTarea key="cuentas" icon="users" tono="info" valor={cuentas} texto={cuentas === 1 ? 'cuenta nueva sin institución' : 'cuentas nuevas sin institución'} href={'/(app)/users' as Href} />);

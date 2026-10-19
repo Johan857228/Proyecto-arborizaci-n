@@ -246,9 +246,11 @@ class Documento:
                 self.y -= tamano * 1.45
         self.y -= 4
 
-    def tabla(self, encabezados: list[str], filas: list[list[str]], anchos: list[float], tamano: float = 9):
+    def tabla(self, encabezados: list[str], filas: list[list[str]], anchos: list[float], tamano: float = 9,
+              alto_minimo: float = 0):
         """`anchos` en fracciones del ancho útil. Cada celda se parte en líneas; si una fila no cabe,
-        pasa a la página siguiente y repite el encabezado."""
+        pasa a la página siguiente y repite el encabezado. `alto_minimo` deja espacio para escribir
+        a mano (firmas)."""
         columnas = [a * self.ancho for a in anchos]
         salto = tamano * 1.35
 
@@ -265,7 +267,7 @@ class Documento:
         encabezado()
         for fila in filas:
             celdas = [partir(str(valor), tamano, ancho - 8) or [""] for valor, ancho in zip(fila, columnas)]
-            alto = max(len(c) for c in celdas) * salto + 6
+            alto = max(max(len(c) for c in celdas) * salto + 6, alto_minimo)
             if self.y - alto < MARGEN_INFERIOR:
                 self._nueva()
                 encabezado()

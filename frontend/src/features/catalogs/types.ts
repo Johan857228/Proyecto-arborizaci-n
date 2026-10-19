@@ -2,6 +2,8 @@ export interface Especie {
   id: number;
   nombre_comun: string;
   nombre_cientifico: string;
+  /** Origen en Colombia (backend/servicios/mapa.py); null si no está clasificada. */
+  origen?: 'nativa' | 'exotica' | null;
 }
 
 export interface Institucion {

@@ -40,6 +40,7 @@ export function InformeTab({ prae }: { prae: Prae }) {
               <StatTile label="Cobertura" value={i.arbolado.cobertura_pct == null ? '—' : `${formatNumero(i.arbolado.cobertura_pct, 1)} %`} hint="árboles inspeccionados" icon="calendar" tono="info" />
               <StatTile label="En riesgo o críticos" value={i.arbolado.pct_riesgo_o_critico == null ? '—' : `${formatNumero(i.arbolado.pct_riesgo_o_critico, 1)} %`} icon="warning" tono="riesgo" />
               {i.alertas ? <StatTile label="Alertas de caída" value={n(i.alertas.total)} hint={`${n(i.alertas.atendidas)} atendidas`} icon="warning" tono="critico" /> : null}
+              {i.siembras ? <StatTile label="Siembras" value={n(i.siembras.sembradas)} hint={`${n(i.siembras.jornadas)} jornadas${i.siembras.supervivencia_pct != null ? ` · ${formatNumero(i.siembras.supervivencia_pct, 0)} % viven` : ''}`} icon="siembra" tono="sano" /> : null}
               {i.pedagogia ? <StatTile label="Clases con guías" value={n(i.pedagogia.clases)} hint={`${n(i.pedagogia.guias)} guías distintas · ${n(i.pedagogia.asistentes)} asistentes`} icon="guia" tono="info" /> : null}
               {i.servicio_social ? <StatTile label="Servicio social" value={`${n(i.servicio_social.horas_aprobadas)} h`} hint={`${n(i.servicio_social.estudiantes)} estudiantes · ${n(i.servicio_social.completaron)} completaron`} icon="school" tono="sano" /> : null}
             </StatGrid>

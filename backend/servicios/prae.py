@@ -155,6 +155,12 @@ def informe_pdf(prae: dict, institucion: dict, acciones: list[dict], evidencias:
     if servicio:
         filas.append(["Servicio social: estudiantes (completaron la meta)", f"{_numero(servicio['estudiantes'])} ({_numero(servicio['completaron'])})"])
         filas.append(["Servicio social: horas aprobadas", _numero(servicio["horas_aprobadas"])])
+    siembras = indicadores.get("siembras")
+    if siembras:
+        nativas = f" · {_numero(siembras['pct_nativas'])} % nativas" if siembras.get("pct_nativas") is not None else ""
+        filas.append(["Siembras del año: jornadas y plántulas", f"{_numero(siembras['jornadas'])} y {_numero(siembras['sembradas'])}{nativas}"])
+        if siembras.get("supervivencia_pct") is not None:
+            filas.append(["Supervivencia de esas plántulas (con control)", f"{_numero(siembras['supervivencia_pct'])} % de {_numero(siembras['evaluadas'])}"])
     pedagogia = indicadores.get("pedagogia")
     if pedagogia:
         filas.append(["Clases con las guías de la app (guías distintas)", f"{_numero(pedagogia['clases'])} ({_numero(pedagogia['guias'])})"])

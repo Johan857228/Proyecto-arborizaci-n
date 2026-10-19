@@ -58,6 +58,7 @@ estos archivos, que se pegan completos en **Supabase → SQL Editor → Run**, e
 10. `sql/010_prae.sql` (PRAE por institución y año: plan de acción, evidencias y evaluaciones)
 11. `sql/011_mapa.sql` (origen de cada especie, nativa o exótica, para el mapa)
 12. `sql/012_guias_clase.sql` (bitácora de clases dictadas con las guías de clase)
+13. `sql/013_siembras.sql` (jornadas de siembra, plántulas, controles de supervivencia y asistentes)
 
 No borran datos: a cada árbol ya registrado le crean su inspección de registro (con los
 hallazgos que tenía) y a cada usuario de Supabase Auth su perfil. Se pueden ejecutar más de
@@ -242,6 +243,12 @@ triggers en Supabase (para que tampoco se puedan saltar llamando a la API de Sup
 | POST | `/guias/{id}/ficha` | Docente o administrador | Ficha en PDF con datos reales del colegio: guía del docente, ficha del estudiante y clave (enlace de 10 min) |
 | GET / POST / DELETE | `/guias/clases` · `/guias/clases/{id}` | Ver: usuario de la institución · registrar: sus docentes · quitar: quien la registró o el administrador | Bitácora de clases dictadas (sin nombres de estudiantes) |
 | GET | `/laboratorio/datos` | Usuario de la institución | DAP, altura y copa de los árboles para el laboratorio de Matemáticas, sin datos de personas |
+| GET / POST / PATCH / DELETE | `/siembras/jornadas` · `/siembras/jornadas/{id}` | Ver: institución · crear y editar: sus docentes | Jornadas de siembra con su supervivencia; el detalle trae cada plántula, sus controles y el próximo |
+| POST / PATCH / DELETE | `/siembras/jornadas/{id}/plantas` · `/siembras/plantas/{id}` | Docentes de la institución | Plántula con especie, coordenadas, vivero (registro ICA) y padrino |
+| POST / DELETE | `/siembras/plantas/{id}/controles` · `/siembras/controles/{id}` | Cualquier persona de la institución · quitar: quien lo registró o un docente | Control de supervivencia a los 3, 6, 12 o 24 meses (o extra) |
+| GET / PUT | `/siembras/jornadas/{id}/asistentes` | Docentes de la institución | Asistentes (con nombres) y la autorización para la lista de la alcaldía |
+| POST | `/siembras/jornadas/{id}/lista` | Docentes de la institución | Lista para el certificado Siembra Vida Buen Ciudadano en PDF o CSV: solo quien tiene autorización |
+| GET / POST | `/siembras/resumen` · `/siembras/exportar` | Ver: institución · exportar: docentes | Supervivencia total, por jornada y por sede; GeoJSON o CSV de las plántulas sin nombres de personas |
 | GET | `/verificar/{código}` · `/servicio-social/verificar/{código}` | Público | Página (y JSON) a la que lleva el QR: válido o anulado, con las iniciales del estudiante |
 
 ## Identificación con IA
@@ -342,6 +349,13 @@ El cuerpo trae `detail` con el mensaje. Los errores que vienen de la base de dat
 - Una foto `completo`, una `detalle` y hasta 3 `adicional`; JPG, PNG o WebP; máximo 5 MB. El formato se comprueba con los primeros bytes del archivo, no con lo que declara el navegador.
 - Solo quien registró un árbol puede subirle fotos (el RLS impide además editar árboles ajenos).
 - El código `IE001-0001` y el campo `registrado_por` los asigna la base de datos; el frontend nunca los envía.
+- **Siembras** (`servicios/siembras.py`; Ley 2173 de 2021 y Resolución 1491 de 2025): cada plántula tiene
+  controles a los 3, 6, 12 y 24 meses (los 2 años de mantenimiento). Un control se hace desde 15 días antes
+  de su fecha y vence 30 días después. La supervivencia por edad es por cohorte: una plántula que murió a
+  los 6 meses cuenta como muerta a los 12 y a los 24; una sin control de la que no se sabe queda pendiente.
+  La lista para la alcaldía solo lleva el nombre de quien tiene la autorización registrada (en menores, la
+  firma el acudiente y el soporte queda en la institución); la app no guarda documentos de identidad ni
+  expide el certificado. Las siembras del año suman en los indicadores y el informe del PRAE.
 - **Guías de clase** (`servicios/guias.py`): 10 guías. Las de Ciencias Naturales (grados 2.°, 3.°, 4.°,
   6.°, 7.° y 11.°) se apoyan cada una en un DBA de Ciencias Naturales del MEN (V.1); las de Matemáticas
   (grados 3.° a 11.°), en el pensamiento aleatorio de los Estándares Básicos de Competencias (MEN, 2006).

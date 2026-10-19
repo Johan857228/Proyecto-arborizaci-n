@@ -71,6 +71,7 @@ const icons = {
   encuadrar: { ios: 'viewfinder', material: 'fit_screen' },
   guia: { ios: 'book.fill', material: 'menu_book' },
   laboratorio: { ios: 'chart.dots.scatter', material: 'scatter_plot' },
+  siembra: { ios: 'leaf.circle', material: 'potted_plant' },
 } satisfies Record<string, { ios: SFSymbol; material: AndroidSymbol }>;
 
 export type IconName = keyof typeof icons;
