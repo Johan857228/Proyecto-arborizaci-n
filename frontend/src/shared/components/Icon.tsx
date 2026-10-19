@@ -69,6 +69,8 @@ const icons = {
   capas: { ios: 'square.3.layers.3d', material: 'layers' },
   remove: { ios: 'minus', material: 'remove' },
   encuadrar: { ios: 'viewfinder', material: 'fit_screen' },
+  guia: { ios: 'book.fill', material: 'menu_book' },
+  laboratorio: { ios: 'chart.dots.scatter', material: 'scatter_plot' },
 } satisfies Record<string, { ios: SFSymbol; material: AndroidSymbol }>;
 
 export type IconName = keyof typeof icons;

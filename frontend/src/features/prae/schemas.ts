@@ -141,6 +141,7 @@ export const indicadoresSchema = z.object({
   }),
   alertas: z.object({ total: z.number(), abiertas: z.number(), atendidas: z.number(), descartadas: z.number() }).nullable().optional(),
   servicio_social: z.object({ estudiantes: z.number(), completaron: z.number(), horas_aprobadas: z.number() }).nullable().optional(),
+  pedagogia: z.object({ clases: z.number(), guias: z.number(), asistentes: z.number() }).nullable().optional(),
 });
 export type IndicadoresPrae = z.infer<typeof indicadoresSchema>;
 

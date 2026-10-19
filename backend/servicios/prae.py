@@ -155,6 +155,10 @@ def informe_pdf(prae: dict, institucion: dict, acciones: list[dict], evidencias:
     if servicio:
         filas.append(["Servicio social: estudiantes (completaron la meta)", f"{_numero(servicio['estudiantes'])} ({_numero(servicio['completaron'])})"])
         filas.append(["Servicio social: horas aprobadas", _numero(servicio["horas_aprobadas"])])
+    pedagogia = indicadores.get("pedagogia")
+    if pedagogia:
+        filas.append(["Clases con las guías de la app (guías distintas)", f"{_numero(pedagogia['clases'])} ({_numero(pedagogia['guias'])})"])
+        filas.append(["Estudiantes en esas clases (suma de asistentes)", _numero(pedagogia["asistentes"])])
     doc.tabla(["Indicador", "Valor"], filas, [0.72, 0.28])
     doc.parrafo("Estimación aproximada del CO2 con las medidas registradas; confirmar las fórmulas con el docente.", tamano=8.5, color=(0.353, 0.384, 0.345))
 

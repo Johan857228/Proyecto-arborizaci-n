@@ -57,6 +57,7 @@ estos archivos, que se pegan completos en **Supabase → SQL Editor → Run**, e
 9. `sql/009_servicio_social.sql` (grado de cada curso, bitácora de servicio social, meta de horas y certificados)
 10. `sql/010_prae.sql` (PRAE por institución y año: plan de acción, evidencias y evaluaciones)
 11. `sql/011_mapa.sql` (origen de cada especie, nativa o exótica, para el mapa)
+12. `sql/012_guias_clase.sql` (bitácora de clases dictadas con las guías de clase)
 
 No borran datos: a cada árbol ya registrado le crean su inspección de registro (con los
 hallazgos que tenía) y a cada usuario de Supabase Auth su perfil. Se pueden ejecutar más de
@@ -237,6 +238,10 @@ triggers en Supabase (para que tampoco se puedan saltar llamando a la API de Sup
 | GET / POST | `/prae/{id}/indicadores` · `/prae/{id}/informe` | Usuario de la institución | Indicadores del año y el informe anual en PDF (enlace de 10 min) |
 | GET | `/mapa?institucion_id=` | Usuario (el administrador elige la institución o todas) | Capas del mapa: sedes, árboles con estado, riesgo de caída, especie, origen, siembra reciente y alerta abierta |
 | PATCH | `/especies/{id}` | Administrador | Guarda si la especie es nativa o exótica (vacío vuelve a la lista del backend) |
+| GET | `/guias?area=&grado=` · `/guias/{id}` | Usuario | Guías de clase por grado y área, con cuántas veces se dictaron en la institución |
+| POST | `/guias/{id}/ficha` | Docente o administrador | Ficha en PDF con datos reales del colegio: guía del docente, ficha del estudiante y clave (enlace de 10 min) |
+| GET / POST / DELETE | `/guias/clases` · `/guias/clases/{id}` | Ver: usuario de la institución · registrar: sus docentes · quitar: quien la registró o el administrador | Bitácora de clases dictadas (sin nombres de estudiantes) |
+| GET | `/laboratorio/datos` | Usuario de la institución | DAP, altura y copa de los árboles para el laboratorio de Matemáticas, sin datos de personas |
 | GET | `/verificar/{código}` · `/servicio-social/verificar/{código}` | Público | Página (y JSON) a la que lleva el QR: válido o anulado, con las iniciales del estudiante |
 
 ## Identificación con IA
@@ -337,6 +342,14 @@ El cuerpo trae `detail` con el mensaje. Los errores que vienen de la base de dat
 - Una foto `completo`, una `detalle` y hasta 3 `adicional`; JPG, PNG o WebP; máximo 5 MB. El formato se comprueba con los primeros bytes del archivo, no con lo que declara el navegador.
 - Solo quien registró un árbol puede subirle fotos (el RLS impide además editar árboles ajenos).
 - El código `IE001-0001` y el campo `registrado_por` los asigna la base de datos; el frontend nunca los envía.
+- **Guías de clase** (`servicios/guias.py`): 10 guías. Las de Ciencias Naturales (grados 2.°, 3.°, 4.°,
+  6.°, 7.° y 11.°) se apoyan cada una en un DBA de Ciencias Naturales del MEN (V.1); las de Matemáticas
+  (grados 3.° a 11.°), en el pensamiento aleatorio de los Estándares Básicos de Competencias (MEN, 2006).
+  La ficha trae los datos reales del colegio: la ruta de campo excluye árboles con alerta de caída,
+  riesgo alto o estado crítico, y las muestras son aleatorias y repetibles con su número. Las clases
+  registradas suman en los indicadores y el informe del PRAE. El laboratorio calcula en la app tabla de
+  frecuencias (Sturges), histograma, media, mediana, cuartiles, desviación (poblacional con todos los
+  árboles, muestral con una muestra) y la regresión DAP-altura; la clave del PDF usa las mismas fórmulas.
 - **Mapa con capas** (`servicios/mapa.py`): una sola respuesta con todo lo que dibuja el visor. El
   origen de cada especie es el que guardó el administrador o, si no hay, el de una lista de
   especies cuyo origen en Colombia no se discute; las demás quedan sin clasificar. Siembra reciente =

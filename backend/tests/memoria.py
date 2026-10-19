@@ -31,6 +31,7 @@ DEFECTOS = {
     "prae_acciones": lambda: {"creado_en": _ahora(), "estado": "pendiente", "orden": 0},
     "prae_evidencias": lambda: {"creado_en": _ahora(), "foto_path": None, "accion_id": None},
     "prae_evaluaciones": lambda: {"creado_en": _ahora()},
+    "clases_guia": lambda: {"creado_en": _ahora(), "curso_id": None, "asistentes": None, "notas": None},
 }
 UNICOS = {
     "cursos": [("institucion_id", "nombre", "anio")],

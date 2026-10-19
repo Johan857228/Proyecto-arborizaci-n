@@ -578,6 +578,7 @@ def _indicadores(perfil: Perfil, prae: dict) -> dict:
         },
         "alertas": None,
         "servicio_social": None,
+        "pedagogia": None,
     }
     try:
         alertas = db.get_admin().table("alertas_riesgo").select("estado, creada_en").eq("institucion_id", institucion_id).execute().data
@@ -599,6 +600,18 @@ def _indicadores(perfil: Perfil, prae: dict) -> dict:
         }
     except APIError:
         pass  # sin la migración 009
+    try:
+        clases = (
+            db.get_admin().table("clases_guia").select("guia_id, fecha, asistentes").eq("institucion_id", institucion_id)
+            .gte("fecha", desde.isoformat()).lte("fecha", hasta.isoformat()).execute().data
+        )
+        resultado["pedagogia"] = {
+            "clases": len(clases),
+            "guias": len({c["guia_id"] for c in clases}),
+            "asistentes": sum(c.get("asistentes") or 0 for c in clases),
+        }
+    except APIError:
+        pass  # sin la migración 012
     return resultado
 
 
@@ -607,6 +620,7 @@ class IndicadoresOut(BaseModel):
     arbolado: dict
     alertas: dict | None = None
     servicio_social: dict | None = None
+    pedagogia: dict | None = Field(default=None, description="Clases dictadas con las guías de Arbolado Escolar en el año")
 
 
 @router.get("/{prae_id}/indicadores", response_model=IndicadoresOut)

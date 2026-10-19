@@ -1,6 +1,6 @@
 """PDF escrito a mano, sin librerías: páginas carta con las fuentes estándar Helvetica (todo lector
 de PDF las trae) en WinAnsiEncoding (cp1252: tildes, ñ, ¿ ¡ y °). Lo usan el certificado de
-servicio social y el informe anual del PRAE.
+servicio social, el informe anual del PRAE y las fichas de las guías de clase.
 
 `Pagina` dibuja en coordenadas fijas; `Documento` además va bajando por la página y abre una nueva
 cuando se acaba el espacio, con pie de página numerado.
@@ -190,6 +190,18 @@ class Documento:
     def espacio(self, alto: float):
         if self.y - alto < MARGEN_INFERIOR:
             self._nueva()
+
+    def nueva_pagina(self):
+        """Empieza en una página nueva (p. ej. la parte que se imprime para los estudiantes)."""
+        self._nueva()
+
+    def renglones(self, cantidad: int, separacion: float = 22):
+        """Líneas en blanco para escribir a mano."""
+        for _ in range(cantidad):
+            self.espacio(separacion)
+            self.y -= separacion
+            self.p.linea(MARGEN, self.y + 6, ANCHO - MARGEN, self.y + 6, color=LINEA, grosor=0.7)
+        self.y -= 6
 
     def portada(self, titulo: str, subtitulo: str):
         """Franja verde en la parte de arriba de la primera página."""
