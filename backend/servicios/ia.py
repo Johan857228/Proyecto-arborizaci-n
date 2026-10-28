@@ -10,6 +10,7 @@ formulario explica que la IA no está activada.
 """
 import base64
 import os
+import time
 from functools import lru_cache
 from typing import Literal
 
@@ -33,6 +34,16 @@ ESFUERZO = "medium"
 # Si el modelo declina una petición, la API la reintenta sola con el modelo de respaldo que
 # recomienda Anthropic; ver https://platform.claude.com/docs/en/build-with-claude/refusals-and-fallback
 BETA_RESPALDO = "server-side-fallback-2026-07-01"
+
+# Tarifa publicada por Anthropic (octubre de 2026), en dólares por millón de tokens: entrada,
+# salida, lectura de caché y escritura de caché (1,25 veces la entrada). Incluye los modelos de
+# respaldo. Es un estimado: la factura real está en la consola de Anthropic.
+TARIFA_VIGENTE = "2026-10"
+PRECIOS_USD_MTOK: dict[str, tuple[float, float, float, float]] = {
+    "claude-opus-5-5": (4.00, 20.00, 0.20, 5.00),
+    "claude-opus-5": (5.00, 25.00, 0.50, 6.25),
+    "claude-opus-4-8": (5.00, 25.00, 0.50, 6.25),
+}
 
 Confianza = Literal["alta", "media", "baja"]
 
@@ -125,6 +136,46 @@ class AnalisisIA(BaseModel):
 
 class AnalisisOut(AnalisisIA):
     modelo: str
+    analisis_id: str | None = Field(default=None, description="Para enlazar el análisis al árbol que se guarde")
+
+
+class Consumo(BaseModel):
+    """Lo que gastó un análisis: con esto se mide el costo por foto."""
+
+    modelo: str
+    tokens_entrada: int = 0
+    tokens_salida: int = 0
+    tokens_cache_lectura: int = 0
+    tokens_cache_escritura: int = 0
+    costo_usd: float | None = None
+    duracion_ms: int = 0
+
+
+def costo_usd(modelo: str, entrada: int, salida: int, cache_lectura: int = 0, cache_escritura: int = 0) -> float | None:
+    """Costo estimado con la tarifa publicada; None si el modelo no está en la tabla."""
+    precios = PRECIOS_USD_MTOK.get(modelo)
+    if not precios:
+        return None
+    p_entrada, p_salida, p_lectura, p_escritura = precios
+    total = entrada * p_entrada + salida * p_salida + cache_lectura * p_lectura + cache_escritura * p_escritura
+    return round(total / 1_000_000, 6)
+
+
+def consumo_de(respuesta, duracion_ms: int) -> Consumo:
+    """Tokens y costo de la respuesta. `model` dice qué modelo respondió (puede ser el de respaldo)."""
+    uso = getattr(respuesta, "usage", None)
+
+    def tokens(campo: str) -> int:
+        return int(getattr(uso, campo, 0) or 0)
+
+    modelo = getattr(respuesta, "model", None) or MODELO
+    entrada, salida = tokens("input_tokens"), tokens("output_tokens")
+    lectura, escritura = tokens("cache_read_input_tokens"), tokens("cache_creation_input_tokens")
+    return Consumo(
+        modelo=modelo, tokens_entrada=entrada, tokens_salida=salida, tokens_cache_lectura=lectura,
+        tokens_cache_escritura=escritura, costo_usd=costo_usd(modelo, entrada, salida, lectura, escritura) if uso else None,
+        duracion_ms=duracion_ms,
+    )
 
 
 # ------------------------------------ Instrucciones ------------------------------------
@@ -166,6 +217,8 @@ Reglas:
 - No estimes medidas (altura, diámetro del tronco ni de copa): se toman en campo.
 - interferencia: "Ninguna" si no se ve infraestructura afectada; null si la foto no lo permite saber.
 - Si las fotos no muestran un árbol, es_arbol es false y el resto queda en null o vacío.
+- Las fotos las toman estudiantes, muchos menores de edad: si aparecen personas, no las describas,
+  no las identifiques ni menciones rasgos suyos; habla solo del árbol y su entorno.
 - Escribe el resumen y las razones en español, sin tecnicismos innecesarios."""
 
 
@@ -201,9 +254,9 @@ def _cliente() -> anthropic.Anthropic:
     return anthropic.Anthropic(timeout=90.0, max_retries=1)
 
 
-def analizar(fotos: list[tuple[bytes, str]], especies: list[dict], observaciones: list[dict]) -> AnalisisIA:
-    """Envía las fotos (contenido, tipo MIME) a Claude y devuelve su análisis sin depurar.
-    La primera foto es la general; la segunda, si existe, la de detalle."""
+def analizar(fotos: list[tuple[bytes, str]], especies: list[dict], observaciones: list[dict]) -> tuple[AnalisisIA, Consumo]:
+    """Envía las fotos (contenido, tipo MIME) a Claude y devuelve su análisis sin depurar y lo
+    que costó. La primera foto es la general; la segunda, si existe, la de detalle."""
     contenido: list[dict] = []
     for indice, (datos, tipo) in enumerate(fotos):
         contenido.append({"type": "text", "text": "Foto general del árbol:" if indice == 0 else "Foto de detalle:"})
@@ -213,6 +266,7 @@ def analizar(fotos: list[tuple[bytes, str]], especies: list[dict], observaciones
         })
     contenido.append({"type": "text", "text": "Analiza las fotos y completa las sugerencias para el formulario."})
 
+    inicio = time.monotonic()
     try:
         respuesta = _cliente().beta.messages.parse(
             model=MODELO,
@@ -237,7 +291,7 @@ def analizar(fotos: list[tuple[bytes, str]], especies: list[dict], observaciones
         raise ErrorIA(422, "La IA no pudo analizar estas fotos. Prueba con otra foto del árbol.")
     if respuesta.stop_reason == "max_tokens" or respuesta.parsed_output is None:
         raise ErrorIA(502, "La IA no terminó el análisis. Intenta de nuevo.")
-    return respuesta.parsed_output
+    return respuesta.parsed_output, consumo_de(respuesta, round((time.monotonic() - inicio) * 1000))
 
 
 def _escala(valor: int, minimo: int, maximo: int) -> int:

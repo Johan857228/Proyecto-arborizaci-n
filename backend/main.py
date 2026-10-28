@@ -18,8 +18,9 @@ import uuid
 from collections import Counter
 from uuid import UUID
 
-from fastapi import Depends, FastAPI, File, HTTPException, Query, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, Query, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from postgrest.exceptions import APIError
 from supabase_auth.errors import AuthApiError, AuthError, AuthWeakPasswordError
@@ -29,12 +30,16 @@ import db
 from auth import Perfil, Sesion, perfil_actual, usuario_actual
 from comun import (
     BUCKET_FOTOS,
-    EXTENSIONES,
     MAX_FOTOS_ADICIONALES,
+    POLITICA_VERSION,
+    ahora,
+    ajeno,
+    buscar_por_id_cliente,
     escapar_like,
+    insertar_sin_duplicar,
+    leer_foto,
     portadas_de_arboles,
     resumen_por_id,
-    tipo_real_imagen,
     traer_todo,
     url_firmada,
 )
@@ -42,13 +47,23 @@ from routers import (
     configuracion,
     cursos,
     escenarios,
+    especies,
+    exportar,
     gamificacion,
+    guias,
     ia,
     inspecciones,
     intervenciones,
+    mapa,
     metas,
+    prae,
     presupuestos,
+    privacidad,
     reportes,
+    riesgo,
+    servicio_social,
+    siembras,
+    territorial,
     usuarios,
 )
 from routers.inspecciones import InspeccionCrear, registrar_inspeccion
@@ -75,6 +90,7 @@ from schemas import (
     TotalesAmbientales,
     Zona,
 )
+from servicios import mapa as reglas_mapa
 from servicios.calificacion import calcular_ambientales, descripcion_metodo
 
 app = FastAPI(
@@ -105,6 +121,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# El mapa y las listas grandes viajan comprimidos (el JSON de miles de árboles baja ~85 %).
+app.add_middleware(GZipMiddleware, minimum_size=2048)
 
 MAX_FOTO_BYTES = 5 * 1024 * 1024
 
@@ -137,7 +155,8 @@ async def manejar_error_db(request, exc: APIError):
 
 
 for modulo in (inspecciones, intervenciones, cursos, usuarios, presupuestos, configuracion,
-               gamificacion, reportes, metas, escenarios, ia):
+               gamificacion, reportes, metas, escenarios, ia, privacidad, exportar, riesgo, servicio_social, prae, mapa, guias, siembras, territorial,
+               especies):
     app.include_router(modulo.router)
 
 
@@ -187,6 +206,17 @@ ERRORES_REGISTRO = {
 }
 
 
+def _registrar_politica(usuario_id: str) -> None:
+    """Guarda en el perfil (creado por el trigger) que la persona aceptó la política al registrarse.
+    Si falla (p. ej. falta la migración 005), la app la vuelve a pedir al entrar."""
+    try:
+        db.get_admin().table("perfiles").update(
+            {"politica_version": POLITICA_VERSION, "politica_aceptada_en": ahora().isoformat()}
+        ).eq("usuario_id", usuario_id).execute()
+    except Exception:
+        pass
+
+
 @app.post("/auth/registro", response_model=RegistroOut, status_code=201, tags=["Autenticación"])
 def registrar(d: RegistroIn):
     """Crea una cuenta nueva como estudiante y sin institución; un docente o un administrador
@@ -194,7 +224,7 @@ def registrar(d: RegistroIn):
     correo, la sesión llega solo después de abrir el enlace."""
     try:
         res = db.nuevo_cliente_anon().auth.sign_up(
-            {"email": d.email, "password": d.password, "options": {"data": {"nombre": d.nombre}}}
+            {"email": d.email, "password": d.password, "options": {"data": {"nombre": d.nombre, "politica_version": POLITICA_VERSION}}}
         )
     except (AuthApiError, AuthWeakPasswordError) as error:
         estado, mensaje = ERRORES_REGISTRO.get(
@@ -204,6 +234,7 @@ def registrar(d: RegistroIn):
 
     if res is None or res.user is None:
         raise HTTPException(status_code=400, detail="No se pudo crear la cuenta. Intenta de nuevo.")
+    _registrar_politica(str(res.user.id))
     if res.session is None:
         # También pasa si el correo ya estaba registrado: Supabase no lo revela para no exponer
         # qué correos tienen cuenta.
@@ -234,8 +265,13 @@ def catalogos():
     """Especies, instituciones y casillas fitosanitarias para llenar el formulario.
     Son datos públicos, por eso no piden token."""
     admin = db.get_admin()
+    fichas, _ = especies.fichas_por_especie()
     return Catalogos(
-        especies=admin.table("especies").select("*").order("nombre_comun").execute().data,
+        especies=[
+            {**e, "origen": reglas_mapa.origen_de(e.get("nombre_cientifico"), e.get("origen") or (fichas.get(e["id"]) or {}).get("origen")),
+             **especies.marcas(fichas.get(e["id"]))}
+            for e in admin.table("especies").select("*").order("nombre_comun").execute().data
+        ],
         instituciones=admin.table("instituciones")
         .select("id, nombre, nombre_corto, prefijo, lat, lng")
         .order("prefijo")
@@ -247,11 +283,18 @@ def catalogos():
 
 # ==================================== Árboles ====================================
 @app.post("/arboles", response_model=ArbolResumen, status_code=201, tags=["Árboles"])
-def crear_arbol(datos_arbol: ArbolCrear, perfil: Perfil = Depends(perfil_actual)):
+def crear_arbol(datos_arbol: ArbolCrear, respuesta: Response, perfil: Perfil = Depends(perfil_actual)):
     """Registra un árbol con sus observaciones y crea su primera inspección (origen
     'registro'), que queda pendiente de revisión. El código (IE001-0001) y el usuario que
-    lo registra los asigna la base de datos."""
+    lo registra los asigna la base de datos. Si la app lo reenvía con el mismo id_cliente
+    (se guardó sin conexión), responde 200 con el árbol que ya existe."""
     cliente = db.cliente_de_usuario(perfil.sesion.token)
+    existente = buscar_por_id_cliente(cliente, "arboles", datos_arbol.id_cliente, "id, registrado_por")
+    if existente:
+        if ajeno(existente, "registrado_por", perfil.usuario_id):
+            raise HTTPException(status_code=409, detail="Ese identificador ya se usó en otro registro")
+        respuesta.status_code = 200
+        return resumen_por_id(cliente, str(existente["id"]))
 
     # 1) Validar que las casillas marcadas existan en el catálogo
     codigos = sorted(set(datos_arbol.observaciones))
@@ -262,8 +305,16 @@ def crear_arbol(datos_arbol: ArbolCrear, perfil: Perfil = Depends(perfil_actual)
             raise HTTPException(status_code=422, detail=f"Observaciones no válidas: {invalidos}")
 
     # 2) Guardar el árbol (solo sus columnas: la precisión y las notas son de la inspección)
-    fila = datos_arbol.model_dump(exclude={"observaciones", "precision_gps_m", "notas", *CAMPOS_BIOTICOS})
-    creado = cliente.table("arboles").insert(fila).execute().data[0]
+    fila = datos_arbol.model_dump(
+        exclude={"observaciones", "precision_gps_m", "notas", "id_cliente", "capturado_en", "tamizaje", "ia_analisis_id",
+                 *CAMPOS_BIOTICOS}
+    )
+    if datos_arbol.id_cliente:
+        fila["id_cliente"] = str(datos_arbol.id_cliente)
+    creado, nuevo = insertar_sin_duplicar(cliente, "arboles", fila)
+    if not nuevo:  # otro envío del mismo registro llegó primero
+        respuesta.status_code = 200
+        return resumen_por_id(cliente, str(creado["id"]))
 
     # 3) Guardar las observaciones y la inspección de registro; si algo falla, se borra el
     #    árbol (y en cascada lo que alcanzó a guardarse) para no dejarlo a medias.
@@ -272,7 +323,7 @@ def crear_arbol(datos_arbol: ArbolCrear, perfil: Perfil = Depends(perfil_actual)
             cliente.table("arbol_observaciones").insert(
                 [{"arbol_id": creado["id"], "observacion_codigo": c} for c in codigos]
             ).execute()
-        registrar_inspeccion(
+        registro = registrar_inspeccion(
             cliente,
             creado,
             InspeccionCrear(
@@ -287,15 +338,22 @@ def crear_arbol(datos_arbol: ArbolCrear, perfil: Perfil = Depends(perfil_actual)
                 interferencia_otra=datos_arbol.interferencia_otra,
                 observaciones=codigos,
                 notas=datos_arbol.notas,
+                capturado_en=datos_arbol.capturado_en,
+                tamizaje=datos_arbol.tamizaje,
                 **datos_arbol.model_dump(include=CAMPOS_BIOTICOS),
             ),
             "registro",
+            perfil.usuario_id,
         )
     except Exception:
         db.get_admin().table("arboles").delete().eq("id", creado["id"]).execute()
         raise
 
-    return resumen_por_id(cliente, creado["id"])
+    if datos_arbol.ia_analisis_id:
+        ia.enlazar_analisis(str(datos_arbol.ia_analisis_id), str(creado["id"]), perfil.usuario_id)
+    resumen = resumen_por_id(cliente, creado["id"])
+    tamizaje = registro.get("_tamizaje")
+    return {**resumen, "riesgo_caida": tamizaje["categoria"] if tamizaje else None}
 
 
 @app.get("/arboles", response_model=list[ArbolResumen], tags=["Árboles"])
@@ -321,7 +379,8 @@ def listar_arboles(
         q = q.ilike("nombre_comun", f"%{escapar_like(especie.strip())}%")
     filas = q.order("registrado_en", desc=True).range(desplazamiento, desplazamiento + limite - 1).execute().data
     portadas = portadas_de_arboles(cliente, [f["id"] for f in filas])
-    return [{**f, "foto_url": portadas.get(f["id"])} for f in filas]
+    riesgos = riesgo.categorias_actuales([str(f["id"]) for f in filas])
+    return [{**f, "foto_url": portadas.get(f["id"]), "riesgo_caida": riesgos.get(str(f["id"]))} for f in filas]
 
 
 @app.get("/arboles/{arbol_id}", response_model=ArbolDetalle, tags=["Árboles"])
@@ -379,26 +438,16 @@ def calculos_arbol(arbol_id: UUID, sesion: Sesion = Depends(usuario_actual)):
 @app.post("/arboles/{arbol_id}/fotos", status_code=201, tags=["Fotos"])
 def subir_foto(
     arbol_id: UUID,
+    respuesta: Response,
     tipo: TipoFoto = Query(..., description="completo, detalle o adicional"),
     archivo: UploadFile = File(...),
+    id_cliente: UUID | None = Query(None, description="UUID de la app: si el envío se repite, no se duplica la foto"),
     sesion: Sesion = Depends(usuario_actual),
 ):
     """Sube una foto a Storage y registra su ruta. Solo quien registró el árbol puede hacerlo.
     Reglas: una foto 'completo', una 'detalle' y hasta 3 'adicional'. JPG, PNG o WebP, máx. 5 MB."""
-    if archivo.content_type not in EXTENSIONES:
-        raise HTTPException(status_code=422, detail="Formato no permitido. Usa JPG, PNG o WebP.")
-
-    contenido = archivo.file.read(MAX_FOTO_BYTES + 1)  # no se lee más de lo necesario para saber si se pasa
-    if not contenido:
-        raise HTTPException(status_code=422, detail="El archivo está vacío")
-    if len(contenido) > MAX_FOTO_BYTES:
-        raise HTTPException(status_code=413, detail="La foto supera el máximo de 5 MB")
-
-    # El tipo declarado lo pone el navegador y se puede falsificar: manda el contenido real.
-    tipo_real = tipo_real_imagen(contenido)
-    if tipo_real is None:
-        raise HTTPException(status_code=422, detail="El archivo no es una imagen JPG, PNG o WebP válida.")
-    extension = EXTENSIONES[tipo_real]
+    # Valida tipo, tamaño y formato real (por su firma) y quita los metadatos de la foto.
+    contenido, tipo_real, extension = leer_foto(archivo, MAX_FOTO_BYTES)
 
     cliente = db.cliente_de_usuario(sesion.token)
 
@@ -407,6 +456,14 @@ def subir_foto(
         raise HTTPException(status_code=404, detail="Árbol no encontrado")
     if arbol[0]["registrado_por"] != sesion.user_id:
         raise HTTPException(status_code=403, detail="Solo quien registró el árbol puede agregar fotos")
+
+    # Reenvío de una foto que ya se guardó (la app no alcanzó a recibir la respuesta).
+    existente = buscar_por_id_cliente(cliente, "arbol_fotos", id_cliente, "id, arbol_id, tipo, storage_path")
+    if existente:
+        if str(existente["arbol_id"]) != str(arbol_id):
+            raise HTTPException(status_code=409, detail="Ese identificador ya se usó en otra foto")
+        respuesta.status_code = 200
+        return {"id": existente["id"], "tipo": existente["tipo"], "storage_path": existente["storage_path"]}
 
     if tipo == "adicional":
         existentes = (
@@ -418,27 +475,43 @@ def subir_foto(
     ruta = f"{arbol_id}/{uuid.uuid4().hex}.{extension}"
     cliente.storage.from_(BUCKET_FOTOS).upload(ruta, contenido, {"content-type": tipo_real})
 
+    nueva_fila = {"arbol_id": str(arbol_id), "tipo": tipo, "storage_path": ruta}
+    if id_cliente:
+        nueva_fila["id_cliente"] = str(id_cliente)
     try:
-        fila = cliente.table("arbol_fotos").insert({"arbol_id": str(arbol_id), "tipo": tipo, "storage_path": ruta}).execute().data[0]
+        fila, nueva = insertar_sin_duplicar(cliente, "arbol_fotos", nueva_fila)
     except Exception:
-        try:  # no dejar el archivo huérfano en Storage
-            db.get_admin().storage.from_(BUCKET_FOTOS).remove([ruta])
-        except Exception:
-            pass
+        _quitar_foto(ruta)
         raise
+    if not nueva:  # otro envío de la misma foto llegó primero: sobra el archivo que se acaba de subir
+        _quitar_foto(ruta)
+        respuesta.status_code = 200
 
-    return {"id": fila["id"], "tipo": tipo, "storage_path": ruta}
+    return {"id": fila["id"], "tipo": fila["tipo"], "storage_path": fila["storage_path"]}
+
+
+def _quitar_foto(ruta: str) -> None:
+    """Borra una foto de Storage sin fallar, para no dejar archivos huérfanos."""
+    try:
+        db.get_admin().storage.from_(BUCKET_FOTOS).remove([ruta])
+    except Exception:
+        pass
 
 
 # ================================= Estadísticas ==================================
 @app.get("/estadisticas", response_model=Estadisticas, tags=["Estadísticas"])
-def estadisticas(sesion: Sesion = Depends(usuario_actual)):
-    """Datos para las pantallas de inicio y estadísticas."""
+def estadisticas(
+    institucion_id: str | None = Query(None, description="Solo los árboles de esta institución (opcional)"),
+    sesion: Sesion = Depends(usuario_actual),
+):
+    """Datos para las pantallas de inicio y estadísticas. Con institucion_id, todo (también las
+    inspecciones pendientes) se limita a los árboles de esa institución."""
     cliente = db.cliente_de_usuario(sesion.token)
     filas = traer_todo(
         cliente,
         "arboles_resumen",
         "id, prefijo, nombre_corto, nombre_comun, dap_cm, altura_m, copa_m, etapa, estado, ultimo_metodo_id",
+        filtros=[("eq", ("institucion_id", institucion_id))] if institucion_id else (),
     )
     metodos = datos.metodos(cliente)
     defecto = datos.metodo_por_defecto(metodos)
@@ -464,7 +537,10 @@ def estadisticas(sesion: Sesion = Depends(usuario_actual)):
         for clave in totales:
             totales[clave] += c[clave]
 
-    pendientes = traer_todo(cliente, "inspecciones", "id", filtros=[("eq", ("estado_revision", "pendiente"))])
+    pendientes = traer_todo(cliente, "inspecciones", "id, arbol_id", filtros=[("eq", ("estado_revision", "pendiente"))])
+    if institucion_id:
+        ids = {str(f["id"]) for f in filas}
+        pendientes = [p for p in pendientes if str(p.get("arbol_id")) in ids]
 
     return Estadisticas(
         total=total,

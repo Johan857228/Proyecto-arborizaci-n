@@ -1,4 +1,5 @@
 import type { PayloadBiotico } from '@/features/inspections/bioticos';
+import type { Tamizaje } from '@/features/riesgo/reglas';
 
 export type Zona =
   | 'Patio central'
@@ -44,6 +45,8 @@ export interface ArbolCrear extends Partial<PayloadBiotico> {
   observaciones: string[];
   precision_gps_m?: number | null;
   notas?: string;
+  tamizaje?: Tamizaje;
+  ia_analisis_id?: string;
 }
 
 export interface FotoLocal {

@@ -9,9 +9,9 @@ export const cursosService = {
   listar: (institucionId?: string) => getValidado('/cursos', z.array(cursoSchema), { institucion_id: institucionId }),
   detalle: (id: string) => getValidado(`/cursos/${id}`, cursoDetalleSchema),
   avance: (id: string, desde?: string, hasta?: string) => getValidado(`/cursos/${id}/avance`, avanceSchema, { desde, hasta }),
-  crear: (datos: { institucion_id: string; nombre: string; anio: number; zonas: Zona[]; docente_id?: string | null }) =>
+  crear: (datos: { institucion_id: string; nombre: string; anio: number; zonas: Zona[]; docente_id?: string | null; grado?: number | null }) =>
     enviarValidado('post', '/cursos', datos, cursoDetalleSchema),
-  editar: (id: string, cambios: { nombre?: string; anio?: number; docente_id?: string | null; activo?: boolean }) =>
+  editar: (id: string, cambios: { nombre?: string; anio?: number; docente_id?: string | null; activo?: boolean; grado?: number | null }) =>
     enviarValidado('patch', `/cursos/${id}`, cambios, cursoDetalleSchema),
   zonas: (id: string, zonas: Zona[]) => enviarValidado('put', `/cursos/${id}/zonas`, { zonas }, cursoDetalleSchema),
   borrar: async (id: string) => {
@@ -19,16 +19,16 @@ export const cursosService = {
   },
 };
 
-export function useCursos(institucionId?: string) {
-  return useQuery({ queryKey: ['cursos', institucionId ?? 'todas'], queryFn: () => cursosService.listar(institucionId) });
+export function useCursos(institucionId?: string, enabled = true) {
+  return useQuery({ queryKey: ['cursos', institucionId ?? 'todas'], queryFn: () => cursosService.listar(institucionId), enabled });
 }
 
 export function useCurso(id: string) {
   return useQuery({ queryKey: ['cursos', 'detalle', id], queryFn: () => cursosService.detalle(id) });
 }
 
-export function useAvanceCurso(id: string, desde?: string, hasta?: string) {
-  return useQuery({ queryKey: ['cursos', 'avance', id, desde, hasta], queryFn: () => cursosService.avance(id, desde, hasta) });
+export function useAvanceCurso(id: string, desde?: string, hasta?: string, enabled = true) {
+  return useQuery({ queryKey: ['cursos', 'avance', id, desde, hasta], queryFn: () => cursosService.avance(id, desde, hasta), enabled: enabled && Boolean(id) });
 }
 
 export function useGuardarCurso() {

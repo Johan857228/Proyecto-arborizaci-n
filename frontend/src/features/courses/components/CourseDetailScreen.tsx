@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Text, View } from 'react-native';
 
 import { useAvanceCurso, useCurso, useGuardarCurso } from '@/features/courses/api';
-import { ZONAS, type CursoDetalle, type Zona } from '@/features/courses/schemas';
+import { GRADOS, ZONAS, type CursoDetalle, type Zona } from '@/features/courses/schemas';
 import { useEditarUsuario, useUsuarios } from '@/features/perfil/hooks/usePerfil';
 import { etiquetaRol } from '@/features/perfil/schemas';
 import { getApiErrorMessage } from '@/services/api/client';
@@ -241,6 +241,7 @@ function DatosCurso({ curso, onCambio }: { curso: CursoDetalle; onCambio: (mensa
   const usuarios = useUsuarios(curso.institucion_id);
   const [nombre, setNombre] = useState(curso.nombre);
   const [docente, setDocente] = useState<string | undefined>(curso.docente_id ?? undefined);
+  const [grado, setGrado] = useState<number | undefined>(curso.grado ?? undefined);
   const [error, setError] = useState<string>();
   const docentes = (usuarios.data ?? []).filter((u) => u.activo && (u.rol === 'docente' || u.rol === 'administrador'));
 
@@ -251,7 +252,7 @@ function DatosCurso({ curso, onCambio }: { curso: CursoDetalle; onCambio: (mensa
       return;
     }
     try {
-      await editar.mutateAsync({ id: curso.id, cambios: { nombre: nombre.trim(), docente_id: docente ?? null } });
+      await editar.mutateAsync({ id: curso.id, cambios: { nombre: nombre.trim(), docente_id: docente ?? null, grado: grado ?? null } });
       onCambio('Datos del curso guardados.');
     } catch (causa) {
       setError(getApiErrorMessage(causa));
@@ -288,6 +289,7 @@ function DatosCurso({ curso, onCambio }: { curso: CursoDetalle; onCambio: (mensa
         options={docentes.map((u) => ({ label: u.nombre, value: u.usuario_id }))}
         onChange={setDocente}
       />
+      <SelectField label="Grado" value={grado} placeholder="Según el nombre del curso" options={GRADOS} onChange={setGrado} />
       {error ? <InlineMessage>{error}</InlineMessage> : null}
       <PrimaryButton title="Guardar" loading={editar.isPending} onPress={() => void guardar()} />
       <PrimaryButton title={curso.activo ? 'Desactivar curso' : 'Activar curso'} variant="secondary" onPress={() => void alternarActivo()} />

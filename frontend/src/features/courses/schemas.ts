@@ -4,11 +4,19 @@ export const ZONAS = ['Patio central', 'Entrada principal', 'Zona deportiva', 'B
 export const zonaSchema = z.enum(ZONAS);
 export type Zona = z.infer<typeof zonaSchema>;
 
+// 10.° y 11.° prestan servicio social (features/servicio).
+export const GRADOS = [
+  { value: 0, label: 'Transición' },
+  ...Array.from({ length: 11 }, (_, i) => ({ value: i + 1, label: `${i + 1}.°` })),
+];
+
 export const cursoSchema = z.object({
   id: z.string().min(1),
   institucion_id: z.string(),
   nombre: z.string(),
   anio: z.number().int(),
+  // El guardado o, si no tiene, el que dice el nombre ("10-A").
+  grado: z.number().int().nullable().optional(),
   docente_id: z.string().nullable(),
   docente_nombre: z.string().nullable(),
   activo: z.boolean(),
@@ -69,5 +77,6 @@ export const cursoFormSchema = z.object({
   nombre: z.string().trim().min(1, 'Escribe el nombre del curso.').max(60, 'Máximo 60 caracteres.'),
   anio: z.number({ error: 'Escribe el año.' }).int('Escribe el año sin decimales.').min(2000, 'Año no válido.').max(2100, 'Año no válido.'),
   zonas: z.array(zonaSchema),
+  grado: z.number().int().min(0).max(11).optional(),
 });
 export type CursoFormInput = z.input<typeof cursoFormSchema>;

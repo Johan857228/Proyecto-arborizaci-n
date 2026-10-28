@@ -7,6 +7,7 @@ import { useForm, useWatch, type Path, type PathValue } from 'react-hook-form';
 import type { Catalogos } from '@/features/catalogs/types';
 import { combinarValor } from '@/features/ia/sugerencias';
 import { payloadBiotico, valoresBioticosIniciales } from '@/features/inspections/bioticos';
+import { TAMIZAJE_INICIAL, type Tamizaje } from '@/features/riesgo/reglas';
 import { useCaptureLocation } from '@/features/trees/hooks/useCaptureLocation';
 import { createArbolCreateSchema, fotosRegistroSchema, type ArbolFormInput } from '@/features/trees/schemas';
 import type { ArbolCrear, FotoLocal } from '@/features/trees/types';
@@ -25,6 +26,10 @@ export function useTreeCreateForm(
 ) {
   const [photos, setPhotos] = useState<FotoLocal[]>([]);
   const [formError, setFormError] = useState<string>();
+  const [tamizaje, setTamizaje] = useState<Tamizaje>(TAMIZAJE_INICIAL);
+  const [tamizajeError, setTamizajeError] = useState<string>();
+  // Último análisis de la IA hecho con estas fotos: va con el árbol para medir sus aciertos.
+  const [iaAnalisisId, setIaAnalisisId] = useState<string>();
   const gps = useCaptureLocation();
   const schema = useMemo(() => createArbolCreateSchema(catalogs), [catalogs]);
   const { control, handleSubmit, setValue, getValues, formState: { errors } } = useForm<ArbolFormInput>({
@@ -149,8 +154,18 @@ export function useTreeCreateForm(
     setPhotos((current) => current.filter((photo) => photo !== photoToRemove));
   }
 
+  function cambiarTamizaje(valor: Tamizaje) {
+    setTamizaje(valor);
+    if (valor.debajo.length) setTamizajeError(undefined);
+  }
+
   const submit = handleSubmit(async (input) => {
     setFormError(undefined);
+    if (!tamizaje.debajo.length) {
+      setTamizajeError('Indica qué hay debajo del árbol.');
+      setFormError('Completa el tamizaje de riesgo de caída: indica qué hay debajo del árbol.');
+      return;
+    }
     if (!photos.some((photo) => photo.tipo === 'completo')) {
       setFormError('Toma una fotografía general del árbol antes de guardar.');
       return;
@@ -179,6 +194,8 @@ export function useTreeCreateForm(
       precision_gps_m: input.precision_gps_m ?? null,
       notas: input.notas,
       ...payloadBiotico(input),
+      tamizaje,
+      ...(iaAnalisisId ? { ia_analisis_id: iaAnalisisId } : {}),
     };
     await onSubmit(payload, validPhotos.data);
   });
@@ -198,6 +215,10 @@ export function useTreeCreateForm(
     toggleObservation,
     clearObservations,
     applySuggestion,
+    setIaAnalisisId,
+    tamizaje,
+    tamizajeError,
+    cambiarTamizaje,
     submit,
   };
 }

@@ -2,23 +2,25 @@ import { type Href } from 'expo-router';
 import { Text, View } from 'react-native';
 
 import { fonts } from '@/config/constants';
-import { useStats } from '@/features/dashboard/hooks/useDashboard';
+import { usePendientes } from '@/features/inspections/hooks/useInspecciones';
 import { GRUPOS, modulosPara } from '@/features/modules/modulos';
 import { useCuentasSinInstitucion, useMiPerfil } from '@/features/perfil/hooks/usePerfil';
-import { ETIQUETA_ROL, esAdmin } from '@/features/perfil/schemas';
+import { ETIQUETA_ROL, esAdmin, esRevisor } from '@/features/perfil/schemas';
 import { AppHeader, Badge, NavCard, Page } from '@/shared/components/UI';
 import { crearEstilos } from '@/theme';
 
 export function ModulesScreen() {
   const styles = useStyles();
   const perfil = useMiPerfil();
-  const stats = useStats();
   const modulos = modulosPara(perfil.data);
-  const pendientes = stats.data?.inspecciones_pendientes ?? 0;
+  // Mismo conteo y caché que la pantalla Revisión (limitado a la institución del docente).
+  const institucionId = perfil.data?.institucion_id ?? undefined;
+  const revision = usePendientes(institucionId, 0, esRevisor(perfil.data) && (esAdmin(perfil.data) || Boolean(institucionId)));
+  const pendientes = revision.data?.total ?? 0;
   const cuentasNuevas = useCuentasSinInstitucion(esAdmin(perfil.data));
 
   return (
-    <Page onRefresh={() => void Promise.all([perfil.refetch(), stats.refetch()])} refreshing={perfil.isRefetching}>
+    <Page onRefresh={() => void Promise.all([perfil.refetch(), revision.refetch()])} refreshing={perfil.isRefetching}>
       <AppHeader
         eyebrow="Proyecto árbol"
         title="Módulos"

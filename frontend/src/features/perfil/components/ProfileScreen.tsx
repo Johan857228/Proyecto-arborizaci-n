@@ -1,3 +1,4 @@
+import { type Href } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import Animated from 'react-native-reanimated';
@@ -8,13 +9,14 @@ import { Avatar } from '@/features/perfil/components/Avatar';
 import { useImagenPropia } from '@/features/perfil/hooks/useImagenPropia';
 import { useCambiarMiNombre, useMiPerfil } from '@/features/perfil/hooks/usePerfil';
 import { ETIQUETA_ROL, editarNombreSchema } from '@/features/perfil/schemas';
+import { useContadorCola } from '@/features/sincronizacion/colaStore';
 import { getApiErrorMessage } from '@/services/api/client';
 import { ActionSheet } from '@/shared/components/ActionSheet';
 import { Field, InlineMessage, PrimaryButton } from '@/shared/components/FormControls';
 import { Icon, type IconName } from '@/shared/components/Icon';
 import { LeafWatermark } from '@/shared/components/LeafWatermark';
 import { usePressScale } from '@/shared/components/Motion';
-import { AppHeader, Badge, Card, ErrorState, KeyValue, LoadingState, Page } from '@/shared/components/UI';
+import { AppHeader, Badge, Card, ErrorState, KeyValue, LoadingState, NavCard, Page } from '@/shared/components/UI';
 import { crearEstilos, useTema, useTemaStore, type PreferenciaTema } from '@/theme';
 
 const OPCIONES_TEMA: { valor: PreferenciaTema; label: string; icon: IconName }[] = [
@@ -96,6 +98,7 @@ export function ProfileScreen() {
   const perfil = useMiPerfil();
   const cambiar = useCambiarMiNombre();
   const signOut = useAuthStore((state) => state.signOut);
+  const porEnviar = useContadorCola().total;
   const [nombre, setNombre] = useState<string>();
   const [mensaje, setMensaje] = useState<string>();
   const [error, setError] = useState<string>();
@@ -142,6 +145,13 @@ export function ProfileScreen() {
         </View>
       </View>
 
+      <NavCard
+        title="Privacidad y mis datos"
+        text="Política de datos, autorización de tu acudiente, alias en los rankings y tus solicitudes."
+        href={'/(app)/privacy' as Href}
+        icon="lock"
+      />
+
       <Card title="Apariencia" subtitle="Sistema usa el mismo tema de tu teléfono o navegador." icon="contrast">
         <SelectorTema />
       </Card>
@@ -161,6 +171,12 @@ export function ProfileScreen() {
         {error ? <InlineMessage>{error}</InlineMessage> : null}
         <PrimaryButton title="Guardar nombre" disabled={valor.trim() === p.nombre} loading={cambiar.isPending} onPress={() => void guardar()} />
       </Card>
+      {porEnviar > 0 ? (
+        <InlineMessage tone="warning">
+          Tienes {porEnviar === 1 ? 'un registro' : `${porEnviar} registros`} sin enviar en este teléfono. Si cierras sesión no se
+          pierden, pero solo se enviarán cuando vuelvas a entrar con tu cuenta aquí.
+        </InlineMessage>
+      ) : null}
       <PrimaryButton title="Cerrar sesión" icon="logout" variant="secondary" onPress={() => void signOut()} />
     </Page>
   );

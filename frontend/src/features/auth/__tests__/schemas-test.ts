@@ -11,7 +11,7 @@ describe('loginSchema', () => {
   });
 });
 describe('registroSchema', () => {
-  const valido = { nombre: '  Ana   Pérez ', email: ' Ana@Colegio.edu.co ', password: 'arboles2026', confirmacion: 'arboles2026' };
+  const valido = { nombre: '  Ana   Pérez ', email: ' Ana@Colegio.edu.co ', password: 'arboles2026', confirmacion: 'arboles2026', acepta_politica: true };
 
   function errorEn(cambios: Partial<typeof valido>, campo: keyof typeof valido) {
     const resultado = registroSchema.safeParse({ ...valido, ...cambios });
@@ -27,6 +27,7 @@ describe('registroSchema', () => {
     expect(errorEn({ password: 'solamenteletras', confirmacion: 'solamenteletras' }, 'password')).toBe('Incluye al menos un número.');
     expect(errorEn({ password: '1234567890', confirmacion: '1234567890' }, 'password')).toBe('Incluye al menos una letra.');
     expect(errorEn({ confirmacion: 'otra2026' }, 'confirmacion')).toBe('Las contraseñas no coinciden.');
+    expect(errorEn({ acepta_politica: false }, 'acepta_politica')).toBe('Debes aceptar la política de tratamiento de datos.');
   });
 
   it('rechaza un nombre muy corto', () => {

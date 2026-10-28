@@ -4,6 +4,7 @@ import type { z } from 'zod';
 import { API_BASE_URL } from '@/config/constants';
 import { sessionSchema } from '@/features/auth/schemas';
 import type { Session } from '@/features/auth/types';
+import { esErrorDeRed, marcarConConexion, marcarSinConexion } from '@/services/offline/conexion';
 import { readStoredSession } from '@/services/storage/sessionStorage';
 import { describeApiDetail } from '@/shared/utils/apiErrors';
 
@@ -27,6 +28,20 @@ api.interceptors.request.use(async (request) => {
   }
   return request;
 });
+
+// Cada respuesta confirma que hay conexión; un fallo sin respuesta la marca como perdida
+// (services/offline/conexion.ts).
+api.interceptors.response.use(
+  (respuesta) => {
+    marcarConConexion();
+    return respuesta;
+  },
+  (error: unknown) => {
+    if (esErrorDeRed(error)) marcarSinConexion();
+    else if (isAxiosError(error) && error.response) marcarConConexion();
+    throw error;
+  },
+);
 
 // La app registra aquí qué hacer cuando la sesión se renueva (guardarla) y cuando ya no se
 // puede renovar (cerrarla y volver al login). Así este módulo no depende del store.

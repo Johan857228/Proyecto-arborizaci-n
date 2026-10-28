@@ -4,6 +4,7 @@ import { Text, View } from 'react-native';
 import type { FotoLocal } from '@/features/trees/types';
 import { InlineMessage, PrimaryButton, Section, Surface } from '@/shared/components/FormControls';
 import { crearEstilos } from '@/theme';
+import { AvisoFotos } from '@/shared/components/AvisoFotos';
 
 export function photoLabel(tipo: FotoLocal['tipo']) {
   if (tipo === 'completo') return 'Vista general';
@@ -29,6 +30,7 @@ export function PhotoSection({
   return (
     <Section title="Fotografías">
       <Text style={styles.helper}>{help}</Text>
+      <AvisoFotos />
       <View style={styles.actions}>
         <View style={styles.cell}>
           <PrimaryButton

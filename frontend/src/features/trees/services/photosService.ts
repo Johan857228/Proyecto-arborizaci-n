@@ -40,18 +40,19 @@ export async function adjuntarFoto(form: FormData, campo: string, photo: FotoLoc
   return safePhoto;
 }
 
-async function uploadTo(path: string, photo: FotoLocal) {
+/** `idCliente` identifica la foto para que, si el envío se repite, el servidor no la duplique. */
+async function uploadTo(path: string, photo: FotoLocal, idCliente?: string) {
   const form = new FormData();
   const safePhoto = await adjuntarFoto(form, 'archivo', photo);
   const { data } = await api.post<unknown>(path, form, {
-    params: { tipo: safePhoto.tipo },
+    params: { tipo: safePhoto.tipo, id_cliente: idCliente },
   });
   return validar(fotoSubidaSchema, data);
 }
 
 export const photosService = {
   /** Foto de registro del árbol (POST /arboles/{id}/fotos). */
-  upload: (treeId: string, photo: FotoLocal) => uploadTo(`/arboles/${treeId}/fotos`, photo),
+  upload: (treeId: string, photo: FotoLocal, idCliente?: string) => uploadTo(`/arboles/${treeId}/fotos`, photo, idCliente),
   /** Cualquier endpoint de fotos (p. ej. /inspecciones/{id}/fotos). */
   uploadTo,
 };

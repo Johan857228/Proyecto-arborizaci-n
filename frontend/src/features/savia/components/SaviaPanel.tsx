@@ -18,6 +18,7 @@ import { getApiErrorMessage } from '@/services/api/client';
 import { InlineMessage, PrimaryButton } from '@/shared/components/FormControls';
 import { Icon } from '@/shared/components/Icon';
 import { crearEstilos, useTema } from '@/theme';
+import { AvisoFotos } from '@/shared/components/AvisoFotos';
 
 const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1);
 const EASE_SHEET = Easing.bezier(0.32, 0.72, 0, 1);
@@ -131,6 +132,7 @@ export function SaviaPanel({ visible, onClose }: { visible: boolean; onClose: ()
               </View>
             ) : null}
 
+            {foto ? null : <AvisoFotos />}
             <View style={styles.buttons}>
               {analisis.data && analisis.data.es_arbol ? (
                 <PrimaryButton title="Registrar este árbol" icon="add" onPress={registrar} />

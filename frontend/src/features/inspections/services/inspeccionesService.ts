@@ -7,6 +7,7 @@ import {
   pendientesSchema,
   type InspeccionPayload,
 } from '@/features/inspections/schemas';
+import type { Envio } from '@/features/sincronizacion/cola';
 import { photosService } from '@/features/trees/services/photosService';
 import type { FotoLocal } from '@/features/trees/types';
 import { ApiContractError, enviarValidado, getValidado } from '@/services/api/client';
@@ -16,15 +17,18 @@ export const inspeccionesService = {
 
   detalle: (inspeccionId: string) => getValidado(`/inspecciones/${inspeccionId}`, inspeccionConArbolSchema),
 
-  async crear(arbolId: string, payload: InspeccionPayload) {
+  /** `envio` identifica la visita para que un reenvío no la duplique (ver sincronizacion/cola.ts). */
+  async crear(arbolId: string, payload: InspeccionPayload, envio?: Envio) {
     const validado = inspeccionPayloadSchema.safeParse(payload);
     if (!validado.success) {
       throw new ApiContractError('No se puede enviar la inspección: revisa los datos ingresados.');
     }
-    return enviarValidado('post', `/arboles/${arbolId}/inspecciones`, validado.data, inspeccionSchema);
+    const cuerpo = envio ? { ...validado.data, id_cliente: envio.idCliente, capturado_en: envio.capturadoEn } : validado.data;
+    return enviarValidado('post', `/arboles/${arbolId}/inspecciones`, cuerpo, inspeccionSchema);
   },
 
-  subirFoto: (inspeccionId: string, foto: FotoLocal) => photosService.uploadTo(`/inspecciones/${inspeccionId}/fotos`, foto),
+  subirFoto: (inspeccionId: string, foto: FotoLocal, idCliente?: string) =>
+    photosService.uploadTo(`/inspecciones/${inspeccionId}/fotos`, foto, idCliente),
 
   pendientes: (params: { institucionId?: string; limite: number; desplazamiento: number }) =>
     getValidado('/revision/pendientes', pendientesSchema, {

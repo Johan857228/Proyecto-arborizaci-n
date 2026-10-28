@@ -61,6 +61,18 @@ const icons = {
   moon: { ios: 'moon.fill', material: 'dark_mode' },
   sun: { ios: 'sun.max.fill', material: 'light_mode' },
   contrast: { ios: 'circle.lefthalf.filled', material: 'contrast' },
+  download: { ios: 'arrow.down.circle', material: 'download' },
+  sinConexion: { ios: 'wifi.slash', material: 'cloud_off' },
+  sincronizar: { ios: 'arrow.triangle.2.circlepath', material: 'sync' },
+  enCola: { ios: 'icloud.and.arrow.up', material: 'cloud_upload' },
+  map: { ios: 'map.fill', material: 'map' },
+  capas: { ios: 'square.3.layers.3d', material: 'layers' },
+  remove: { ios: 'minus', material: 'remove' },
+  encuadrar: { ios: 'viewfinder', material: 'fit_screen' },
+  guia: { ios: 'book.fill', material: 'menu_book' },
+  laboratorio: { ios: 'chart.dots.scatter', material: 'scatter_plot' },
+  siembra: { ios: 'leaf.circle', material: 'potted_plant' },
+  territorio: { ios: 'building.columns.fill', material: 'account_balance' },
 } satisfies Record<string, { ios: SFSymbol; material: AndroidSymbol }>;
 
 export type IconName = keyof typeof icons;

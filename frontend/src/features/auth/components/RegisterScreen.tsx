@@ -12,7 +12,7 @@ import {
   type RegistroFormValues,
 } from '@/features/auth/schemas';
 import { getApiErrorMessage } from '@/services/api/client';
-import { Field, InlineMessage, PrimaryButton } from '@/shared/components/FormControls';
+import { Casilla, Field, InlineMessage, PrimaryButton } from '@/shared/components/FormControls';
 import { Icon } from '@/shared/components/Icon';
 import { FadeIn } from '@/shared/components/Motion';
 import { crearEstilos, useTema } from '@/theme';
@@ -26,7 +26,7 @@ export function RegisterScreen() {
   const registro = useRegistro();
   const { control, handleSubmit } = useForm<RegistroFormInput, unknown, RegistroFormValues>({
     resolver: zodResolver(registroSchema),
-    defaultValues: { nombre: '', email: '', password: '', confirmacion: '' },
+    defaultValues: { nombre: '', email: '', password: '', confirmacion: '', acepta_politica: false },
   });
 
   function submit(valores: RegistroFormValues) {
@@ -124,6 +124,15 @@ export function RegisterScreen() {
               error={fieldState.error?.message}
               placeholder="Escríbela otra vez"
             />
+          )} />
+          <Controller name="acepta_politica" control={control} render={({ field, fieldState }) => (
+            <Casilla checked={field.value} onChange={field.onChange} error={fieldState.error?.message}>
+              Acepto la{' '}
+              <Text accessibilityRole="link" style={authFormStyles.switchLink} onPress={() => router.push('/politica' as Href)}>
+                política de tratamiento de datos
+              </Text>
+              . Si soy menor de edad, mi acudiente también deberá autorizarla.
+            </Casilla>
           )} />
         </FadeIn>
 

@@ -8,7 +8,7 @@ from supabase_auth.errors import AuthApiError, AuthWeakPasswordError
 import db
 import main
 
-CUERPO = {"nombre": "  Ana   María  Pérez ", "email": "  Ana.Perez@Colegio.edu.co ", "password": "arboles2026"}
+CUERPO = {"nombre": "  Ana   María  Pérez ", "email": "  Ana.Perez@Colegio.edu.co ", "password": "arboles2026", "acepta_politica": True}
 
 
 class AuthFalso:
@@ -22,10 +22,34 @@ class AuthFalso:
         return self.respuesta
 
 
+class TablaFalsa:
+    """Anota los update(...).eq(...) que el registro hace sobre perfiles."""
+
+    def __init__(self, registro):
+        self.registro = registro
+
+    def table(self, nombre):
+        self.nombre = nombre
+        return self
+
+    def update(self, cambios):
+        self.cambios = cambios
+        return self
+
+    def eq(self, columna, valor):
+        self.registro.append((self.nombre, self.cambios, valor))
+        return self
+
+    def execute(self):
+        return SimpleNamespace(data=[])
+
+
 @pytest.fixture
 def supabase(monkeypatch):
     auth = AuthFalso()
+    auth.perfiles = []
     monkeypatch.setattr(db, "nuevo_cliente_anon", lambda: SimpleNamespace(auth=auth))
+    monkeypatch.setattr(db, "get_admin", lambda: TablaFalsa(auth.perfiles))
     return auth
 
 
@@ -48,7 +72,11 @@ def test_registro_con_sesion_inmediata(supabase):
     # El nombre llega limpio a los metadatos que usa el trigger que crea el perfil.
     enviado = supabase.llamadas[0]
     assert enviado["email"] == "ana.perez@colegio.edu.co"
-    assert enviado["options"] == {"data": {"nombre": "Ana María Pérez"}}
+    assert enviado["options"] == {"data": {"nombre": "Ana María Pérez", "politica_version": main.POLITICA_VERSION}}
+    # La aceptación de la política queda en el perfil.
+    (tabla, cambios, usuario), = supabase.perfiles
+    assert tabla == "perfiles" and usuario == "u-nuevo"
+    assert cambios["politica_version"] == main.POLITICA_VERSION and cambios["politica_aceptada_en"]
 
 
 def test_registro_que_pide_confirmar_el_correo(supabase):
@@ -85,6 +113,7 @@ def test_errores_de_supabase_al_registrar(supabase, error, estado):
         {"password": "solamenteletras"},      # sin números
         {"password": "1234567890"},           # sin letras
         {"password": "a1" * 40},              # más de 72
+        {"acepta_politica": False},           # sin aceptar la política de datos
     ],
 )
 def test_registro_rechaza_datos_invalidos_sin_llamar_a_supabase(supabase, cambio):

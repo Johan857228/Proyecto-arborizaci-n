@@ -44,12 +44,23 @@ pip install -r requerimientos.txt
 
 Los módulos de inspecciones, revisión, intervenciones, cursos, presupuestos, configuración,
 gamificación, reportes, metas y escenarios necesitan tablas nuevas en Supabase. Se crean con
-cuatro archivos que se pegan completos en **Supabase → SQL Editor → Run**, en este orden:
+estos archivos, que se pegan completos en **Supabase → SQL Editor → Run**, en este orden:
 
 1. `sql/001_fase1_modulos.sql`
 2. `sql/002_fase2_metas_escenarios.sql`
 3. `sql/003_validaciones.sql`
 4. `sql/004_agentes_bioticos.sql`
+5. `sql/005_privacidad.sql` (autorización del acudiente, solicitudes de datos, alias y nombres protegidos en rankings)
+6. `sql/006_dane.sql` (código DANE, DIVIPOLA y municipio de cada sede)
+7. `sql/007_sin_conexion.sql` (registros hechos sin señal: no se duplican al reenviarse)
+8. `sql/008_riesgo_caida.sql` (tamizaje de riesgo de caída, alertas y contactos de emergencia de cada sede)
+9. `sql/009_servicio_social.sql` (grado de cada curso, bitácora de servicio social, meta de horas y certificados)
+10. `sql/010_prae.sql` (PRAE por institución y año: plan de acción, evidencias y evaluaciones)
+11. `sql/011_mapa.sql` (origen de cada especie, nativa o exótica, para el mapa)
+12. `sql/012_guias_clase.sql` (bitácora de clases dictadas con las guías de clase)
+13. `sql/013_siembras.sql` (jornadas de siembra, plántulas, controles de supervivencia y asistentes)
+14. `sql/014_territorial.sql` (rol territorial, territorios, sus funcionarios y el informe anual editable)
+15. `sql/015_catalogo_oficial.sql` (ficha oficial de cada especie con versión y DOI de la fuente, y análisis de IA para medir aciertos y costo)
 
 No borran datos: a cada árbol ya registrado le crean su inspección de registro (con los
 hallazgos que tenía) y a cada usuario de Supabase Auth su perfil. Se pueden ejecutar más de
@@ -113,6 +124,10 @@ CORS_ORIGINS=http://localhost:5173,http://localhost:3000
 
 `CORS_ORIGINS` son las direcciones del frontend que pueden llamar a la API.
 
+Opcional: `URL_PUBLICA_API=https://tu-backend.up.railway.app` es la dirección pública de la API
+que lleva el QR de los certificados de servicio social (`/verificar/<código>`). Si no está, se
+toma de la petición (encabezados `X-Forwarded-Proto` y `X-Forwarded-Host` detrás de un proxy).
+
 ## Ejecutar
 
 ```powershell
@@ -149,7 +164,7 @@ triggers en Supabase (para que tampoco se puedan saltar llamando a la API de Sup
 | GET | `/salud` | Público | Comprueba que el servidor responde |
 | POST | `/auth/login` | Público | Devuelve el token (`access_token`) y el `refresh_token` |
 | POST | `/auth/refresh` | Público | Cambia el `refresh_token` por una sesión nueva |
-| POST | `/auth/registro` | Público | Crea una cuenta de estudiante sin institución (nombre, correo y contraseña); devuelve la sesión o pide confirmar el correo |
+| POST | `/auth/registro` | Público | Crea una cuenta de estudiante sin institución (nombre, correo, contraseña y `acepta_politica`); devuelve la sesión o pide confirmar el correo |
 | GET | `/catalogos` | Público | Especies, instituciones y casillas fitosanitarias |
 | GET / PATCH | `/perfil` | Usuario | Mi rol, institución y curso / cambiar mi nombre |
 | GET | `/usuarios` | Docente, admin | Usuarios (el docente ve los de su institución) |
@@ -191,7 +206,59 @@ triggers en Supabase (para que tampoco se puedan saltar llamando a la API de Sup
 | GET / DELETE | `/escenarios/{id}` | Docente, admin / admin | Detalle / borrar |
 | GET | `/estadisticas` | Usuario | Totales, semáforo, por institución, especies, promedios, ambientales e inspecciones pendientes |
 | GET | `/ia/estado` | Usuario | Si la identificación con IA está activada y con qué modelo |
-| POST | `/ia/analizar-foto` | Usuario | Sugerencias de la IA a partir de la foto `general` (y `detalle`, opcional) |
+| POST | `/ia/analizar-foto` | Usuario | Sugerencias de la IA a partir de la foto `general` (y `detalle`, opcional); devuelve `analisis_id` para enlazarlo al árbol (`ia_analisis_id` en `POST /arboles`) |
+| POST | `/ia/prueba` | Admin | Prueba a ciegas con la foto de una especie conocida (`especie_id`): entra en la medición de precisión |
+| GET | `/ia/precision?desde=` | Admin | Aciertos de la IA (general, por confianza, por origen, nativas del bosque seco del Cesar, por especie) con intervalo del 95 %, y costo por foto |
+| GET | `/especies/catalogo` | Usuario | Especies con su ficha oficial (origen, invasora, amenaza, veda, bosque seco) y cuántos árboles de cada una ve quien consulta |
+| POST · PUT | `/especies/{id}/fuente-oficial` · `/especies/{id}/veda` | Admin | Consultar las listas oficiales en GBIF y guardar la ficha · registrar la veda con su norma |
+| PUT / DELETE | `/perfil/foto` · `/perfil/portada` | Usuario | Cambiar o quitar la foto de perfil o la portada del inicio |
+| GET | `/privacidad/estado` | Usuario | Política aceptada, alias y autorización del acudiente |
+| POST | `/privacidad/politica` | Usuario | Acepta la versión vigente de la política de datos |
+| PUT | `/privacidad/alias` | Usuario | Alias para los rankings (sin alias, los demás ven las iniciales) |
+| POST | `/privacidad/consentimientos` | Usuario / docente, admin | Autorización firmada en la app (para sí, o el docente para un estudiante de su institución) |
+| POST | `/privacidad/consentimientos/documento` | Docente, admin | Sube la foto del formato firmado por el acudiente |
+| POST | `/privacidad/consentimientos/{id}/revocar` | Usuario / docente, admin | Revoca una autorización |
+| GET | `/privacidad/estudiantes` | Docente, admin | Estudiantes de la institución y el estado de su autorización |
+| GET | `/privacidad/mis-datos` | Usuario | Copia de los datos personales (derecho de consulta) |
+| GET / POST | `/privacidad/solicitudes` | Usuario | Mis solicitudes (o las de la institución con `alcance=institucion`) / crear consulta o reclamo |
+| PATCH | `/privacidad/solicitudes/{id}` | Docente, admin | Responder una solicitud (atendida o rechazada) |
+| POST | `/privacidad/anonimizar/{usuario_id}` | Admin | Anonimiza la cuenta de un egresado y le quita el acceso |
+| GET | `/instituciones` | Usuario | Sedes con código DANE, DIVIPOLA y municipio |
+| PATCH | `/instituciones/{id}` | Admin | Asigna el código DANE (12 dígitos), el DIVIPOLA (5) y el municipio |
+| POST | `/exportar` | Docente, admin | Genera `arboles` (CSV, GeoJSON o Shapefile), `inspecciones` o `intervenciones` (CSV), o `todo` (ZIP), y devuelve un enlace de descarga que vence en 10 minutos. Sin datos personales |
+| GET | `/exportar/diccionario` | Usuario | Qué significa cada columna exportada |
+| GET | `/arboles/{id}/riesgo` | Usuario | Último tamizaje de riesgo de caída del árbol y su alerta abierta |
+| GET | `/alertas?estado=abiertas\|cerradas\|todas` | Usuario | Alertas de riesgo alto o inminente de la institución (el admin, de todas) |
+| POST | `/alertas/{id}/confirmar` · `/descartar` · `/aviso` · `/atender` | Docente o admin | Confirmar el riesgo, descartarlo con motivo, dejar constancia del aviso a rectoría y cerrarla |
+| GET / PUT | `/instituciones/{id}/contactos` | Usuario / docente o admin | Contactos de emergencia de la sede (rectoría, gestión del riesgo, autoridad ambiental) |
+| GET | `/servicio-social/resumen?estudiante_id=` | Estudiante / docente o admin | Horas aprobadas, por revisar y esperadas, por tipo, y bitácora |
+| POST | `/servicio-social/actividades` · `/actividades/{id}/foto` | Estudiante de 10.° y 11.° | Registrar una actividad (siembra, riego, jornada…) y su foto de evidencia |
+| GET / POST | `/servicio-social/actividades/pendientes` · `/{id}/aprobar` · `/{id}/rechazar` | Docente o admin | Revisar las actividades de la institución |
+| GET | `/servicio-social/estudiantes?curso_id=` | Docente o admin | Estudiantes de 10.° y 11.° con sus horas, los atrasados primero |
+| GET / PUT | `/servicio-social/parametros/{institucion_id}` | Usuario / docente o admin | Meta de horas (80) y horas por inspección confirmada (1) |
+| GET / POST | `/servicio-social/certificados` · `/{id}/descarga` · `/{id}/anular` | Docente o admin (descarga también el estudiante) | Emitir el PDF con QR, descargarlo (enlace de 10 min) y anularlo |
+| GET | `/prae?anio=` · `/prae/anios` | Usuario de la institución | El PRAE del año (o null) y los años con su estado |
+| POST / PATCH | `/prae` · `/prae/{id}` · `/prae/{id}/copiar` | Docente o admin | Crear, editar y empezar otro año a partir de uno |
+| POST / PATCH / DELETE | `/prae/{id}/acciones` · `/prae/acciones/{id}` | Docente o admin | Plan de acción |
+| POST / DELETE | `/prae/{id}/evidencias` · `/prae/evidencias/{id}` (y `/foto`) | Docente o admin | Notas, enlaces y fotos de evidencia |
+| POST / DELETE | `/prae/{id}/evaluaciones` · `/prae/evaluaciones/{id}` | Docente o admin | Evaluación del consejo directivo, la Secretaría o el comité |
+| GET / POST | `/prae/{id}/indicadores` · `/prae/{id}/informe` | Usuario de la institución | Indicadores del año y el informe anual en PDF (enlace de 10 min) |
+| GET | `/mapa?institucion_id=` | Usuario (el administrador elige la institución o todas) | Capas del mapa: sedes, árboles con estado, riesgo de caída, especie, origen, siembra reciente y alerta abierta |
+| PATCH | `/especies/{id}` | Administrador | Guarda si la especie es nativa o exótica (vacío vuelve a la lista del backend) |
+| GET | `/guias?area=&grado=` · `/guias/{id}` | Usuario | Guías de clase por grado y área, con cuántas veces se dictaron en la institución |
+| POST | `/guias/{id}/ficha` | Docente o administrador | Ficha en PDF con datos reales del colegio: guía del docente, ficha del estudiante y clave (enlace de 10 min) |
+| GET / POST / DELETE | `/guias/clases` · `/guias/clases/{id}` | Ver: usuario de la institución · registrar: sus docentes · quitar: quien la registró o el administrador | Bitácora de clases dictadas (sin nombres de estudiantes) |
+| GET | `/laboratorio/datos` | Usuario de la institución | DAP, altura y copa de los árboles para el laboratorio de Matemáticas, sin datos de personas |
+| GET / POST / PATCH / DELETE | `/siembras/jornadas` · `/siembras/jornadas/{id}` | Ver: institución · crear y editar: sus docentes | Jornadas de siembra con su supervivencia; el detalle trae cada plántula, sus controles y el próximo |
+| POST / PATCH / DELETE | `/siembras/jornadas/{id}/plantas` · `/siembras/plantas/{id}` | Docentes de la institución | Plántula con especie, coordenadas, vivero (registro ICA) y padrino |
+| POST / DELETE | `/siembras/plantas/{id}/controles` · `/siembras/controles/{id}` | Cualquier persona de la institución · quitar: quien lo registró o un docente | Control de supervivencia a los 3, 6, 12 o 24 meses (o extra) |
+| GET / PUT | `/siembras/jornadas/{id}/asistentes` | Docentes de la institución | Asistentes (con nombres) y la autorización para la lista de la alcaldía |
+| POST | `/siembras/jornadas/{id}/lista` | Docentes de la institución | Lista para el certificado Siembra Vida Buen Ciudadano en PDF o CSV: solo quien tiene autorización |
+| GET / POST | `/siembras/resumen` · `/siembras/exportar` | Ver: institución · exportar: docentes | Supervivencia total, por jornada y por sede; GeoJSON o CSV de las plántulas sin nombres de personas |
+| GET / POST / PATCH / DELETE · PUT | `/territorial/territorios` · `/territorial/territorios/{id}` · `.../miembros` | Ver: administrador y sus funcionarios · editar: administrador | Territorios (municipios por DIVIPOLA y colegios sueltos) y sus funcionarios con rol territorial |
+| GET | `/territorial/tablero?territorio_id=&anio=` | Funcionario territorial de ese territorio o administrador | Semáforo del PRAE de cada colegio y cifras del año (siembras, clases, servicio social, participación), sin datos de personas |
+| GET / PUT · POST | `/territorial/informe` · `/territorial/informe/archivo` | Funcionario territorial o administrador | Textos editables del informe anual y descarga en PDF o Word |
+| GET | `/verificar/{código}` · `/servicio-social/verificar/{código}` | Público | Página (y JSON) a la que lleva el QR: válido o anulado, con las iniciales del estudiante |
 
 ## Identificación con IA
 
@@ -206,8 +273,15 @@ la persona la acepta**; nada se guarda por la IA. No estima medidas ni marca la 
   está en el catálogo se descarta y las escalas fuera de rango se corrigen.
 - Para activarla, agrega `ANTHROPIC_API_KEY` (de console.anthropic.com) al `.env` y reinicia uvicorn. Sin
   la clave, `POST /ia/analizar-foto` responde 503 y el formulario avisa que la IA no está activada.
-- Costo aproximado: unos US$0,04 por análisis. Para cuidar el saldo hay un máximo de 30 análisis por
-  usuario cada hora (`MAX_ANALISIS_POR_HORA` en `routers/ia.py`).
+- Costo: cada análisis queda anotado en `analisis_ia` (sin las fotos) con los tokens que reporta la API y
+  su costo según la tarifa publicada (`PRECIOS_USD_MTOK` en `servicios/ia.py`; Opus 5.5: US$4 por millón de
+  tokens de entrada y US$20 de salida). Es un estimado: la factura real está en la consola de Anthropic.
+  Con `IA_TRM` (pesos por dólar) en el `.env`, el tablero de precisión también lo muestra en pesos. Para
+  cuidar el saldo hay un máximo de 30 análisis por usuario cada hora (`MAX_ANALISIS_POR_HORA`).
+- Precisión (`servicios/precision_ia.py`): la especie real es la del árbol que se guardó con la sugerencia,
+  solo cuando un docente confirmó su inspección de registro (pendientes y anuladas no cuentan), o la que
+  indica el administrador en una prueba a ciegas. Un análisis que no sugirió especie cuenta como fallo. Cada
+  porcentaje lleva su intervalo de confianza del 95 % (Wilson) y se avisa si hay menos de 30 casos.
 - Las pruebas (`tests/test_ia.py`) usan un cliente falso: no necesitan la clave ni gastan saldo.
 
 ## Cómo lo usa el frontend (React)
@@ -291,6 +365,78 @@ El cuerpo trae `detail` con el mensaje. Los errores que vienen de la base de dat
 - Una foto `completo`, una `detalle` y hasta 3 `adicional`; JPG, PNG o WebP; máximo 5 MB. El formato se comprueba con los primeros bytes del archivo, no con lo que declara el navegador.
 - Solo quien registró un árbol puede subirle fotos (el RLS impide además editar árboles ajenos).
 - El código `IE001-0001` y el campo `registrado_por` los asigna la base de datos; el frontend nunca los envía.
+- **Catálogo con fuente oficial** (`servicios/fuentes_oficiales.py`): se consulta en GBIF, donde el SiB
+  Colombia publica las listas oficiales: Catálogo de Plantas y Líquenes de Colombia (UNAL), plantas exóticas
+  y trasplantadas (Instituto Humboldt, con la declaración de invasora de la Resolución 207 de 2010), GRIIS
+  Colombia, especies amenazadas de la Resolución 0126 de 2024 y plantas de bosque seco (Instituto Humboldt).
+  La ficha guarda la versión, el DOI y el enlace de cada lista. Si las listas no coinciden en el origen manda
+  la de exóticas, después GRIIS y por último el Catálogo, y la ficha lo avisa. Un sinónimo se resuelve con el
+  nombre aceptado. "Nativa del bosque seco del Cesar" = nativa, reportada en bosque seco y registrada en el
+  Cesar. La veda no está publicada como lista: la registra el administrador con la norma que la establece.
+- **Tablero territorial** (`servicios/territorial.py`; Ley 2173, art. 12, parágrafo, y Ley 1549): el rol
+  territorial es para funcionarios de la Secretaría, la autoridad ambiental o la Gobernación; no pertenece a
+  un colegio, así que el backend lee con la llave de servicio después de comprobar su territorio y solo
+  devuelve cifras por colegio. Semáforo: verde = PRAE del año evaluado por el consejo directivo y la
+  Secretaría; amarillo = le falta alguna evaluación; rojo = sin PRAE del año. El informe sale en PDF y en
+  Word (`servicios/docx.py`, sin librerías) para ajustarlo al formato del MEN, que está por confirmar.
+- **Siembras** (`servicios/siembras.py`; Ley 2173 de 2021 y Resolución 1491 de 2025): cada plántula tiene
+  controles a los 3, 6, 12 y 24 meses (los 2 años de mantenimiento). Un control se hace desde 15 días antes
+  de su fecha y vence 30 días después. La supervivencia por edad es por cohorte: una plántula que murió a
+  los 6 meses cuenta como muerta a los 12 y a los 24; una sin control de la que no se sabe queda pendiente.
+  La lista para la alcaldía solo lleva el nombre de quien tiene la autorización registrada (en menores, la
+  firma el acudiente y el soporte queda en la institución); la app no guarda documentos de identidad ni
+  expide el certificado. Las siembras del año suman en los indicadores y el informe del PRAE.
+- **Guías de clase** (`servicios/guias.py`): 10 guías. Las de Ciencias Naturales (grados 2.°, 3.°, 4.°,
+  6.°, 7.° y 11.°) se apoyan cada una en un DBA de Ciencias Naturales del MEN (V.1); las de Matemáticas
+  (grados 3.° a 11.°), en el pensamiento aleatorio de los Estándares Básicos de Competencias (MEN, 2006).
+  La ficha trae los datos reales del colegio: la ruta de campo excluye árboles con alerta de caída,
+  riesgo alto o estado crítico, y las muestras son aleatorias y repetibles con su número. Las clases
+  registradas suman en los indicadores y el informe del PRAE. El laboratorio calcula en la app tabla de
+  frecuencias (Sturges), histograma, media, mediana, cuartiles, desviación (poblacional con todos los
+  árboles, muestral con una muestra) y la regresión DAP-altura; la clave del PDF usa las mismas fórmulas.
+- **Mapa con capas** (`servicios/mapa.py`): una sola respuesta con todo lo que dibuja el visor. El
+  origen de cada especie es el que guardó el administrador o, si no hay, el de una lista de
+  especies cuyo origen en Colombia no se discute; las demás quedan sin clasificar. Siembra reciente =
+  plántula registrada en los últimos 12 meses. El riesgo y las alertas se piden por lotes de 100
+  árboles para que el mapa de muchas sedes no alargue la URL. Las respuestas de más de 2 KB viajan
+  comprimidas (gzip).
+- **PRAE** (`servicios/prae.py`; Decreto 1743 de 1994, compilado en el Decreto 1075 de 2015): un
+  expediente por institución y año sobre cualquier tema (arbolado, residuos, agua, energía,
+  biodiversidad u otro) con problema, diagnóstico, objetivos, comité, plan de acción, evidencias y
+  evaluaciones. El estado sale de los datos: en formulación, en ejecución (con acciones), evaluación
+  parcial y evaluado (cuando lo evaluaron el consejo directivo y la Secretaría de Educación). El
+  informe anual en PDF suma los indicadores del arbolado, las alertas de riesgo y el servicio social
+  del año. Copiar a otro año lleva el plan con las fechas corridas y las acciones pendientes.
+- **Servicio social** (`servicios/servicio_social.py`, Resolución MEN 4210 de 1996): lo prestan los
+  estudiantes de cursos de 10.° y 11.° (el grado se guarda en el curso o se deduce del nombre: "10-A",
+  "1102", "Once B"), del 1 de febrero de 10.° al 30 de noviembre de 11.°. Cuentan las inspecciones
+  propias confirmadas (1 h cada una por defecto, una por árbol y día) y las actividades con foto que
+  aprueba un docente; máximo 8 h por día y actividades de máximo 90 días atrás. No se registran
+  trabajos en altura, con herramientas cortantes o motorizadas, ni con agroquímicos. Las horas
+  esperadas reparten la meta en los 20 meses de clase de los dos años; con menos del 75 % de lo
+  esperado el estudiante va atrasado. El certificado (PDF con código y QR) lo emite un docente de la
+  institución o el administrador cuando se cumple la meta, con autorización de rectoría y el nombre de
+  quien firma; hay uno vigente por estudiante y se anula para corregirlo. La verificación pública
+  muestra solo las iniciales del estudiante.
+- **Riesgo de caída** (`servicios/riesgo_caida.py`): el registro y cada inspección pueden traer un
+  `tamizaje` (inclinación, raíces, ramas secas, cavidades, hongos, grietas y qué hay debajo, que es
+  obligatorio). La categoría (bajo, medio, alto o inminente) la calcula el backend cruzando la
+  probabilidad de falla con la ocupación de lo que hay debajo; un árbol pequeño (≤ 3 m y DAP ≤ 10 cm)
+  baja un nivel. La app usa las mismas reglas sin conexión (`frontend/src/features/riesgo/reglas.ts`).
+  Alto o inminente abre una alerta por árbol (`por_confirmar` → `confirmada` → `atendida`, o
+  `descartada`); otra inspección la actualiza sin bajarle la categoría y anular la inspección que la
+  abrió la descarta. Es un tamizaje, no un dictamen: la poda o tala la autoriza la autoridad ambiental
+  previa visita técnica (Decreto 1076 de 2015, art. 2.2.1.1.9.3). Sin la migración 008 la categoría se
+  calcula y se devuelve, pero no se guarda ni abre alertas.
+- **Sin conexión**: la app guarda en el teléfono lo que se registra sin señal y lo envía después.
+  `POST /arboles`, `POST /arboles/{id}/inspecciones` y las dos rutas de fotos aceptan un
+  `id_cliente` (UUID que genera la app; en las fotos va como parámetro `?id_cliente=`). Si llega
+  otra vez el mismo `id_cliente`, la API responde **200** con lo que ya está guardado en lugar de
+  crear un duplicado (y en las fotos no cuenta para el límite de tres). Un `id_cliente` que ya usó
+  otra persona u otro árbol responde 409. `capturado_en` es la hora de la visita según el teléfono:
+  se guarda en la inspección como dato informativo y se descarta si está más de 10 minutos en el
+  futuro o tiene más de 90 días; la fecha oficial sigue siendo la del servidor. Sin la migración
+  007 todo funciona igual, sin la protección contra duplicados.
 - Un árbol tiene muchas **inspecciones** (visitas). Al registrarlo se crea la primera (`origen = registro`).
   Su estado, medidas y hallazgos actuales son los de la última inspección **no anulada**
   (vista `arboles_resumen`), así que anular una inspección devuelve el árbol al estado anterior.

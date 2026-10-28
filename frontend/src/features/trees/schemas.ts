@@ -2,6 +2,8 @@ import { z } from 'zod';
 
 import type { Catalogos } from '@/features/catalogs/types';
 import { camposBioticosSchema, validarBioticos } from '@/features/inspections/bioticos';
+import { CATEGORIAS } from '@/features/riesgo/reglas';
+import { tamizajeSchema } from '@/features/riesgo/schemas';
 import { textoOpcional } from '@/shared/validacion';
 import { isInColombia } from '@/shared/utils/geo';
 
@@ -40,6 +42,10 @@ const arbolFieldsSchema = z.object({
   notas: textoOpcional(1000),
   // Agentes bióticos FB-01 a FB-06: van a la primera inspección, como los hallazgos.
   ...camposBioticosSchema.shape,
+  // Tamizaje de riesgo de caída de la primera inspección (features/riesgo).
+  tamizaje: tamizajeSchema.optional(),
+  // Análisis de IA cuyas sugerencias se usaron: el backend lo enlaza al árbol para medir aciertos.
+  ia_analisis_id: z.uuid().optional(),
 }).strict();
 
 function validateTreeRules(
@@ -155,6 +161,8 @@ export const arbolResumenSchema = z.object({
   n_inspecciones: z.number().int().nullable().optional(),
   // Foto general más reciente (URL firmada); solo viene en la lista de árboles.
   foto_url: z.string().nullable().optional(),
+  // Categoría del último tamizaje de riesgo de caída; solo viene en la lista y al registrar.
+  riesgo_caida: z.enum(CATEGORIAS).nullable().optional(),
 });
 
 export const arbolesResumenSchema = z.array(arbolResumenSchema);

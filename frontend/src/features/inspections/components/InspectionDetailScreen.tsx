@@ -31,6 +31,7 @@ import {
   StateBadge,
 } from '@/shared/components/UI';
 import { crearEstilos } from '@/theme';
+import { AvisoFotos } from '@/shared/components/AvisoFotos';
 
 export function InspectionDetailScreen({ inspeccionId, aviso }: { inspeccionId: string; aviso?: string }) {
   const styles = useStyles();
@@ -166,6 +167,7 @@ function SubirFotos({ inspeccionId, existentes }: { inspeccionId: string; existe
 
   return (
     <View style={styles.subir}>
+      <AvisoFotos />
       <Row>
         {!existentes.includes('completo') ? (
           <Cell basis={160}><PrimaryButton title="Agregar foto general" variant="secondary" onPress={() => void picker.pickPhoto('completo')} /></Cell>

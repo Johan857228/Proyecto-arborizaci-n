@@ -250,6 +250,34 @@ export function InlineMessage({
   );
 }
 
+/** Casilla de verificación con texto (aceptar una política, confirmar algo). Toda la fila se toca. */
+export function Casilla({
+  checked,
+  onChange,
+  children,
+  error,
+}: PropsWithChildren<{ checked: boolean; onChange: (checked: boolean) => void; error?: string }>) {
+  const styles = useStyles();
+  const { palette } = useTema();
+  return (
+    <View style={styles.casillaWrap}>
+      <Pressable
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked }}
+        onPress={() => onChange(!checked)}
+        hitSlop={4}
+        style={({ pressed }) => [styles.casilla, pressed && styles.pressed]}
+      >
+        <View style={[styles.casillaCaja, checked && styles.casillaCajaActiva, error && !checked ? styles.invalid : null]}>
+          {checked ? <Icon name="check" size={14} color={palette.paper} /> : null}
+        </View>
+        <Text style={styles.casillaTexto}>{children}</Text>
+      </Pressable>
+      {error ? <FieldError message={error} /> : null}
+    </View>
+  );
+}
+
 export function ChoiceChip({
   label,
   selected,
@@ -316,6 +344,11 @@ const useStyles = crearEstilos(({ palette, gradients, card, oscuro }) => ({
   message: { overflow: 'hidden', flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingVertical: 11, paddingLeft: 15, paddingRight: 12, borderRadius: 12 },
   messageBar: { position: 'absolute', top: 0, bottom: 0, left: 0, width: 3 },
   messageText: { flex: 1, fontSize: 13, lineHeight: 19, fontWeight: '500' },
+  casillaWrap: { gap: 6 },
+  casilla: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingVertical: 4 },
+  casillaCaja: { width: 22, height: 22, marginTop: 1, alignItems: 'center', justifyContent: 'center', borderRadius: 7, borderWidth: 1.5, borderColor: palette.placeholder, backgroundColor: palette.paper },
+  casillaCajaActiva: { borderColor: palette.forest, backgroundColor: palette.forest },
+  casillaTexto: { flex: 1, color: palette.ink, fontSize: 14, lineHeight: 20 },
   chip: { minHeight: 38, flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderColor: palette.line, borderRadius: 999, paddingHorizontal: 14, backgroundColor: palette.paper },
   selectedChip: { borderColor: palette.forest, backgroundColor: palette.forestSoft },
   chipText: { color: palette.ink, fontWeight: '500', fontSize: 13 },

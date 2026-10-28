@@ -20,6 +20,7 @@ import { useArbol, useCalculos, useSubirFotoArbol } from '@/features/trees/hooks
 import { usePhotoPicker } from '@/features/trees/hooks/usePhotoPicker';
 import type { FotoLocal } from '@/features/trees/types';
 import { getApiErrorMessage } from '@/services/api/client';
+import { RiesgoArbolCard } from '@/features/riesgo/components/RiesgoArbolCard';
 import { useAvisos } from '@/shared/avisos';
 import { formatFecha, formatFechaHora, formatNumero, formatPesos } from '@/shared/format';
 import { InlineMessage, PrimaryButton } from '@/shared/components/FormControls';
@@ -40,8 +41,9 @@ import {
   Cell,
 } from '@/shared/components/UI';
 import { crearEstilos } from '@/theme';
+import { AvisoFotos } from '@/shared/components/AvisoFotos';
 
-const AVISOS: Record<string, { texto: string; tono: 'sano' | 'riesgo' }> = {
+const AVISOS: Record<string, { texto: string; tono: 'sano' | 'riesgo' | 'info' | 'critico' }> = {
   registrado: {
     texto: 'Árbol registrado. Su primera inspección quedó pendiente de revisión por un docente.',
     tono: 'sano',
@@ -51,6 +53,30 @@ const AVISOS: Record<string, { texto: string; tono: 'sano' | 'riesgo' }> = {
     tono: 'riesgo',
   },
   inspeccion: { texto: 'Inspección guardada. Quedó pendiente de revisión.', tono: 'sano' },
+  inspeccionEnCola: {
+    texto: 'Sin conexión: la inspección y sus fotos quedaron guardadas en el teléfono y se enviarán solas cuando vuelva la señal.',
+    tono: 'info',
+  },
+  'riesgo-inminente': {
+    texto: 'Inspección guardada con riesgo de caída INMINENTE. Aleja a las personas y acordona el área ahora; se abrió una alerta para los docentes. Mira abajo qué hacer.',
+    tono: 'critico',
+  },
+  'riesgo-alto': {
+    texto: 'Inspección guardada con riesgo de caída alto. Restringe el paso debajo del árbol; se abrió una alerta para los docentes.',
+    tono: 'riesgo',
+  },
+  'riesgo-inminente-cola': {
+    texto: 'Sin conexión: la inspección quedó en el teléfono. Riesgo de caída INMINENTE: aleja a las personas, acordona el área y avisa a un docente ya. Si hay peligro inmediato, llama al 123.',
+    tono: 'critico',
+  },
+  'riesgo-alto-cola': {
+    texto: 'Sin conexión: la inspección quedó en el teléfono. Riesgo de caída alto: restringe el paso debajo del árbol y avisa a un docente.',
+    tono: 'riesgo',
+  },
+  inspeccionFotosEnCola: {
+    texto: 'Inspección guardada. Algunas fotos no alcanzaron a subir por falta de señal: quedaron en el teléfono y se enviarán solas.',
+    tono: 'info',
+  },
   intervencion: { texto: 'Intervención guardada.', tono: 'sano' },
 };
 
@@ -113,6 +139,8 @@ export function TreeDetailScreen({ arbolId, aviso: avisoRuta }: { arbolId: strin
         {a.puntaje_riesgo != null ? <Badge label={`Puntaje de riesgo ${formatNumero(a.puntaje_riesgo)}`} /> : null}
       </View>
 
+      <RiesgoArbolCard arbolId={a.id} institucionId={a.institucion_id} />
+
       <Row>
         <Cell>
           <PrimaryButton title="Registrar inspección" onPress={() => router.push(`/(app)/trees/${a.id}/inspect` as Href)} />
@@ -126,6 +154,9 @@ export function TreeDetailScreen({ arbolId, aviso: avisoRuta }: { arbolId: strin
             />
           </Cell>
         ) : null}
+        <Cell>
+          <PrimaryButton title="Ver en el mapa" icon="map" variant="secondary" onPress={() => router.push(`/(app)/map?arbol=${a.id}` as Href)} />
+        </Cell>
       </Row>
 
       <Card title="Estado actual">
@@ -315,6 +346,7 @@ function FotosRegistro({
       <PhotoGallery fotos={galeria} vacio="Este árbol todavía no tiene fotos." />
       {puedeSubir ? (
         <>
+          <AvisoFotos />
           <Row>
             {!tiene('completo') ? (
               <Cell basis={160}><PrimaryButton title="Agregar foto general" variant="secondary" onPress={() => void picker.pickPhoto('completo')} /></Cell>

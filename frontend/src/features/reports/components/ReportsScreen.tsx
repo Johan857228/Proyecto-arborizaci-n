@@ -1,4 +1,4 @@
-import { router, type Href } from 'expo-router';
+import { router, useLocalSearchParams, type Href } from 'expo-router';
 import { useState } from 'react';
 import { Text, View } from 'react-native';
 
@@ -24,7 +24,12 @@ import {
 } from '@/shared/components/UI';
 import { crearEstilos } from '@/theme';
 
-type Seccion = 'inventario' | 'riesgo' | 'cobertura' | 'productividad' | 'intervenciones';
+const SECCIONES = ['inventario', 'riesgo', 'cobertura', 'productividad', 'intervenciones'] as const;
+type Seccion = (typeof SECCIONES)[number];
+
+function esSeccion(valor: string | undefined): valor is Seccion {
+  return SECCIONES.some((s) => s === valor);
+}
 const GRUPOS: Record<string, string> = { follaje: 'Follaje', tronco: 'Tronco y ramas', raiz: 'Raíz', plagas: 'Plagas' };
 
 export function ReportsScreen() {
@@ -34,7 +39,9 @@ export function ReportsScreen() {
   const [hasta, setHasta] = useState('');
   const [periodo, setPeriodo] = useState<{ desde?: string; hasta?: string }>({});
   const [error, setError] = useState<string>();
-  const [seccion, setSeccion] = useState<Seccion>('inventario');
+  // El inicio puede abrir una sección directamente (/reports?seccion=riesgo).
+  const params = useLocalSearchParams<{ seccion?: string }>();
+  const [seccion, setSeccion] = useState<Seccion>(() => (esSeccion(params.seccion) ? params.seccion : 'inventario'));
   const reporte = useReporte({ institucionId: institucion.institucionId, ...periodo });
 
   function aplicar() {

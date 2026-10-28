@@ -5,8 +5,9 @@ usuario reciba el error ANTES de llegar a Supabase, con un mensaje claro.
 """
 from datetime import datetime
 from typing import Annotated, Literal
+from uuid import UUID
 
-from pydantic import BaseModel, Field, StringConstraints, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator, model_validator
 
 # Límites del formulario (el frontend usa los mismos en src/features/trees/schemas.ts)
 DAP_MAX_CM = 500       # 5 m de diámetro de tronco
@@ -46,7 +47,7 @@ CAMPOS_BIOTICOS = {
 TipoFoto = Literal["completo", "detalle", "adicional"]
 EstadoRevision = Literal["pendiente", "confirmada", "anulada"]
 OrigenInspeccion = Literal["registro", "seguimiento"]
-Rol = Literal["administrador", "docente", "estudiante"]
+Rol = Literal["administrador", "docente", "estudiante", "territorial"]
 
 ZONAS: tuple[str, ...] = ("Patio central", "Entrada principal", "Zona deportiva", "Bloques académicos", "Otra")
 
@@ -70,6 +71,8 @@ class RegistroIn(BaseModel):
     email: str = Field(max_length=254, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
     # Supabase guarda la contraseña con bcrypt, que solo usa los primeros 72 bytes.
     password: str = Field(min_length=8, max_length=72)
+    # Ley 1581: la autorización para tratar los datos se da antes de crear la cuenta.
+    acepta_politica: bool = Field(description="Acepta la política de tratamiento de datos vigente")
 
     @field_validator("nombre", mode="before")
     @classmethod
@@ -80,6 +83,13 @@ class RegistroIn(BaseModel):
     @classmethod
     def _normalizar_email(cls, v):
         return v.strip().lower() if isinstance(v, str) else v
+
+    @field_validator("acepta_politica")
+    @classmethod
+    def _acepta(cls, v: bool) -> bool:
+        if not v:
+            raise ValueError("Debes aceptar la política de tratamiento de datos para crear la cuenta")
+        return v
 
     @field_validator("password")
     @classmethod
@@ -115,6 +125,13 @@ class Especie(BaseModel):
     id: int
     nombre_comun: str
     nombre_cientifico: str
+    origen: Literal["nativa", "exotica"] | None = Field(
+        default=None, description="Origen en Colombia: el guardado (migración 011) o el de la lista del backend"
+    )
+    # Ficha oficial (migración 015): para avisar al sembrar o intervenir.
+    invasora: bool | None = None
+    amenaza: Literal["CR", "EN", "VU"] | None = None
+    en_veda: bool = False
 
 
 class Institucion(BaseModel):
@@ -140,6 +157,54 @@ class Catalogos(BaseModel):
 
 
 # ----------------------------------- Árboles -----------------------------------
+class CamposSinConexion(BaseModel):
+    """Datos que agrega la app cuando el registro se guardó en el teléfono sin señal y se
+    envía después (comun.insertar_sin_duplicar)."""
+
+    id_cliente: UUID | None = Field(
+        default=None, description="UUID que genera la app: si el envío se repite, no se duplica el registro"
+    )
+    capturado_en: datetime | None = Field(
+        default=None, description="Cuándo se tomó en campo; se descarta si el reloj del teléfono no es creíble"
+    )
+
+
+# ------------------------------ Riesgo de caída ------------------------------
+DebajoDelArbol = Literal["aulas", "paso", "recreo", "cancha", "parqueadero", "via", "cables", "poco_uso", "cerrada"]
+CategoriaRiesgo = Literal["bajo", "medio", "alto", "inminente"]
+
+
+class Tamizaje(BaseModel):
+    """Tamizaje visual del riesgo de caída: lo que se ve del árbol y qué hay debajo. La categoría
+    la calcula servicios/riesgo_caida.py (no la envía la app)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    inclinacion: Literal["ninguna", "leve", "marcada", "reciente"] = "ninguna"
+    raices: Literal["sanas", "expuestas", "danadas"] = "sanas"
+    ramas_secas: Literal["ninguna", "pequenas", "grandes", "colgando"] = "ninguna"
+    cavidades: Literal["ninguna", "pequena", "grande"] = "ninguna"
+    hongos: Literal["ninguno", "en_ramas", "en_tronco_o_base"] = "ninguno"
+    grietas: Literal["ninguna", "en_ramas", "en_tronco_o_union", "abriendose"] = "ninguna"
+    debajo: list[DebajoDelArbol] = Field(
+        min_length=1, max_length=9, description="Qué hay debajo o al alcance si el árbol o una rama cae"
+    )
+
+    @field_validator("debajo")
+    @classmethod
+    def _sin_repetir(cls, v: list[str]) -> list[str]:
+        return sorted(set(v))
+
+
+class ResultadoTamizaje(BaseModel):
+    categoria: CategoriaRiesgo
+    probabilidad: Literal["improbable", "posible", "probable", "inminente"]
+    ocupacion: Literal["rara", "ocasional", "frecuente", "constante"]
+    motivos: list[str]
+    accion: str
+    respuestas: Tamizaje
+
+
 class CamposBioticos(BaseModel):
     """Agentes bióticos observados en la visita (FB-01 a FB-06). Todos son opcionales: si no se
     observa un agente, su tipo va vacío y no se envían su parte ni su severidad (escala 0 a 4)."""
@@ -189,7 +254,7 @@ class CamposBioticos(BaseModel):
         return self
 
 
-class ArbolCrear(CamposBioticos):
+class ArbolCrear(CamposBioticos, CamposSinConexion):
     """Lo que envía el formulario del frontend (pasos 1, 3 y 4 del prototipo)."""
 
     institucion_id: str = Field(min_length=1, max_length=64)
@@ -213,6 +278,10 @@ class ArbolCrear(CamposBioticos):
         default=None, ge=0, le=10000, description="Precisión que reporta el GPS del dispositivo, en metros"
     )
     notas: str | None = Field(default=None, max_length=1000, description="Notas de la primera inspección")
+    tamizaje: Tamizaje | None = Field(default=None, description="Tamizaje de riesgo de caída de la primera inspección")
+    ia_analisis_id: UUID | None = Field(
+        default=None, description="Análisis de IA cuyas sugerencias se usaron: se enlaza para medir los aciertos"
+    )
 
     # mode="before": se limpian los espacios ANTES de medir el largo del texto
     @field_validator("zona_otra", "interferencia_otra", "notas", mode="before")
@@ -263,6 +332,9 @@ class ArbolResumen(BaseModel):
     ultima_revision: EstadoRevision | None = None
     n_inspecciones: int | None = None
     foto_url: str | None = Field(default=None, description="Foto general más reciente (URL firmada por 1 hora)")
+    riesgo_caida: CategoriaRiesgo | None = Field(
+        default=None, description="Categoría del último tamizaje de riesgo de caída (inspecciones no anuladas)"
+    )
 
 
 class ObservacionOut(BaseModel):

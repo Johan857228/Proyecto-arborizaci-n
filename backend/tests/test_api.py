@@ -242,6 +242,20 @@ def test_estadisticas(entorno):
     assert [i["prefijo"] for i in j["por_institucion"]] == ["IE001", "IE002"]
 
 
+def test_estadisticas_por_institucion(entorno):
+    """Con institucion_id se filtran los árboles y solo cuentan las pendientes de esos árboles."""
+    cliente, almacen, registro = entorno
+    almacen["arboles_resumen"] = [ARBOL]
+    almacen["inspecciones"] = [
+        {"id": "i1", "arbol_id": ARBOL["id"], "estado_revision": "pendiente"},
+        {"id": "i2", "arbol_id": "arbol-de-otra-institucion", "estado_revision": "pendiente"},
+    ]
+    assert cliente.get("/estadisticas").json()["inspecciones_pendientes"] == 2
+    j = cliente.get("/estadisticas?institucion_id=sj").json()
+    assert j["inspecciones_pendientes"] == 1
+    assert ("arboles_resumen", "eq", ("institucion_id", "sj"), {}) in registro
+
+
 def test_estadisticas_sin_datos(entorno):
     cliente, almacen, _ = entorno
     almacen["arboles_resumen"] = []

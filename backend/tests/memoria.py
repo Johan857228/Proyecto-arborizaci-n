@@ -19,14 +19,46 @@ DEFECTOS = {
     "metas": lambda: {"creado_en": _ahora(), "descripcion": None},
     "escenarios_presupuestales": lambda: {"creado_en": _ahora()},
     "metodos_calculo": lambda: {"creado_en": _ahora()},
+    "tamizajes_riesgo": lambda: {"creado_en": _ahora()},
+    "alertas_riesgo": lambda: {"estado": "por_confirmar", "creada_en": _ahora(), "actualizada_en": _ahora(),
+                               "revisada_en": None, "comentario_revision": None, "rectoria_avisada_en": None,
+                               "rectoria_medio": None, "atendida_en": None, "nota_cierre": None, "intervencion_id": None},
+    "actividades_servicio": lambda: {"estado": "pendiente", "creado_en": _ahora(), "foto_path": None, "revisado_en": None,
+                                     "revisado_por": None, "comentario": None, "arbol_id": None, "lat": None, "lng": None},
+    "certificados_servicio": lambda: {"emitido_en": _ahora(), "anulado_en": None, "anulado_por": None, "anulado_motivo": None},
+    "prae": lambda: {"creado_en": _ahora(), "actualizado_en": _ahora(), "diagnostico": None, "objetivo_general": None,
+                     "objetivos_especificos": [], "comite": None, "tema_otro": None},
+    "prae_acciones": lambda: {"creado_en": _ahora(), "estado": "pendiente", "orden": 0},
+    "prae_evidencias": lambda: {"creado_en": _ahora(), "foto_path": None, "accion_id": None},
+    "prae_evaluaciones": lambda: {"creado_en": _ahora()},
+    "clases_guia": lambda: {"creado_en": _ahora(), "curso_id": None, "asistentes": None, "notas": None},
+    "jornadas_siembra": lambda: {"creado_en": _ahora(), "actualizado_en": _ahora(), "lugar": None, "organizador": "colegio",
+                                 "oficial": False, "area_de_vida": None, "patrocinador": None, "notas": None},
+    "siembras": lambda: {"creado_en": _ahora(), "especie_otra": None, "precision_gps_m": None, "vivero": None,
+                         "vivero_registro_ica": None, "altura_inicial_cm": None, "padrino_curso_id": None,
+                         "padrino_usuario_id": None, "padrino_nombre": None, "arbol_id": None, "reemplaza_id": None, "notas": None},
+    "controles_siembra": lambda: {"creado_en": _ahora(), "altura_cm": None, "mantenimiento": False, "observaciones": None},
+    "asistentes_jornada": lambda: {"creado_en": _ahora(), "arboles_sembrados": None, "autoriza_certificado": False,
+                                   "autorizacion_registrada_por": None, "autorizacion_registrada_en": None},
+    "territorios": lambda: {"creado_en": _ahora(), "actualizado_en": _ahora(), "tipo": "secretaria_educacion",
+                            "divipolas": [], "institucion_ids": []},
+    "miembros_territorio": lambda: {"creado_en": _ahora()},
+    "informes_territoriales": lambda: {"actualizado_en": _ahora(), "secciones": {}, "estado": "borrador"},
+    "especies_fuente_oficial": lambda: {"consultado_en": _ahora(), "veda": None, "veda_url": None,
+                                        "veda_registrada_por": None, "veda_registrada_en": None},
+    "analisis_ia": lambda: {"creado_en": _ahora(), "tipo": "campo", "arbol_id": None, "especie_real_id": None,
+                            "tokens_entrada": 0, "tokens_salida": 0, "tokens_cache_lectura": 0, "tokens_cache_escritura": 0},
 }
 UNICOS = {
     "cursos": [("institucion_id", "nombre", "anio")],
     "metas": [("institucion_id", "indicador", "fecha_inicio", "fecha_fin")],
     "curso_zonas": [("curso_id", "zona")],
     "inspeccion_observaciones": [("inspeccion_id", "observacion_codigo")],
+    "prae": [("institucion_id", "anio")],
 }
-SIN_ID = {"curso_zonas", "inspeccion_observaciones", "parametros_institucionales", "perfiles", "tipos_intervencion"}
+SIN_ID = {"curso_zonas", "inspeccion_observaciones", "parametros_institucionales", "perfiles", "tipos_intervencion",
+          "tamizajes_riesgo", "contactos_emergencia", "servicio_social_parametros", "miembros_territorio",
+          "especies_fuente_oficial"}
 
 
 def _ahora():
@@ -101,8 +133,11 @@ class Consulta:
 
     def execute(self):
         self.base.llamadas.append((self.tabla, self.op))
-        if self.base.fallar.get(self.tabla) == self.op:
-            raise APIError({"message": "falla simulada", "code": "23503", "hint": None, "details": None})
+        # fallar[tabla] = "insert" (error 23503) o ("select", "42703") para elegir el código.
+        falla = self.base.fallar.get(self.tabla)
+        op_falla, codigo = (falla, "23503") if isinstance(falla, str) else (falla or (None, None))
+        if op_falla == self.op:
+            raise APIError({"message": "falla simulada", "code": codigo, "hint": None, "details": None})
         filas = self.base.tablas.setdefault(self.tabla, [])
         if self.op == "select":
             resultado = self._coinciden(filas)
@@ -159,7 +194,7 @@ class Almacen:
         for r in rutas:
             self.base.archivos.pop(r, None)
 
-    def create_signed_url(self, ruta, segundos):
+    def create_signed_url(self, ruta, segundos, opciones=None):
         return {"signedURL": f"https://memoria/{ruta}"}
 
     def create_signed_urls(self, rutas, segundos):

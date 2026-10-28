@@ -3,6 +3,7 @@ import { ActivityIndicator, Text, View } from 'react-native';
 import { router, type Href } from 'expo-router';
 
 import { useCatalogs } from '@/features/catalogs/hooks/useCatalogs';
+import { evaluarTamizaje, type ResultadoLocal } from '@/features/riesgo/reglas';
 import { useRegisterTree } from '@/features/trees/hooks/useRegisterTree';
 import { RegistrationSuccess } from '@/features/trees/components/RegistrationSuccess';
 import { TreeCreateForm } from '@/features/trees/components/TreeCreateForm';
@@ -14,10 +15,15 @@ import { Icon } from '@/shared/components/Icon';
 import { crearEstilos, useTema } from '@/theme';
 
 interface Registered {
-  id: string;
-  codigo: string;
+  /** Sin id ni código: quedó guardado en el teléfono y se envía cuando haya conexión. */
+  id?: string;
+  codigo?: string;
   nombreComun: string;
   photoWarning?: string;
+  fotosEnCola?: number;
+  /** Resultado del tamizaje calculado en el teléfono: orienta aunque no haya conexión. */
+  riesgo?: ResultadoLocal;
+  institucionId: string;
 }
 
 export default function NewTreeRoute() {
@@ -32,12 +38,28 @@ export default function NewTreeRoute() {
 
   async function submit(values: ArbolCrear, photos: FotoLocal[]) {
     setSubmitError(undefined);
+    const especie = catalogs.data?.especies.find((item) => item.id === values.especie_id);
+    const institucion = catalogs.data?.instituciones.find((item) => item.id === values.institucion_id);
+    const zona = values.zona === 'Otra' ? values.zona_otra : values.zona;
+    const etiqueta = {
+      titulo: especie?.nombre_comun ?? 'Árbol',
+      detalle: [institucion?.nombre_corto, zona].filter(Boolean).join(' · '),
+    };
+    const riesgo = values.tamizaje ? evaluarTamizaje(values.tamizaje, values.altura_m, values.dap_cm) : undefined;
     try {
-      const { tree, photoError } = await registerTree.submit(values, photos);
+      const resultado = await registerTree.submit(values, photos, etiqueta);
+      if (resultado.estado === 'en_cola') {
+        setRegistered({ nombreComun: etiqueta.titulo, riesgo, institucionId: values.institucion_id });
+        return;
+      }
+      const { tree, photoError, fotosEnCola } = resultado;
       setRegistered({
         id: tree.id,
         codigo: tree.codigo,
         nombreComun: tree.nombre_comun,
+        fotosEnCola,
+        riesgo,
+        institucionId: values.institucion_id,
         photoWarning: photoError
           ? `No se pudo subir toda la evidencia fotográfica. ${getApiErrorMessage(photoError)}`
           : undefined,
@@ -53,11 +75,15 @@ export default function NewTreeRoute() {
         codigo={registered.codigo}
         nombreComun={registered.nombreComun}
         photoWarning={registered.photoWarning}
+        fotosEnCola={registered.fotosEnCola}
+        riesgo={registered.riesgo}
+        institucionId={registered.institucionId}
         onRegisterAnother={() => {
           setRegistered(undefined);
           setFormKey((key) => key + 1);
         }}
-        onViewTree={() => router.push(`/(app)/trees/${registered.id}` as Href)}
+        onViewTree={registered.id ? () => router.push(`/(app)/trees/${registered.id}` as Href) : undefined}
+        onViewPending={() => router.push('/(app)/sync' as Href)}
         onViewInventory={() => router.navigate('/(app)/trees' as Href)}
       />
     );

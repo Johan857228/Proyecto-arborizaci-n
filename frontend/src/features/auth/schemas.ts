@@ -32,6 +32,8 @@ export const registroSchema = z
       .regex(/\p{L}/u, 'Incluye al menos una letra.')
       .regex(/\d/, 'Incluye al menos un número.'),
     confirmacion: z.string().min(1, 'Repite la contraseña.'),
+    // Ley 1581: la autorización se da antes de crear la cuenta.
+    acepta_politica: z.boolean().refine((v) => v, 'Debes aceptar la política de tratamiento de datos.'),
   })
   .refine((valores) => valores.password === valores.confirmacion, {
     path: ['confirmacion'],
