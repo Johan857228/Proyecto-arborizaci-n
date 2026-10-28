@@ -72,6 +72,7 @@ const icons = {
   guia: { ios: 'book.fill', material: 'menu_book' },
   laboratorio: { ios: 'chart.dots.scatter', material: 'scatter_plot' },
   siembra: { ios: 'leaf.circle', material: 'potted_plant' },
+  territorio: { ios: 'building.columns.fill', material: 'account_balance' },
 } satisfies Record<string, { ios: SFSymbol; material: AndroidSymbol }>;
 
 export type IconName = keyof typeof icons;

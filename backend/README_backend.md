@@ -59,6 +59,7 @@ estos archivos, que se pegan completos en **Supabase → SQL Editor → Run**, e
 11. `sql/011_mapa.sql` (origen de cada especie, nativa o exótica, para el mapa)
 12. `sql/012_guias_clase.sql` (bitácora de clases dictadas con las guías de clase)
 13. `sql/013_siembras.sql` (jornadas de siembra, plántulas, controles de supervivencia y asistentes)
+14. `sql/014_territorial.sql` (rol territorial, territorios, sus funcionarios y el informe anual editable)
 
 No borran datos: a cada árbol ya registrado le crean su inspección de registro (con los
 hallazgos que tenía) y a cada usuario de Supabase Auth su perfil. Se pueden ejecutar más de
@@ -249,6 +250,9 @@ triggers en Supabase (para que tampoco se puedan saltar llamando a la API de Sup
 | GET / PUT | `/siembras/jornadas/{id}/asistentes` | Docentes de la institución | Asistentes (con nombres) y la autorización para la lista de la alcaldía |
 | POST | `/siembras/jornadas/{id}/lista` | Docentes de la institución | Lista para el certificado Siembra Vida Buen Ciudadano en PDF o CSV: solo quien tiene autorización |
 | GET / POST | `/siembras/resumen` · `/siembras/exportar` | Ver: institución · exportar: docentes | Supervivencia total, por jornada y por sede; GeoJSON o CSV de las plántulas sin nombres de personas |
+| GET / POST / PATCH / DELETE · PUT | `/territorial/territorios` · `/territorial/territorios/{id}` · `.../miembros` | Ver: administrador y sus funcionarios · editar: administrador | Territorios (municipios por DIVIPOLA y colegios sueltos) y sus funcionarios con rol territorial |
+| GET | `/territorial/tablero?territorio_id=&anio=` | Funcionario territorial de ese territorio o administrador | Semáforo del PRAE de cada colegio y cifras del año (siembras, clases, servicio social, participación), sin datos de personas |
+| GET / PUT · POST | `/territorial/informe` · `/territorial/informe/archivo` | Funcionario territorial o administrador | Textos editables del informe anual y descarga en PDF o Word |
 | GET | `/verificar/{código}` · `/servicio-social/verificar/{código}` | Público | Página (y JSON) a la que lleva el QR: válido o anulado, con las iniciales del estudiante |
 
 ## Identificación con IA
@@ -349,6 +353,12 @@ El cuerpo trae `detail` con el mensaje. Los errores que vienen de la base de dat
 - Una foto `completo`, una `detalle` y hasta 3 `adicional`; JPG, PNG o WebP; máximo 5 MB. El formato se comprueba con los primeros bytes del archivo, no con lo que declara el navegador.
 - Solo quien registró un árbol puede subirle fotos (el RLS impide además editar árboles ajenos).
 - El código `IE001-0001` y el campo `registrado_por` los asigna la base de datos; el frontend nunca los envía.
+- **Tablero territorial** (`servicios/territorial.py`; Ley 2173, art. 12, parágrafo, y Ley 1549): el rol
+  territorial es para funcionarios de la Secretaría, la autoridad ambiental o la Gobernación; no pertenece a
+  un colegio, así que el backend lee con la llave de servicio después de comprobar su territorio y solo
+  devuelve cifras por colegio. Semáforo: verde = PRAE del año evaluado por el consejo directivo y la
+  Secretaría; amarillo = le falta alguna evaluación; rojo = sin PRAE del año. El informe sale en PDF y en
+  Word (`servicios/docx.py`, sin librerías) para ajustarlo al formato del MEN, que está por confirmar.
 - **Siembras** (`servicios/siembras.py`; Ley 2173 de 2021 y Resolución 1491 de 2025): cada plántula tiene
   controles a los 3, 6, 12 y 24 meses (los 2 años de mantenimiento). Un control se hace desde 15 días antes
   de su fecha y vence 30 días después. La supervivencia por edad es por cohorte: una plántula que murió a

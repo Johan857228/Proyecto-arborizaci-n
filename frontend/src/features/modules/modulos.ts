@@ -1,6 +1,6 @@
 import type { Href } from 'expo-router';
 
-import { esRevisor, type MiPerfil } from '@/features/perfil/schemas';
+import { esRevisor, type MiPerfil, type Rol } from '@/features/perfil/schemas';
 import type { IconName } from '@/shared/components/Icon';
 
 export type GrupoModulo = 'campo' | 'seguimiento' | 'gestion';
@@ -18,6 +18,8 @@ export interface Modulo {
   grupo: GrupoModulo;
   /** Solo para docentes y administradores (el backend aplica el mismo permiso). */
   soloRevisores?: boolean;
+  /** Solo para estos roles. El funcionario territorial ve únicamente los módulos que lo incluyen. */
+  roles?: Rol[];
 }
 
 export const GRUPOS: { clave: GrupoModulo; titulo: string }[] = [
@@ -45,13 +47,15 @@ export const MODULOS: Modulo[] = [
   { clave: 'escenarios', titulo: 'Escenarios', corto: 'Escenarios', texto: 'Simula cómo repartir un presupuesto entre las acciones pendientes.', icono: 'tune', href: '/(app)/scenarios' as Href, ruta: '/scenarios', grupo: 'gestion', soloRevisores: true },
   { clave: 'configuracion', titulo: 'Configuración', corto: 'Ajustes', texto: 'Método de cálculo, pesos, umbrales y parámetros por institución.', icono: 'settings', href: '/(app)/settings' as Href, ruta: '/settings', grupo: 'gestion', soloRevisores: true },
   { clave: 'privacidad', titulo: 'Privacidad', corto: 'Privacidad', texto: 'Política de datos, autorización del acudiente, alias y solicitudes de datos.', icono: 'lock', href: '/(app)/privacy' as Href, ruta: '/privacy', grupo: 'gestion' },
+  { clave: 'territorial', titulo: 'Tablero territorial', corto: 'Territorio', texto: 'Semáforo del PRAE de cada colegio, siembras, clases y servicio social, e informe anual al MEN.', icono: 'territorio', href: '/(app)/territorial' as Href, ruta: '/territorial', grupo: 'gestion', roles: ['administrador', 'territorial'] },
   { clave: 'usuarios', titulo: 'Usuarios', corto: 'Usuarios', texto: 'Roles, instituciones, cursos y cuentas activas.', icono: 'users', href: '/(app)/users' as Href, ruta: '/users', grupo: 'gestion', soloRevisores: true },
 ];
 
 /** Módulos que puede abrir el perfil. Mientras el perfil carga se muestran los de todos. */
 export function modulosPara(perfil: MiPerfil | undefined) {
   const revisor = esRevisor(perfil);
-  return MODULOS.filter((modulo) => !modulo.soloRevisores || revisor);
+  if (perfil?.rol === 'territorial') return MODULOS.filter((modulo) => modulo.roles?.includes('territorial'));
+  return MODULOS.filter((modulo) => (!modulo.soloRevisores || revisor) && (!modulo.roles || !perfil || modulo.roles.includes(perfil.rol)));
 }
 
 /** Rutas que se consideran parte de "Módulos" en la barra de navegación (incluye el perfil). */

@@ -17,13 +17,18 @@ import { BrandMark } from '@/shared/components/BrandMark';
 import { Icon, type IconName } from '@/shared/components/Icon';
 import { crearEstilos, useTema, useTemaStore } from '@/theme';
 
-const navItems: { label: string; icon: IconName; href: Href; isActive: (path: string) => boolean }[] = [
+const navItems: { label: string; icon: IconName; href: Href; isActive: (path: string) => boolean; delColegio?: boolean }[] = [
   { label: 'Inicio', icon: 'home', href: '/(app)' as Href, isActive: (path) => path === '/' },
   // La ficha de un árbol (/trees/<id>) también es parte del inventario.
-  { label: 'Inventario', icon: 'list', href: '/(app)/trees' as Href, isActive: (path) => path === '/trees' || (path.startsWith('/trees/') && path !== '/trees/new') },
-  { label: 'Registrar', icon: 'addCircle', href: '/(app)/trees/new' as Href, isActive: (path) => path === '/trees/new' },
+  { label: 'Inventario', icon: 'list', href: '/(app)/trees' as Href, isActive: (path) => path === '/trees' || (path.startsWith('/trees/') && path !== '/trees/new'), delColegio: true },
+  { label: 'Registrar', icon: 'addCircle', href: '/(app)/trees/new' as Href, isActive: (path) => path === '/trees/new', delColegio: true },
   { label: 'Módulos', icon: 'modules', href: '/(app)/modules' as Href, isActive: esRutaDeModulo },
 ];
+
+/** El funcionario territorial no pertenece a un colegio: no tiene inventario ni registra árboles. */
+function itemsPara(rol: string | undefined) {
+  return rol === 'territorial' ? navItems.filter((item) => !item.delColegio) : navItems;
+}
 
 // En tableta y en ventanas de escritorio angostas la barra no alcanza para todo. Por debajo de
 // BARRA_HOLGADA se esconde el correo (también está en Mi perfil) y el aviso de conexión va corto;
@@ -72,7 +77,7 @@ export function AppHeader() {
 
         {isWide ? (
           <View style={styles.headerNav}>
-            {navItems.map((item) => {
+            {itemsPara(perfil.data?.rol).map((item) => {
               const active = item.isActive(pathname);
               return (
                 <Pressable
@@ -147,10 +152,11 @@ export function BottomNav() {
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
   const pendientes = usePendientesNav();
+  const perfil = useMiPerfil();
 
   return (
     <View style={[styles.bottomNav, { paddingBottom: Math.max(insets.bottom, 8) }]}>
-      {navItems.map((item) => {
+      {itemsPara(perfil.data?.rol).map((item) => {
         const active = item.isActive(pathname);
         return (
           <Pressable

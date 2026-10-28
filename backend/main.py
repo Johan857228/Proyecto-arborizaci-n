@@ -62,6 +62,7 @@ from routers import (
     riesgo,
     servicio_social,
     siembras,
+    territorial,
     usuarios,
 )
 from routers.inspecciones import InspeccionCrear, registrar_inspeccion
@@ -153,7 +154,7 @@ async def manejar_error_db(request, exc: APIError):
 
 
 for modulo in (inspecciones, intervenciones, cursos, usuarios, presupuestos, configuracion,
-               gamificacion, reportes, metas, escenarios, ia, privacidad, exportar, riesgo, servicio_social, prae, mapa, guias, siembras):
+               gamificacion, reportes, metas, escenarios, ia, privacidad, exportar, riesgo, servicio_social, prae, mapa, guias, siembras, territorial):
     app.include_router(modulo.router)
 
 

@@ -1,12 +1,14 @@
 import { z } from 'zod';
 
-export const rolSchema = z.enum(['administrador', 'docente', 'estudiante']);
+// territorial: funcionario de una Secretaría, autoridad ambiental o Gobernación (migración 014).
+export const rolSchema = z.enum(['administrador', 'docente', 'estudiante', 'territorial']);
 export type Rol = z.infer<typeof rolSchema>;
 
 export const ETIQUETA_ROL: Record<Rol, string> = {
   administrador: 'Administrador',
   docente: 'Docente',
   estudiante: 'Estudiante',
+  territorial: 'Funcionario territorial',
 };
 
 export function etiquetaRol(rol: string) {
@@ -52,6 +54,10 @@ export type EditarUsuario = z.infer<typeof editarUsuarioSchema>;
 
 export function esAdmin(perfil: MiPerfil | undefined) {
   return perfil?.rol === 'administrador';
+}
+
+export function esTerritorial(perfil: MiPerfil | undefined) {
+  return perfil?.rol === 'territorial';
 }
 
 export function esRevisor(perfil: MiPerfil | undefined) {

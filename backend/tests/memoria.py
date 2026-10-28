@@ -40,6 +40,10 @@ DEFECTOS = {
     "controles_siembra": lambda: {"creado_en": _ahora(), "altura_cm": None, "mantenimiento": False, "observaciones": None},
     "asistentes_jornada": lambda: {"creado_en": _ahora(), "arboles_sembrados": None, "autoriza_certificado": False,
                                    "autorizacion_registrada_por": None, "autorizacion_registrada_en": None},
+    "territorios": lambda: {"creado_en": _ahora(), "actualizado_en": _ahora(), "tipo": "secretaria_educacion",
+                            "divipolas": [], "institucion_ids": []},
+    "miembros_territorio": lambda: {"creado_en": _ahora()},
+    "informes_territoriales": lambda: {"actualizado_en": _ahora(), "secciones": {}, "estado": "borrador"},
 }
 UNICOS = {
     "cursos": [("institucion_id", "nombre", "anio")],
@@ -49,7 +53,7 @@ UNICOS = {
     "prae": [("institucion_id", "anio")],
 }
 SIN_ID = {"curso_zonas", "inspeccion_observaciones", "parametros_institucionales", "perfiles", "tipos_intervencion",
-          "tamizajes_riesgo", "contactos_emergencia", "servicio_social_parametros"}
+          "tamizajes_riesgo", "contactos_emergencia", "servicio_social_parametros", "miembros_territorio"}
 
 
 def _ahora():

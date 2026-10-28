@@ -47,7 +47,7 @@ CAMPOS_BIOTICOS = {
 TipoFoto = Literal["completo", "detalle", "adicional"]
 EstadoRevision = Literal["pendiente", "confirmada", "anulada"]
 OrigenInspeccion = Literal["registro", "seguimiento"]
-Rol = Literal["administrador", "docente", "estudiante"]
+Rol = Literal["administrador", "docente", "estudiante", "territorial"]
 
 ZONAS: tuple[str, ...] = ("Patio central", "Entrada principal", "Zona deportiva", "Bloques académicos", "Otra")
 
