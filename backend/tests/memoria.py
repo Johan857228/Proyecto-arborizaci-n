@@ -44,6 +44,10 @@ DEFECTOS = {
                             "divipolas": [], "institucion_ids": []},
     "miembros_territorio": lambda: {"creado_en": _ahora()},
     "informes_territoriales": lambda: {"actualizado_en": _ahora(), "secciones": {}, "estado": "borrador"},
+    "especies_fuente_oficial": lambda: {"consultado_en": _ahora(), "veda": None, "veda_url": None,
+                                        "veda_registrada_por": None, "veda_registrada_en": None},
+    "analisis_ia": lambda: {"creado_en": _ahora(), "tipo": "campo", "arbol_id": None, "especie_real_id": None,
+                            "tokens_entrada": 0, "tokens_salida": 0, "tokens_cache_lectura": 0, "tokens_cache_escritura": 0},
 }
 UNICOS = {
     "cursos": [("institucion_id", "nombre", "anio")],
@@ -53,7 +57,8 @@ UNICOS = {
     "prae": [("institucion_id", "anio")],
 }
 SIN_ID = {"curso_zonas", "inspeccion_observaciones", "parametros_institucionales", "perfiles", "tipos_intervencion",
-          "tamizajes_riesgo", "contactos_emergencia", "servicio_social_parametros", "miembros_territorio"}
+          "tamizajes_riesgo", "contactos_emergencia", "servicio_social_parametros", "miembros_territorio",
+          "especies_fuente_oficial"}
 
 
 def _ahora():

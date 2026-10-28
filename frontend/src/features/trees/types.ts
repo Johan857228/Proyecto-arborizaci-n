@@ -46,6 +46,7 @@ export interface ArbolCrear extends Partial<PayloadBiotico> {
   precision_gps_m?: number | null;
   notas?: string;
   tamizaje?: Tamizaje;
+  ia_analisis_id?: string;
 }
 
 export interface FotoLocal {

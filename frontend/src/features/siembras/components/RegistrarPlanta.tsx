@@ -4,6 +4,7 @@ import { Text, View } from 'react-native';
 import { fonts } from '@/config/constants';
 import { useCatalogs } from '@/features/catalogs/hooks/useCatalogs';
 import { useCurso, useCursos } from '@/features/courses/api';
+import { avisosDeSiembra } from '@/features/especies/schemas';
 import { useMiPerfil } from '@/features/perfil/hooks/usePerfil';
 import { useRegistrarPlanta } from '@/features/siembras/api';
 import { PADRINOS, plantaFormSchema, vacio, type JornadaDetalle, type PadrinoTipo } from '@/features/siembras/schemas';
@@ -117,6 +118,7 @@ export function RegistrarPlanta({ jornada }: { jornada: JornadaDetalle }) {
       {elegida?.origen === 'exotica' ? (
         <InlineMessage tone="warning">Es una especie exótica: para las siembras de la Ley del Árbol se piden especies nativas.</InlineMessage>
       ) : null}
+      {avisosDeSiembra(elegida).map((aviso) => <InlineMessage key={aviso.texto} tone={aviso.tono}>{aviso.texto}</InlineMessage>)}
 
       <Text style={styles.etiqueta}>Ubicación</Text>
       <PrimaryButton title={lat && lng ? 'Volver a tomar el GPS' : 'Tomar ubicación con el GPS'} icon="myLocation" variant="secondary" loading={gps.loading} onPress={() => void tomarGps()} />

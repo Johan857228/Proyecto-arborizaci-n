@@ -28,6 +28,8 @@ export function useTreeCreateForm(
   const [formError, setFormError] = useState<string>();
   const [tamizaje, setTamizaje] = useState<Tamizaje>(TAMIZAJE_INICIAL);
   const [tamizajeError, setTamizajeError] = useState<string>();
+  // Último análisis de la IA hecho con estas fotos: va con el árbol para medir sus aciertos.
+  const [iaAnalisisId, setIaAnalisisId] = useState<string>();
   const gps = useCaptureLocation();
   const schema = useMemo(() => createArbolCreateSchema(catalogs), [catalogs]);
   const { control, handleSubmit, setValue, getValues, formState: { errors } } = useForm<ArbolFormInput>({
@@ -193,6 +195,7 @@ export function useTreeCreateForm(
       notas: input.notas,
       ...payloadBiotico(input),
       tamizaje,
+      ...(iaAnalisisId ? { ia_analisis_id: iaAnalisisId } : {}),
     };
     await onSubmit(payload, validPhotos.data);
   });
@@ -212,6 +215,7 @@ export function useTreeCreateForm(
     toggleObservation,
     clearObservations,
     applySuggestion,
+    setIaAnalisisId,
     tamizaje,
     tamizajeError,
     cambiarTamizaje,

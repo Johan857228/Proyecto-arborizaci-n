@@ -291,6 +291,7 @@ export function TreeCreateForm({ catalogs, submitting, submitError, onCancel, on
             fotoGeneral={fotoGeneral}
             fotoDetalle={fotoDetalle}
             onApply={form.applySuggestion}
+            onAnalizado={form.setIaAnalisisId}
           />
         </Section>
 

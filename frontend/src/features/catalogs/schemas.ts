@@ -6,6 +6,9 @@ export const catalogosSchema = z.object({
     nombre_comun: z.string().min(1),
     nombre_cientifico: z.string().min(1),
     origen: z.enum(['nativa', 'exotica']).nullable().optional(),
+    invasora: z.boolean().nullable().optional(),
+    amenaza: z.enum(['CR', 'EN', 'VU']).nullable().optional(),
+    en_veda: z.boolean().optional(),
   })),
   instituciones: z.array(z.object({
     id: z.string().min(1),

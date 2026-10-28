@@ -47,6 +47,7 @@ from routers import (
     configuracion,
     cursos,
     escenarios,
+    especies,
     exportar,
     gamificacion,
     guias,
@@ -154,7 +155,8 @@ async def manejar_error_db(request, exc: APIError):
 
 
 for modulo in (inspecciones, intervenciones, cursos, usuarios, presupuestos, configuracion,
-               gamificacion, reportes, metas, escenarios, ia, privacidad, exportar, riesgo, servicio_social, prae, mapa, guias, siembras, territorial):
+               gamificacion, reportes, metas, escenarios, ia, privacidad, exportar, riesgo, servicio_social, prae, mapa, guias, siembras, territorial,
+               especies):
     app.include_router(modulo.router)
 
 
@@ -263,9 +265,11 @@ def catalogos():
     """Especies, instituciones y casillas fitosanitarias para llenar el formulario.
     Son datos públicos, por eso no piden token."""
     admin = db.get_admin()
+    fichas, _ = especies.fichas_por_especie()
     return Catalogos(
         especies=[
-            {**e, "origen": reglas_mapa.origen_de(e.get("nombre_cientifico"), e.get("origen"))}
+            {**e, "origen": reglas_mapa.origen_de(e.get("nombre_cientifico"), e.get("origen") or (fichas.get(e["id"]) or {}).get("origen")),
+             **especies.marcas(fichas.get(e["id"]))}
             for e in admin.table("especies").select("*").order("nombre_comun").execute().data
         ],
         instituciones=admin.table("instituciones")
@@ -302,7 +306,8 @@ def crear_arbol(datos_arbol: ArbolCrear, respuesta: Response, perfil: Perfil = D
 
     # 2) Guardar el árbol (solo sus columnas: la precisión y las notas son de la inspección)
     fila = datos_arbol.model_dump(
-        exclude={"observaciones", "precision_gps_m", "notas", "id_cliente", "capturado_en", "tamizaje", *CAMPOS_BIOTICOS}
+        exclude={"observaciones", "precision_gps_m", "notas", "id_cliente", "capturado_en", "tamizaje", "ia_analisis_id",
+                 *CAMPOS_BIOTICOS}
     )
     if datos_arbol.id_cliente:
         fila["id_cliente"] = str(datos_arbol.id_cliente)
@@ -344,6 +349,8 @@ def crear_arbol(datos_arbol: ArbolCrear, respuesta: Response, perfil: Perfil = D
         db.get_admin().table("arboles").delete().eq("id", creado["id"]).execute()
         raise
 
+    if datos_arbol.ia_analisis_id:
+        ia.enlazar_analisis(str(datos_arbol.ia_analisis_id), str(creado["id"]), perfil.usuario_id)
     resumen = resumen_por_id(cliente, creado["id"])
     tamizaje = registro.get("_tamizaje")
     return {**resumen, "riesgo_caida": tamizaje["categoria"] if tamizaje else None}

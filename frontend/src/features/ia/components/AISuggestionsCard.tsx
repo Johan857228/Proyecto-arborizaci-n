@@ -29,11 +29,14 @@ export function AISuggestionsCard({
   fotoGeneral,
   fotoDetalle,
   onApply,
+  onAnalizado,
 }: {
   catalogs: Catalogos;
   fotoGeneral?: FotoLocal;
   fotoDetalle?: FotoLocal;
   onApply: (valores: Partial<ArbolFormInput>) => void;
+  /** Id del análisis (o undefined): el formulario lo envía con el árbol para medir los aciertos. */
+  onAnalizado?: (analisisId: string | undefined) => void;
 }) {
   const styles = useStyles();
   const estado = useEstadoIA();
@@ -49,7 +52,11 @@ export function AISuggestionsCard({
   function analizar() {
     if (!fotoGeneral) return;
     setAplicadas(new Set());
-    analisis.mutate({ general: fotoGeneral, detalle: fotoDetalle });
+    onAnalizado?.(undefined);
+    analisis.mutate(
+      { general: fotoGeneral, detalle: fotoDetalle },
+      { onSuccess: (resultado) => onAnalizado?.(resultado.analisis_id ?? undefined) },
+    );
   }
 
   function aplicar(sugerencia: SugerenciaIA) {

@@ -128,6 +128,10 @@ class Especie(BaseModel):
     origen: Literal["nativa", "exotica"] | None = Field(
         default=None, description="Origen en Colombia: el guardado (migración 011) o el de la lista del backend"
     )
+    # Ficha oficial (migración 015): para avisar al sembrar o intervenir.
+    invasora: bool | None = None
+    amenaza: Literal["CR", "EN", "VU"] | None = None
+    en_veda: bool = False
 
 
 class Institucion(BaseModel):
@@ -275,6 +279,9 @@ class ArbolCrear(CamposBioticos, CamposSinConexion):
     )
     notas: str | None = Field(default=None, max_length=1000, description="Notas de la primera inspección")
     tamizaje: Tamizaje | None = Field(default=None, description="Tamizaje de riesgo de caída de la primera inspección")
+    ia_analisis_id: UUID | None = Field(
+        default=None, description="Análisis de IA cuyas sugerencias se usaron: se enlaza para medir los aciertos"
+    )
 
     # mode="before": se limpian los espacios ANTES de medir el largo del texto
     @field_validator("zona_otra", "interferencia_otra", "notas", mode="before")

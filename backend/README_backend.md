@@ -60,6 +60,7 @@ estos archivos, que se pegan completos en **Supabase → SQL Editor → Run**, e
 12. `sql/012_guias_clase.sql` (bitácora de clases dictadas con las guías de clase)
 13. `sql/013_siembras.sql` (jornadas de siembra, plántulas, controles de supervivencia y asistentes)
 14. `sql/014_territorial.sql` (rol territorial, territorios, sus funcionarios y el informe anual editable)
+15. `sql/015_catalogo_oficial.sql` (ficha oficial de cada especie con versión y DOI de la fuente, y análisis de IA para medir aciertos y costo)
 
 No borran datos: a cada árbol ya registrado le crean su inspección de registro (con los
 hallazgos que tenía) y a cada usuario de Supabase Auth su perfil. Se pueden ejecutar más de
@@ -205,7 +206,11 @@ triggers en Supabase (para que tampoco se puedan saltar llamando a la API de Sup
 | GET / DELETE | `/escenarios/{id}` | Docente, admin / admin | Detalle / borrar |
 | GET | `/estadisticas` | Usuario | Totales, semáforo, por institución, especies, promedios, ambientales e inspecciones pendientes |
 | GET | `/ia/estado` | Usuario | Si la identificación con IA está activada y con qué modelo |
-| POST | `/ia/analizar-foto` | Usuario | Sugerencias de la IA a partir de la foto `general` (y `detalle`, opcional) |
+| POST | `/ia/analizar-foto` | Usuario | Sugerencias de la IA a partir de la foto `general` (y `detalle`, opcional); devuelve `analisis_id` para enlazarlo al árbol (`ia_analisis_id` en `POST /arboles`) |
+| POST | `/ia/prueba` | Admin | Prueba a ciegas con la foto de una especie conocida (`especie_id`): entra en la medición de precisión |
+| GET | `/ia/precision?desde=` | Admin | Aciertos de la IA (general, por confianza, por origen, nativas del bosque seco del Cesar, por especie) con intervalo del 95 %, y costo por foto |
+| GET | `/especies/catalogo` | Usuario | Especies con su ficha oficial (origen, invasora, amenaza, veda, bosque seco) y cuántos árboles de cada una ve quien consulta |
+| POST · PUT | `/especies/{id}/fuente-oficial` · `/especies/{id}/veda` | Admin | Consultar las listas oficiales en GBIF y guardar la ficha · registrar la veda con su norma |
 | PUT / DELETE | `/perfil/foto` · `/perfil/portada` | Usuario | Cambiar o quitar la foto de perfil o la portada del inicio |
 | GET | `/privacidad/estado` | Usuario | Política aceptada, alias y autorización del acudiente |
 | POST | `/privacidad/politica` | Usuario | Acepta la versión vigente de la política de datos |
@@ -268,8 +273,15 @@ la persona la acepta**; nada se guarda por la IA. No estima medidas ni marca la 
   está en el catálogo se descarta y las escalas fuera de rango se corrigen.
 - Para activarla, agrega `ANTHROPIC_API_KEY` (de console.anthropic.com) al `.env` y reinicia uvicorn. Sin
   la clave, `POST /ia/analizar-foto` responde 503 y el formulario avisa que la IA no está activada.
-- Costo aproximado: unos US$0,04 por análisis. Para cuidar el saldo hay un máximo de 30 análisis por
-  usuario cada hora (`MAX_ANALISIS_POR_HORA` en `routers/ia.py`).
+- Costo: cada análisis queda anotado en `analisis_ia` (sin las fotos) con los tokens que reporta la API y
+  su costo según la tarifa publicada (`PRECIOS_USD_MTOK` en `servicios/ia.py`; Opus 5.5: US$4 por millón de
+  tokens de entrada y US$20 de salida). Es un estimado: la factura real está en la consola de Anthropic.
+  Con `IA_TRM` (pesos por dólar) en el `.env`, el tablero de precisión también lo muestra en pesos. Para
+  cuidar el saldo hay un máximo de 30 análisis por usuario cada hora (`MAX_ANALISIS_POR_HORA`).
+- Precisión (`servicios/precision_ia.py`): la especie real es la del árbol que se guardó con la sugerencia,
+  solo cuando un docente confirmó su inspección de registro (pendientes y anuladas no cuentan), o la que
+  indica el administrador en una prueba a ciegas. Un análisis que no sugirió especie cuenta como fallo. Cada
+  porcentaje lleva su intervalo de confianza del 95 % (Wilson) y se avisa si hay menos de 30 casos.
 - Las pruebas (`tests/test_ia.py`) usan un cliente falso: no necesitan la clave ni gastan saldo.
 
 ## Cómo lo usa el frontend (React)
@@ -353,6 +365,14 @@ El cuerpo trae `detail` con el mensaje. Los errores que vienen de la base de dat
 - Una foto `completo`, una `detalle` y hasta 3 `adicional`; JPG, PNG o WebP; máximo 5 MB. El formato se comprueba con los primeros bytes del archivo, no con lo que declara el navegador.
 - Solo quien registró un árbol puede subirle fotos (el RLS impide además editar árboles ajenos).
 - El código `IE001-0001` y el campo `registrado_por` los asigna la base de datos; el frontend nunca los envía.
+- **Catálogo con fuente oficial** (`servicios/fuentes_oficiales.py`): se consulta en GBIF, donde el SiB
+  Colombia publica las listas oficiales: Catálogo de Plantas y Líquenes de Colombia (UNAL), plantas exóticas
+  y trasplantadas (Instituto Humboldt, con la declaración de invasora de la Resolución 207 de 2010), GRIIS
+  Colombia, especies amenazadas de la Resolución 0126 de 2024 y plantas de bosque seco (Instituto Humboldt).
+  La ficha guarda la versión, el DOI y el enlace de cada lista. Si las listas no coinciden en el origen manda
+  la de exóticas, después GRIIS y por último el Catálogo, y la ficha lo avisa. Un sinónimo se resuelve con el
+  nombre aceptado. "Nativa del bosque seco del Cesar" = nativa, reportada en bosque seco y registrada en el
+  Cesar. La veda no está publicada como lista: la registra el administrador con la norma que la establece.
 - **Tablero territorial** (`servicios/territorial.py`; Ley 2173, art. 12, parágrafo, y Ley 1549): el rol
   territorial es para funcionarios de la Secretaría, la autoridad ambiental o la Gobernación; no pertenece a
   un colegio, así que el backend lee con la llave de servicio después de comprobar su territorio y solo

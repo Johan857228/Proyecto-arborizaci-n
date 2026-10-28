@@ -36,6 +36,8 @@ export const analisisIASchema = z.object({
   bejucos: z.object({ nivel: z.number().int().min(1).max(4), ...respaldo }).nullable(),
   epifitas: z.object({ tipos: z.array(z.enum(TIPOS_EPIFITA)), ...respaldo }).nullable(),
   modelo: z.string(),
+  /** Se envía con el árbol para medir qué tan bien acierta la IA (null si el servidor no lo anotó). */
+  analisis_id: z.string().nullable().optional(),
 });
 export type AnalisisIA = z.infer<typeof analisisIASchema>;
 

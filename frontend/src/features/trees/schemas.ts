@@ -44,6 +44,8 @@ const arbolFieldsSchema = z.object({
   ...camposBioticosSchema.shape,
   // Tamizaje de riesgo de caída de la primera inspección (features/riesgo).
   tamizaje: tamizajeSchema.optional(),
+  // Análisis de IA cuyas sugerencias se usaron: el backend lo enlaza al árbol para medir aciertos.
+  ia_analisis_id: z.uuid().optional(),
 }).strict();
 
 function validateTreeRules(
