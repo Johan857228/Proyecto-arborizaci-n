@@ -3,7 +3,8 @@ import { useState } from 'react';
 import { Text, View } from 'react-native';
 
 import { useAvanceCurso, useCurso, useGuardarCurso } from '@/features/courses/api';
-import { GRADOS, ZONAS, type CursoDetalle, type Zona } from '@/features/courses/schemas';
+import { GRADOS, type CursoDetalle, type Zona } from '@/features/courses/schemas';
+import { nombresDeZonas, useZonas } from '@/features/zonas/api';
 import { useEditarUsuario, useUsuarios } from '@/features/perfil/hooks/usePerfil';
 import { etiquetaRol } from '@/features/perfil/schemas';
 import { getApiErrorMessage } from '@/services/api/client';
@@ -149,7 +150,8 @@ function AvanceCurso({ cursoId }: { cursoId: string }) {
 function ZonasCurso({ curso, onGuardado }: { curso: CursoDetalle; onGuardado: () => void }) {
   const styles = useStyles();
   const { zonas } = useGuardarCurso();
-  const [seleccion, setSeleccion] = useState<Zona[]>(curso.zonas.filter((z): z is Zona => (ZONAS as readonly string[]).includes(z)));
+  const disponibles = nombresDeZonas(useZonas(curso.institucion_id).data);
+  const [seleccion, setSeleccion] = useState<Zona[]>(curso.zonas);
   const [error, setError] = useState<string>();
 
   async function guardar() {
@@ -165,7 +167,7 @@ function ZonasCurso({ curso, onGuardado }: { curso: CursoDetalle; onGuardado: ()
   return (
     <Card title="Zonas asignadas">
       <View style={styles.chips}>
-        {ZONAS.map((zona) => (
+        {disponibles.map((zona) => (
           <ChoiceChip
             key={zona}
             label={zona}

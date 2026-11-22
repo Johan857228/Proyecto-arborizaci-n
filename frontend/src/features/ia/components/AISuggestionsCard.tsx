@@ -5,7 +5,7 @@ import { fonts } from '@/config/constants';
 import type { Catalogos } from '@/features/catalogs/types';
 import { useAnalizarFotos, useEstadoIA } from '@/features/ia/hooks';
 import { SaviaMark } from '@/features/savia/components/SaviaMark';
-import type { Confianza } from '@/features/ia/schemas';
+import type { AnalisisIA, Confianza } from '@/features/ia/schemas';
 import { sugerenciasDeAnalisis, type SugerenciaIA } from '@/features/ia/sugerencias';
 import type { ArbolFormInput } from '@/features/trees/schemas';
 import type { FotoLocal } from '@/features/trees/types';
@@ -30,6 +30,7 @@ export function AISuggestionsCard({
   fotoDetalle,
   onApply,
   onAnalizado,
+  analisisInicial,
 }: {
   catalogs: Catalogos;
   fotoGeneral?: FotoLocal;
@@ -37,14 +38,19 @@ export function AISuggestionsCard({
   onApply: (valores: Partial<ArbolFormInput>) => void;
   /** Id del análisis (o undefined): el formulario lo envía con el árbol para medir los aciertos. */
   onAnalizado?: (analisisId: string | undefined) => void;
+  /** Análisis que ya hizo Savia antes de abrir el formulario: sus sugerencias llegan aplicadas. */
+  analisisInicial?: AnalisisIA;
 }) {
   const styles = useStyles();
   const estado = useEstadoIA();
   const analisis = useAnalizarFotos();
-  const [aplicadas, setAplicadas] = useState<ReadonlySet<string>>(new Set());
+  const datos = analisis.data ?? analisisInicial;
+  const [aplicadas, setAplicadas] = useState<ReadonlySet<string>>(
+    () => new Set(analisisInicial ? sugerenciasDeAnalisis(analisisInicial, catalogs).map((sugerencia) => sugerencia.id) : []),
+  );
   const sugerencias = useMemo(
-    () => (analisis.data ? sugerenciasDeAnalisis(analisis.data, catalogs) : []),
-    [analisis.data, catalogs],
+    () => (datos ? sugerenciasDeAnalisis(datos, catalogs) : []),
+    [datos, catalogs],
   );
   const pendientes = sugerencias.filter((sugerencia) => sugerencia.valores && !aplicadas.has(sugerencia.id));
   const disponible = estado.data?.disponible === true;
@@ -91,9 +97,9 @@ export function AISuggestionsCard({
       ) : null}
 
       <PrimaryButton
-        title={analisis.data ? 'Analizar de nuevo' : 'Analizar con Savia'}
+        title={datos ? 'Analizar de nuevo' : 'Analizar con Savia'}
         icon="sparkle"
-        variant={analisis.data ? 'secondary' : 'primary'}
+        variant={datos ? 'secondary' : 'primary'}
         loading={analisis.isPending}
         disabled={!fotoGeneral || !disponible}
         onPress={analizar}
@@ -104,18 +110,21 @@ export function AISuggestionsCard({
       ) : null}
       {analisis.error ? <InlineMessage>{getApiErrorMessage(analisis.error)}</InlineMessage> : null}
 
-      {analisis.data ? (
+      {datos ? (
         <View style={styles.results}>
-          <Text style={styles.summary}>{analisis.data.resumen}</Text>
-          {!analisis.data.es_arbol ? (
+          {!analisis.data && analisisInicial ? (
+            <Text style={styles.caption}>Savia ya analizó esta foto y sus sugerencias quedaron aplicadas en el formulario.</Text>
+          ) : null}
+          <Text style={styles.summary}>{datos.resumen}</Text>
+          {!datos.es_arbol ? (
             <InlineMessage tone="warning">Las fotos no parecen mostrar un árbol. Toma otra foto general.</InlineMessage>
           ) : null}
-          {analisis.data.es_arbol && analisis.data.calidad_foto === 'mala' ? (
+          {datos.es_arbol && datos.calidad_foto === 'mala' ? (
             <InlineMessage tone="warning">
               La foto no es muy clara y las sugerencias pueden fallar. Si puedes, toma otra con buena luz.
             </InlineMessage>
           ) : null}
-          {analisis.data.es_arbol && sugerencias.length === 0 ? (
+          {datos.es_arbol && sugerencias.length === 0 ? (
             <Text style={styles.caption}>La IA no encontró nada que sugerir con estas fotos.</Text>
           ) : null}
           {sugerencias.map((sugerencia) => (

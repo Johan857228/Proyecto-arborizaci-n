@@ -99,6 +99,9 @@ export function LoginScreen() {
               placeholder="Tu contraseña"
             />
           )} />
+          <Text accessibilityRole="link" style={styles.olvido} onPress={() => router.push('/recuperar' as Href)}>
+            ¿Olvidaste tu contraseña?
+          </Text>
         </FadeIn>
 
         {login.error ? <InlineMessage>{getApiErrorMessage(login.error)}</InlineMessage> : null}

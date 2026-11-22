@@ -45,11 +45,12 @@ function SessionGate() {
     PlusJakartaSans_800ExtraBold,
   });
 
-  // Pantallas sin sesión: inicio de sesión y registro.
-  const inPublic = segments[0] === 'login' || segments[0] === 'registro';
+  // Pantallas sin sesión: inicio de sesión, registro y pedir el enlace para recuperar la contraseña.
+  const inPublic = segments[0] === 'login' || segments[0] === 'registro' || segments[0] === 'recuperar';
   const inApp = segments[0] === '(app)';
-  // La política de datos se puede leer con o sin sesión.
-  const abierta = segments[0] === 'politica';
+  // La política de datos se puede leer con o sin sesión, y el enlace del correo para crear la
+  // contraseña nueva se abre aunque en ese navegador haya otra sesión abierta.
+  const abierta = segments[0] === 'politica' || segments[0] === 'restablecer';
 
   useEffect(() => {
     void hydrate();
@@ -126,7 +127,7 @@ function SessionGate() {
       <ThemeProvider value={temaNavegacion}>
         <Stack
           screenOptions={({ route }) => {
-            const publica = route.name === 'login' || route.name === 'registro';
+            const publica = ['login', 'registro', 'recuperar', 'restablecer'].includes(route.name);
             return {
               headerShown: false,
               animation: publica ? 'fade' : 'default',

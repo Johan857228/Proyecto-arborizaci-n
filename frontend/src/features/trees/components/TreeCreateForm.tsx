@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { router, type Href } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { Controller, useController, useWatch } from 'react-hook-form';
 import { Image } from 'expo-image';
 import { Pressable, ScrollView, Text, View } from 'react-native';
@@ -12,6 +13,10 @@ import { useIsWide } from '@/hooks/use-is-wide';
 import { ObservationPicker } from '@/features/trees/components/ObservationPicker';
 import { BioticAgentsFields } from '@/features/inspections/components/BioticAgentsFields';
 import { AISuggestionsCard } from '@/features/ia/components/AISuggestionsCard';
+import { useMiPerfil } from '@/features/perfil/hooks/usePerfil';
+import { gestiona } from '@/features/perfil/schemas';
+import type { RegistroDesdeSavia } from '@/features/savia/registroDesdeSavia';
+import { ZONA_OTRA, nombresDeZonas, useZonas } from '@/features/zonas/api';
 import {
   Field,
   Heading,
@@ -34,9 +39,10 @@ interface Props {
   submitError?: string;
   onCancel: () => void;
   onSubmit: (values: ArbolCrear, photos: FotoLocal[]) => Promise<void>;
+  /** Lo que ya identificó Savia: foto general, sugerencias aplicadas y GPS al abrir. */
+  desdeSavia?: RegistroDesdeSavia;
 }
 
-const zonas = ['Patio central', 'Entrada principal', 'Zona deportiva', 'Bloques académicos', 'Otra'] as const;
 const etapas = ['Plántula', 'Juvenil', 'Adulto', 'Senescente'] as const;
 const interferencias = [
   'Ninguna',
@@ -98,16 +104,28 @@ function PhotoSlot({
   );
 }
 
-export function TreeCreateForm({ catalogs, submitting, submitError, onCancel, onSubmit }: Props) {
+export function TreeCreateForm({ catalogs, submitting, submitError, onCancel, onSubmit, desdeSavia }: Props) {
   const styles = useStyles();
   const { palette } = useTema();
   const isWide = useIsWide();
   const espacio = useEspaciado();
-  const form = useTreeCreateForm(catalogs, onSubmit);
+  const perfil = useMiPerfil();
+  const form = useTreeCreateForm(catalogs, onSubmit, { institucionId: perfil.data?.institucion_id ?? undefined, desdeSavia });
   // Solo se muestra el prefijo; el número lo asigna la base de datos para que dos equipos no repitan código.
   const institucionId = useWatch({ control: form.control, name: 'institucion_id' });
   const institucion = catalogs.instituciones.find((item) => item.id === institucionId);
   const prefijo = institucion?.prefijo;
+  // Las zonas son las de la institución elegida; si la zona actual no está entre ellas, se toma la primera.
+  const zonasInstitucion = useZonas(institucionId || undefined);
+  const zonas = nombresDeZonas(zonasInstitucion.data);
+  const { zonaActual, fijarZona } = form;
+  const claveZonas = zonas.join('|');
+  useEffect(() => {
+    if (!zonas.includes(zonaActual)) fijarZona(zonas[0]);
+    // claveZonas resume la lista: cambia solo si cambian las zonas.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [claveZonas, zonaActual]);
+  const editaZonas = Boolean(institucionId) && gestiona(perfil.data, institucionId);
   // Avisos (no bloquean): precisión baja del GPS o punto lejos de la institución elegida.
   const ubicacion = form.gps.location;
   const precisionBaja = ubicacion?.accuracy != null && ubicacion.accuracy > PRECISION_GPS_MAX_M;
@@ -127,6 +145,13 @@ export function TreeCreateForm({ catalogs, submitting, submitError, onCancel, on
         <Heading subtitle="Registra el árbol con ubicación, medidas, observaciones y evidencia fotográfica. Al guardar queda como su primera inspección, que revisará un docente.">
           Registrar árbol
         </Heading>
+
+        {desdeSavia ? (
+          <InlineMessage tone="info">
+            Savia ya identificó el árbol: puso la foto general y llenó la especie, la etapa y lo que vio en la foto. Revisa esos datos,
+            confirma la ubicación y mide el tronco, la altura y la copa, que no se pueden sacar de una foto.
+          </InlineMessage>
+        ) : null}
 
         <Section step={1} icon="location" title="Identificación y ubicación" description="Institución, zona del campus y coordenadas GPS.">
           <View style={styles.row}>
@@ -162,6 +187,11 @@ export function TreeCreateForm({ catalogs, submitting, submitError, onCancel, on
                   />
                 )}
               />
+              {editaZonas ? (
+                <Text accessibilityRole="link" style={styles.zonasLink} onPress={() => router.push('/(app)/zones' as Href)}>
+                  ¿Falta una zona? Edita las zonas de la sede
+                </Text>
+              ) : null}
             </View>
           </View>
           <View style={styles.codePreview} accessible accessibilityLabel={prefijo ? `Código del árbol: ${prefijo} seguido del número que asigna el sistema` : 'Código del árbol: selecciona una institución'}>
@@ -172,7 +202,7 @@ export function TreeCreateForm({ catalogs, submitting, submitError, onCancel, on
               <Text style={styles.codeCaption}>Se asigna al guardar: prefijo de la institución más el número del árbol en esa institución.</Text>
             </View>
           </View>
-          {form.zonaActual === 'Otra' ? (
+          {form.zonaActual === ZONA_OTRA ? (
             <Controller
               name="zona_otra"
               control={form.control}
@@ -292,6 +322,7 @@ export function TreeCreateForm({ catalogs, submitting, submitError, onCancel, on
             fotoDetalle={fotoDetalle}
             onApply={form.applySuggestion}
             onAnalizado={form.setIaAnalisisId}
+            analisisInicial={desdeSavia?.analisis}
           />
         </Section>
 
@@ -470,6 +501,7 @@ function NumericField({
 const useStyles = crearEstilos(({ palette }) => ({
   content: { width: '100%', maxWidth: layout.formWidth, alignSelf: 'center', padding: 20, paddingTop: 16, paddingBottom: ESPACIO_FINAL, gap: 18 },
   backAction: { alignSelf: 'flex-start', marginLeft: -8 },
+  zonasLink: { marginTop: -6, color: palette.forest, fontSize: 13, fontFamily: fonts.bold },
   // Campos relacionados lado a lado cuando hay espacio; en teléfonos se apilan.
   row: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 12 },
   cell: { flexGrow: 1, flexBasis: 180 },

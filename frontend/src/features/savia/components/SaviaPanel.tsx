@@ -11,6 +11,7 @@ import { SuggestionRow } from '@/features/ia/components/AISuggestionsCard';
 import { useAnalizarFotos, useEstadoIA } from '@/features/ia/hooks';
 import { sugerenciasDeAnalisis } from '@/features/ia/sugerencias';
 import { SaviaMark } from '@/features/savia/components/SaviaMark';
+import { useRegistroDesdeSavia } from '@/features/savia/registroDesdeSavia';
 import { usePhotoPicker } from '@/features/trees/hooks/usePhotoPicker';
 import type { FotoLocal } from '@/features/trees/types';
 import { useIsWide } from '@/hooks/use-is-wide';
@@ -23,8 +24,9 @@ import { AvisoFotos } from '@/shared/components/AvisoFotos';
 const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1);
 const EASE_SHEET = Easing.bezier(0.32, 0.72, 0, 1);
 
-/** Panel de Savia: identifica un árbol a partir de una foto con la IA del backend. Solo muestra
- *  sugerencias; para guardar, la persona registra el árbol en el formulario. */
+/** Panel de Savia: identifica un árbol a partir de una foto con la IA del backend. "Registrar este
+ *  árbol" abre el formulario con la foto, las sugerencias aplicadas y la ubicación en camino; la
+ *  persona completa las medidas y guarda. */
 export function SaviaPanel({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const styles = useStyles();
   const { palette } = useTema();
@@ -35,6 +37,7 @@ export function SaviaPanel({ visible, onClose }: { visible: boolean; onClose: ()
   const picker = usePhotoPicker();
   const analisis = useAnalizarFotos();
   const [foto, setFoto] = useState<FotoLocal>();
+  const dejarParaRegistro = useRegistroDesdeSavia((estado) => estado.dejar);
   const disponible = estado.data?.disponible === true;
   const sugerencias = useMemo(
     () => (analisis.data && catalogs.data ? sugerenciasDeAnalisis(analisis.data, catalogs.data) : []),
@@ -55,8 +58,11 @@ export function SaviaPanel({ visible, onClose }: { visible: boolean; onClose: ()
   }
 
   function registrar() {
+    if (foto && analisis.data) dejarParaRegistro({ foto, analisis: analisis.data });
     onClose();
-    router.push('/trees/new' as Href);
+    analisis.reset();
+    setFoto(undefined);
+    router.push('/(app)/trees/new' as Href);
   }
 
   return (
@@ -136,6 +142,11 @@ export function SaviaPanel({ visible, onClose }: { visible: boolean; onClose: ()
             <View style={styles.buttons}>
               {analisis.data && analisis.data.es_arbol ? (
                 <PrimaryButton title="Registrar este árbol" icon="add" onPress={registrar} />
+              ) : null}
+              {analisis.data && analisis.data.es_arbol ? (
+                <Text style={styles.caption}>
+                  Se abre el registro con esta foto y lo que Savia identificó. Solo te faltan las medidas y el tamizaje.
+                </Text>
               ) : null}
               <PrimaryButton
                 title={foto ? 'Analizar otra foto' : Platform.OS === 'web' ? 'Elegir foto' : 'Tomar foto'}

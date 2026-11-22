@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useRefrescarTodo } from '@/features/perfil/hooks/usePerfil';
 import { photosService } from '@/features/trees/services/photosService';
@@ -16,4 +16,18 @@ export function useCalculos(arbolId: string) {
 export function useSubirFotoArbol(arbolId: string) {
   const refrescar = useRefrescarTodo();
   return useMutation({ mutationFn: (foto: FotoLocal) => photosService.upload(arbolId, foto), onSuccess: refrescar });
+}
+
+/** Borra el árbol (docente de su institución o administrador). Su ficha sale de la caché antes de
+ *  refrescar el resto, para que nada intente volver a pedirla. */
+export function useBorrarArbol(arbolId: string) {
+  const queryClient = useQueryClient();
+  const refrescar = useRefrescarTodo();
+  return useMutation({
+    mutationFn: (motivo: string) => treesService.borrar(arbolId, motivo),
+    onSuccess: async () => {
+      queryClient.removeQueries({ queryKey: ['arbol', arbolId] });
+      await refrescar();
+    },
+  });
 }
