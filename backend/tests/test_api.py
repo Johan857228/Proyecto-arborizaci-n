@@ -100,7 +100,8 @@ def test_login_normaliza_el_correo(monkeypatch):
         {"zona": "Otra"},                                    # falta zona_otra
         {"interferencia": "Otra infraestructura"},           # falta interferencia_otra
         {"lat": 200},
-        {"zona": "Cancha inventada"},
+        {"zona": "x"},                                       # zona de un carácter
+        {"zona": "x" * 61},                                  # zona muy larga
         {"dap_cm": 500.1},                                   # tronco de más de 5 m
         {"copa_m": 41},
         {"lat": 40.4168, "lng": -3.7038},                    # Madrid: fuera de Colombia
@@ -182,9 +183,10 @@ def test_listar_rechaza_estado_invalido(entorno):
     assert cliente.get("/arboles?limite=1000").status_code == 422
 
 
-def test_listar_filtra_solo_zonas_del_catalogo(entorno):
+def test_listar_filtra_por_zona(entorno):
+    # Las zonas las define cada institución (migración 016): se acepta cualquier nombre de largo válido.
     cliente, _, registro = entorno
-    assert cliente.get("/arboles?zona=Cancha inventada").status_code == 422
+    assert cliente.get("/arboles", params={"zona": "x" * 61}).status_code == 422
     assert cliente.get("/arboles?zona=Zona deportiva").status_code == 200
     assert ("arboles_resumen", "eq", ("zona", "Zona deportiva"), {}) in registro
 

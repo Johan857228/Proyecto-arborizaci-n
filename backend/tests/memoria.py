@@ -3,6 +3,7 @@ conftest.py, este SÍ aplica filtros, orden, paginación, inserciones y actualiz
 No aplica RLS: las pruebas de API comprueban los permisos que valida el backend en Python
 (el RLS se prueba aparte contra PostgreSQL)."""
 import copy
+import re
 import uuid
 from datetime import datetime, timezone
 from types import SimpleNamespace
@@ -95,6 +96,11 @@ class Consulta:
     def ilike(self, c, patron):
         texto = patron.strip("%").lower()
         return self._filtro(lambda f: texto in str(f.get(c, "")).lower())
+
+    def or_(self, expresion):
+        """Solo lo que usa la búsqueda del inventario: campo.ilike."%texto%" separados por comas."""
+        condiciones = re.findall(r'(\w+)\.ilike\."%([^"]*)%"', expresion)
+        return self._filtro(lambda f: any(t.lower() in str(f.get(c) or "").lower() for c, t in condiciones))
 
     def order(self, columna, desc=False, **_):
         self.orden.append((columna, desc))
