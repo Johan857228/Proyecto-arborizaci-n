@@ -13,13 +13,8 @@ const medida = (mensajeVacio: string) =>
 
 const arbolFieldsSchema = z.object({
   institucion_id: z.string().min(1, 'Selecciona la institución.'),
-  zona: z.enum([
-    'Patio central',
-    'Entrada principal',
-    'Zona deportiva',
-    'Bloques académicos',
-    'Otra',
-  ]),
+  // Las zonas las define cada institución (features/zonas): aquí solo se limita el texto.
+  zona: z.string().trim().min(2, 'Elige la zona.').max(60, 'Máximo 60 caracteres.'),
   zona_otra: z.string().trim().max(120, 'Máximo 120 caracteres.').optional(),
   lat: z.number().min(-90).max(90),
   lng: z.number().min(-180).max(180),

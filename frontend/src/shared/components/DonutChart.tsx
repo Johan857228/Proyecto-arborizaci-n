@@ -29,12 +29,15 @@ export function DonutChart({
   size = 168,
   thickness = 22,
   delay = 300,
+  compacto = false,
 }: {
   slices: DonutSlice[];
   centerLabel: string;
   size?: number;
   thickness?: number;
   delay?: number;
+  /** Para paneles bajos: la leyenda siempre al lado de la dona y con filas más bajas. */
+  compacto?: boolean;
 }) {
   const styles = useStyles();
   const { palette } = useTema();
@@ -66,7 +69,7 @@ export function DonutChart({
     : visibles.map((slice) => `${slice.label} ${slice.value}`).join(', ');
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, compacto && styles.containerCompacto]}>
       <View style={{ width: size, height: size }} accessible accessibilityLabel={resumen}>
         <Svg width={size} height={size}>
           <G transform={`rotate(-90 ${size / 2} ${size / 2})`}>
@@ -92,14 +95,14 @@ export function DonutChart({
           </G>
         </Svg>
         <View style={styles.center} pointerEvents="none">
-          <Text style={styles.centerValue}>{active ? active.value : total}</Text>
-          <Text style={styles.centerLabel} numberOfLines={2}>
+          <Text style={[styles.centerValue, compacto && styles.centerValueCompacto]}>{active ? active.value : total}</Text>
+          <Text style={[styles.centerLabel, compacto && styles.centerLabelCompacto]} numberOfLines={2}>
             {active ? `${active.label} · ${percent.format(active.value / total)}` : centerLabel}
           </Text>
         </View>
       </View>
 
-      <View style={styles.legend}>
+      <View style={[styles.legend, compacto && styles.legendCompacta]}>
         {visibles.length === 0 ? <Text style={styles.empty}>Aún no hay datos para este gráfico.</Text> : null}
         {visibles.map((slice) => {
           const selected = active?.key === slice.key;
@@ -111,7 +114,7 @@ export function DonutChart({
               onPress={() => toggle(slice.key)}
               onHoverIn={() => setActiveKey(slice.key)}
               onHoverOut={() => setActiveKey(undefined)}
-              style={[styles.row, selected && styles.rowSelected]}
+              style={[styles.row, compacto && styles.rowCompacta, selected && styles.rowSelected]}
             >
               {slice.icon ? (
                 <View style={[styles.swatchIcon, { backgroundColor: slice.color }]}>
@@ -120,9 +123,9 @@ export function DonutChart({
               ) : (
                 <View style={[styles.swatch, { backgroundColor: slice.color }]} />
               )}
-              <Text style={styles.rowLabel} numberOfLines={1}>{slice.label}</Text>
-              <Text style={styles.rowValue}>{slice.value}</Text>
-              <Text style={styles.rowPercent}>{percent.format(slice.value / total)}</Text>
+              <Text style={[styles.rowLabel, compacto && styles.textoCompacto]} numberOfLines={1}>{slice.label}</Text>
+              <Text style={[styles.rowValue, compacto && styles.textoCompacto]}>{slice.value}</Text>
+              <Text style={[styles.rowPercent, compacto && styles.rowPercentCompacto]}>{percent.format(slice.value / total)}</Text>
             </Pressable>
           );
         })}
@@ -146,4 +149,11 @@ const useStyles = crearEstilos(({ palette }) => ({
   rowLabel: { flex: 1, color: palette.ink, fontSize: 14 },
   rowValue: { color: palette.ink, fontSize: 14, fontFamily: fonts.bold },
   rowPercent: { minWidth: 42, textAlign: 'right', color: palette.muted, fontSize: 13 },
+  containerCompacto: { flexWrap: 'nowrap', gap: 14 },
+  centerValueCompacto: { fontSize: 22 },
+  centerLabelCompacto: { fontSize: 11 },
+  legendCompacta: { flexBasis: 0, minWidth: 0, gap: 1 },
+  rowCompacta: { minHeight: 26, gap: 8, paddingHorizontal: 6 },
+  textoCompacto: { fontSize: 13 },
+  rowPercentCompacto: { minWidth: 34, fontSize: 12 },
 }));

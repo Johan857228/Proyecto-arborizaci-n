@@ -16,19 +16,20 @@ import { ETIQUETA_ESTADO_INTERVENCION, ETIQUETA_RESULTADO } from '@/features/int
 import { useMiPerfil } from '@/features/perfil/hooks/usePerfil';
 import { gestiona } from '@/features/perfil/schemas';
 import { photoLabel } from '@/features/trees/components/PhotoSection';
-import { useArbol, useCalculos, useSubirFotoArbol } from '@/features/trees/hooks/useArbol';
+import { useArbol, useBorrarArbol, useCalculos, useSubirFotoArbol } from '@/features/trees/hooks/useArbol';
 import { usePhotoPicker } from '@/features/trees/hooks/usePhotoPicker';
 import type { FotoLocal } from '@/features/trees/types';
 import { getApiErrorMessage } from '@/services/api/client';
 import { RiesgoArbolCard } from '@/features/riesgo/components/RiesgoArbolCard';
 import { useAvisos } from '@/shared/avisos';
 import { formatFecha, formatFechaHora, formatNumero, formatPesos } from '@/shared/format';
-import { InlineMessage, PrimaryButton } from '@/shared/components/FormControls';
+import { Field, InlineMessage, PrimaryButton } from '@/shared/components/FormControls';
 import { PhotoGallery, type FotoGaleria } from '@/shared/components/PhotoGallery';
 import {
   AppHeader,
   Badge,
   Card,
+  ConfirmButton,
   EmptyState,
   ErrorState,
   KeyValue,
@@ -281,7 +282,60 @@ export function TreeDetailScreen({ arbolId, aviso: avisoRuta }: { arbolId: strin
       ) : (
         <EmptyState title="Sin inspecciones" text="Registra la primera inspección de este árbol." />
       )}
+
+      {puedeIntervenir ? (
+        <BorrarArbol arbolId={a.id} codigo={a.codigo} inspecciones={historial.data?.length ?? a.n_inspecciones ?? 0} intervenciones={intervenciones.data?.length ?? 0} />
+      ) : null}
     </Page>
+  );
+}
+
+/** Borrar un árbol registrado por error. Solo lo ve un docente de la institución del árbol o el
+ *  administrador; el motivo queda en la constancia que guarda el backend. */
+function BorrarArbol({ arbolId, codigo, inspecciones, intervenciones }: { arbolId: string; codigo: string; inspecciones: number; intervenciones: number }) {
+  const styles = useStyles();
+  const borrar = useBorrarArbol(arbolId);
+  const [motivo, setMotivo] = useState('');
+  const [error, setError] = useState<string>();
+  const motivoValido = motivo.trim().length >= 5;
+  const arrastra = [
+    `${inspecciones} ${inspecciones === 1 ? 'inspección' : 'inspecciones'}`,
+    intervenciones ? `${intervenciones} ${intervenciones === 1 ? 'intervención' : 'intervenciones'}` : null,
+  ].filter(Boolean).join(' y ');
+
+  async function eliminar() {
+    setError(undefined);
+    try {
+      await borrar.mutateAsync(motivo.trim());
+      router.replace(`/(app)/trees?borrado=${encodeURIComponent(codigo)}` as Href);
+    } catch (causa) {
+      setError(getApiErrorMessage(causa));
+    }
+  }
+
+  return (
+    <Card title="Borrar este árbol" subtitle="Solo para registros hechos por error: duplicados, en otra institución o con datos inventados." icon="trash">
+      <Text style={styles.texto}>
+        Se borran también sus {arrastra}, sus fotos y sus alertas. Los puntos y las horas de servicio social que dieron
+        esas inspecciones dejan de contar. No se puede deshacer.
+      </Text>
+      <Field
+        label="Motivo"
+        value={motivo}
+        maxLength={300}
+        placeholder="Ej.: registro duplicado de IE001-0012"
+        hint="Queda guardado con tu nombre y la fecha."
+        onChangeText={setMotivo}
+      />
+      {error ? <InlineMessage>{error}</InlineMessage> : null}
+      <ConfirmButton
+        title={`Borrar ${codigo}`}
+        confirmTitle={`¿Borrar ${codigo} y todo su historial? No se puede deshacer.`}
+        disabled={!motivoValido}
+        loading={borrar.isPending}
+        onConfirm={() => void eliminar()}
+      />
+    </Card>
   );
 }
 

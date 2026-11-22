@@ -157,6 +157,8 @@ export const useAuthFormStyles = crearEstilos(({ palette }) => ({
   switchRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', gap: 4 },
   switchText: { color: palette.muted, fontSize: 14 },
   switchLink: { color: palette.forest, fontSize: 14, fontFamily: fonts.bold, textDecorationLine: 'underline' },
+  // "¿Olvidaste tu contraseña?" debajo del campo, alineado a la derecha.
+  olvido: { alignSelf: 'flex-end', marginTop: -6, color: palette.forest, fontSize: 13, fontFamily: fonts.bold },
   privacy: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
   privacyText: { flexShrink: 1, color: palette.muted, fontSize: 12, lineHeight: 18, textAlign: 'center' },
 }));

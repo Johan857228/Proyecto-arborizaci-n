@@ -1,17 +1,20 @@
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams, type Href } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { fonts, layout } from '@/config/constants';
 import { useCatalogs } from '@/features/catalogs/hooks/useCatalogs';
+import { useMiPerfil, useUsuarios } from '@/features/perfil/hooks/usePerfil';
+import { esAdmin, esRevisor } from '@/features/perfil/schemas';
 import { RiesgoBadge } from '@/features/riesgo/components/RiesgoBadge';
 import { abreAlerta } from '@/features/riesgo/reglas';
 import { useColaStore } from '@/features/sincronizacion/colaStore';
 import { treeKeys } from '@/features/trees/hooks/useCreateTree';
 import type { FiltrosInventario, Zona } from '@/features/trees/types';
 import { treesService } from '@/features/trees/services/treesService';
+import { nombresDeZonas, useZonas } from '@/features/zonas/api';
 import { ESPACIO_FINAL, useEspaciado } from '@/hooks/use-espaciado';
 import { useIsWide } from '@/hooks/use-is-wide';
 import { getApiErrorMessage } from '@/services/api/client';
@@ -28,15 +31,17 @@ import { crearEstilos, useTema } from '@/theme';
 
 const PAGE_SIZE = 50;
 const TODAS = '__todas__';
-const zonas: Zona[] = [
-  'Patio central',
-  'Entrada principal',
-  'Zona deportiva',
-  'Bloques académicos',
-  'Otra',
-];
-function isZona(value: string): value is Zona {
-  return zonas.some((zona) => zona === value);
+// Espera tras la última tecla antes de buscar en el servidor.
+const ESPERA_BUSQUEDA_MS = 400;
+
+/** El texto ya escrito, pero solo cuando la persona deja de teclear un momento. */
+function useTextoEstable(texto: string) {
+  const [estable, setEstable] = useState(texto);
+  useEffect(() => {
+    const espera = setTimeout(() => setEstable(texto), ESPERA_BUSQUEDA_MS);
+    return () => clearTimeout(espera);
+  }, [texto]);
+  return estable;
 }
 const estados: { label: string; value: EstadoArbol | undefined }[] = [
   { label: 'Todos', value: undefined },
@@ -135,22 +140,37 @@ export default function TreeListScreen() {
   const isWide = useIsWide();
   const espacio = useEspaciado();
   const catalogs = useCatalogs();
+  const perfil = useMiPerfil();
+  const miId = perfil.data?.usuario_id;
+  const revisor = esRevisor(perfil.data);
   const [search, setSearch] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
-  // El inicio abre el inventario ya filtrado por estado (/trees?estado=critico).
-  const { estado: estadoInicial } = useLocalSearchParams<{ estado?: string }>();
+  const busqueda = useTextoEstable(search.trim());
+  // El inicio abre el inventario ya filtrado por estado (/trees?estado=critico); al borrar un
+  // árbol, la ficha vuelve aquí con su código (/trees?borrado=IE001-0003).
+  const { estado: estadoInicial, borrado } = useLocalSearchParams<{ estado?: string; borrado?: string }>();
   const [estado, setEstado] = useState<EstadoArbol | undefined>(() =>
     estadoInicial === 'sano' || estadoInicial === 'riesgo' || estadoInicial === 'critico' ? estadoInicial : undefined,
   );
   const [institution, setInstitution] = useState<string>();
   const [species, setSpecies] = useState<string>();
   const [zone, setZone] = useState<Zona>();
+  const [registradoPor, setRegistradoPor] = useState<string>();
+  // Las zonas y los alumnos son los de la institución elegida (o la propia).
+  const institucionDeFiltros = institution ?? perfil.data?.institucion_id ?? undefined;
+  const zonas = useZonas(institucionDeFiltros);
+  const usuarios = useUsuarios(institucionDeFiltros, revisor && (esAdmin(perfil.data) || Boolean(institucionDeFiltros)));
+  const alumnos = (usuarios.data ?? [])
+    .filter((u) => u.rol === 'estudiante')
+    .sort((a, b) => Number(b.activo) - Number(a.activo) || a.nombre.localeCompare(b.nombre));
   const filters = useMemo<FiltrosInventario>(() => ({
     ...(estado ? { estado } : {}),
     ...(institution ? { institucionId: institution } : {}),
     ...(species ? { especie: species } : {}),
     ...(zone ? { zona: zone } : {}),
-  }), [estado, institution, species, zone]);
+    ...(busqueda ? { q: busqueda } : {}),
+    ...(registradoPor ? { registradoPor } : {}),
+  }), [estado, institution, species, zone, busqueda, registradoPor]);
   const inventory = useInfiniteQuery({
     queryKey: treeKeys.list(filters),
     queryFn: ({ pageParam }) => treesService.getAll({
@@ -167,17 +187,10 @@ export default function TreeListScreen() {
   const sinDatosSinConexion = inventory.isPending && inventory.fetchStatus === 'paused';
   // Los árboles guardados sin conexión aparecen en la lista cuando se envían.
   const arbolesEnTelefono = useColaStore((estado) => estado.registros.filter((r) => r.tipo === 'arbol' && !r.registroId).length);
-  const allTrees = inventory.data?.pages.flat() ?? [];
-  const searchText = search.trim().toLocaleLowerCase();
-  const trees = allTrees.filter((tree) => searchText.length === 0 || [
-    tree.codigo,
-    tree.nombre_comun,
-    tree.nombre_cientifico,
-    tree.zona,
-    tree.nombre_corto,
-  ].some((value) => value.toLocaleLowerCase().includes(searchText)));
+  // La búsqueda la hace el servidor sobre todo el inventario, no solo sobre lo ya cargado.
+  const trees = inventory.data?.pages.flat() ?? [];
   // Con filtros o búsqueda activos, una lista vacía significa "sin coincidencias", no "inventario vacío".
-  const filtering = Object.keys(filters).length > 0 || searchText.length > 0;
+  const filtering = Object.keys(filters).length > 0 || search.trim().length > 0;
 
   function clearFilters() {
     setSearch('');
@@ -185,6 +198,14 @@ export default function TreeListScreen() {
     setInstitution(undefined);
     setSpecies(undefined);
     setZone(undefined);
+    setRegistradoPor(undefined);
+  }
+
+  function cambiarInstitucion(valor: string | undefined) {
+    setInstitution(valor);
+    // Las zonas y los alumnos cambian con la institución.
+    setZone(undefined);
+    if (registradoPor !== miId) setRegistradoPor(undefined);
   }
 
   const institutionOptions = [
@@ -200,8 +221,13 @@ export default function TreeListScreen() {
   ];
   const zoneOptions = [
     { label: 'Todas las zonas', value: TODAS },
-    ...zonas.map((value) => ({ label: value, value })),
+    ...nombresDeZonas(zonas.data).map((value) => ({ label: value, value })),
   ];
+  const alumnoOptions = [
+    { label: 'Todos los alumnos', value: TODAS },
+    ...alumnos.map((u) => ({ label: u.activo ? u.nombre : `${u.nombre} (inactivo)`, value: u.usuario_id })),
+  ];
+  const misRegistros = Boolean(miId) && registradoPor === miId;
 
   return (
     <Screen>
@@ -211,7 +237,7 @@ export default function TreeListScreen() {
             <Text style={styles.eyebrow}>GESTIÓN AMBIENTAL</Text>
             <Text style={styles.title}>Inventario de árboles</Text>
             <Text style={styles.subtitle}>
-              Consulta los registros institucionales y filtra por estado, institución, especie o zona.
+              Busca en todo el inventario y filtra por estado, institución, especie, zona o por quién registró el árbol.
               Toca un árbol para ver su ficha, su historial de inspecciones y sus intervenciones.
             </Text>
           </View>
@@ -230,7 +256,7 @@ export default function TreeListScreen() {
               <Icon name="search" size={20} color={palette.muted} />
               <TextInput
                 style={styles.searchInput}
-                placeholder="Buscar por código, especie o zona"
+                placeholder="Buscar por código, especie o zona en todo el inventario"
                 placeholderTextColor={palette.placeholder}
                 value={search}
                 onChangeText={setSearch}
@@ -266,7 +292,7 @@ export default function TreeListScreen() {
                 label="Institución"
                 value={institution ?? TODAS}
                 options={institutionOptions}
-                onChange={(value) => setInstitution(value === TODAS ? undefined : value)}
+                onChange={(value) => cambiarInstitucion(value === TODAS ? undefined : value)}
                 error={catalogs.error ? getApiErrorMessage(catalogs.error) : undefined}
               />
             </View>
@@ -283,12 +309,34 @@ export default function TreeListScreen() {
                 label="Zona"
                 value={zone ?? TODAS}
                 options={zoneOptions}
-                onChange={(value) => setZone(value === TODAS || !isZona(value) ? undefined : value)}
+                onChange={(value) => setZone(value === TODAS ? undefined : value)}
               />
             </View>
+            {revisor ? (
+              <View style={styles.filter}>
+                <SelectField
+                  label="Alumno que lo registró"
+                  value={registradoPor && !misRegistros ? registradoPor : TODAS}
+                  options={alumnoOptions}
+                  onChange={(value) => setRegistradoPor(value === TODAS ? undefined : value)}
+                  error={usuarios.error ? getApiErrorMessage(usuarios.error) : undefined}
+                />
+              </View>
+            ) : null}
           </View>
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.stateFilters}>
+            {miId ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ selected: misRegistros }}
+                onPress={() => setRegistradoPor(misRegistros ? undefined : miId)}
+                style={[styles.stateFilter, misRegistros && styles.stateFilterSelected]}
+              >
+                <Text style={[styles.stateFilterText, misRegistros && styles.stateFilterTextSelected]}>Mis registros</Text>
+              </Pressable>
+            ) : null}
+            {miId ? <View style={styles.separador} /> : null}
             {estados.map((option) => {
               const selected = estado === option.value;
               return (
@@ -319,6 +367,8 @@ export default function TreeListScreen() {
             </Pressable>
           ) : null}
         </View>
+
+        {borrado ? <Notice tono="info">Se borró el árbol {borrado} con todo su historial.</Notice> : null}
 
         {arbolesEnTelefono > 0 ? (
           <Pressable accessibilityRole="link" onPress={() => router.navigate('/(app)/sync' as Href)}>
@@ -409,7 +459,8 @@ const useStyles = crearEstilos(({ palette, card }) => ({
   pressed: { opacity: 0.75 },
   filters: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 12 },
   filter: { flexGrow: 1, flexBasis: 220 },
-  stateFilters: { gap: 8 },
+  stateFilters: { alignItems: 'center', gap: 8 },
+  separador: { width: 1, height: 22, marginHorizontal: 2, backgroundColor: palette.line },
   stateFilter: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 999, borderWidth: 1, borderColor: palette.line, backgroundColor: palette.paper },
   stateFilterSelected: { borderColor: palette.forest, backgroundColor: palette.forest },
   stateFilterText: { color: palette.ink, fontSize: 13, fontFamily: fonts.semiBold },

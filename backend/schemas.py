@@ -23,7 +23,10 @@ LNG_MIN, LNG_MAX = -82.0, -66.8
 
 CodigoObservacion = Annotated[str, StringConstraints(min_length=1, max_length=40)]
 
-Zona = Literal["Patio central", "Entrada principal", "Zona deportiva", "Bloques académicos", "Otra"]
+# Las zonas las define cada institución (tabla zonas, migración 016); aquí solo se limita el texto.
+# Que la zona exista en la institución lo comprueba routers/zonas.py.
+ZONA_MAX = 60
+Zona = Annotated[str, StringConstraints(strip_whitespace=True, min_length=2, max_length=ZONA_MAX)]
 Etapa = Literal["Plántula", "Juvenil", "Adulto", "Senescente"]
 Interferencia = Literal[
     "Ninguna",
@@ -49,7 +52,11 @@ EstadoRevision = Literal["pendiente", "confirmada", "anulada"]
 OrigenInspeccion = Literal["registro", "seguimiento"]
 Rol = Literal["administrador", "docente", "estudiante", "territorial"]
 
-ZONAS: tuple[str, ...] = ("Patio central", "Entrada principal", "Zona deportiva", "Bloques académicos", "Otra")
+# Zonas con las que arranca cada institución. "Otra" no se guarda como zona: siempre está disponible
+# y lleva el nombre en zona_otra.
+ZONAS_POR_DEFECTO: tuple[str, ...] = ("Patio central", "Entrada principal", "Zona deportiva", "Bloques académicos")
+ZONA_OTRA = "Otra"
+ZONAS: tuple[str, ...] = (*ZONAS_POR_DEFECTO, ZONA_OTRA)
 
 
 # ------------------------------- Autenticación -------------------------------
@@ -117,6 +124,39 @@ class RegistroOut(BaseModel):
 
     requiere_confirmacion: bool
     sesion: SesionOut | None = None
+    mensaje: str
+
+
+def _validar_contrasena(v: str) -> str:
+    if not any(c.isalpha() for c in v) or not any(c.isdigit() for c in v):
+        raise ValueError("La contraseña debe tener letras y números")
+    return v
+
+
+class RecuperarIn(BaseModel):
+    """Pedir el enlace para crear una contraseña nueva."""
+
+    email: str = Field(max_length=254, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def _normalizar_email(cls, v):
+        return v.strip().lower() if isinstance(v, str) else v
+
+
+class RestablecerIn(BaseModel):
+    """La contraseña nueva, con el token que trae el enlace del correo."""
+
+    access_token: str = Field(min_length=20, max_length=4096)
+    password: str = Field(min_length=8, max_length=72)
+
+    @field_validator("password")
+    @classmethod
+    def _contrasena_segura(cls, v: str) -> str:
+        return _validar_contrasena(v)
+
+
+class MensajeOut(BaseModel):
     mensaje: str
 
 

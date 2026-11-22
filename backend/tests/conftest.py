@@ -28,7 +28,7 @@ class ConsultaFalsa:
         return self
 
     def __getattr__(self, metodo):
-        if metodo in ("select", "eq", "neq", "ilike", "order", "range", "limit", "in_"):
+        if metodo in ("select", "eq", "neq", "ilike", "order", "range", "limit", "in_", "or_"):
             return lambda *a, **k: self._anotar(metodo, *a, **k)
         raise AttributeError(metodo)
 

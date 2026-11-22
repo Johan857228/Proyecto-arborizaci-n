@@ -14,15 +14,17 @@ Ejecutar:  uvicorn main:app --reload
 Docs:      http://127.0.0.1:8000/docs
 """
 import os
+import re
 import uuid
 from collections import Counter
 from uuid import UUID
 
-from fastapi import Depends, FastAPI, File, HTTPException, Query, Response, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from postgrest.exceptions import APIError
+from pydantic import BaseModel, Field, field_validator
 from supabase_auth.errors import AuthApiError, AuthError, AuthWeakPasswordError
 
 import datos
@@ -65,6 +67,7 @@ from routers import (
     siembras,
     territorial,
     usuarios,
+    zonas,
 )
 from routers.inspecciones import InspeccionCrear, registrar_inspeccion
 from schemas import (
@@ -80,14 +83,18 @@ from schemas import (
     Estado,
     FotoOut,
     LoginIn,
+    MensajeOut,
     ObservacionOut,
     Promedios,
+    RecuperarIn,
     RefrescarIn,
     RegistroIn,
     RegistroOut,
+    RestablecerIn,
     SesionOut,
     TipoFoto,
     TotalesAmbientales,
+    ZONA_OTRA,
     Zona,
 )
 from servicios import mapa as reglas_mapa
@@ -156,7 +163,7 @@ async def manejar_error_db(request, exc: APIError):
 
 for modulo in (inspecciones, intervenciones, cursos, usuarios, presupuestos, configuracion,
                gamificacion, reportes, metas, escenarios, ia, privacidad, exportar, riesgo, servicio_social, prae, mapa, guias, siembras, territorial,
-               especies):
+               especies, zonas):
     app.include_router(modulo.router)
 
 
@@ -259,6 +266,60 @@ def refrescar(d: RefrescarIn):
     return _sesion(res)
 
 
+def _origen_permitido(origen: str) -> bool:
+    return permitir_todos or origen in origenes or re.match(REGEX_ORIGENES_LOCALES, origen) is not None
+
+
+def _url_restablecer(request: Request) -> str | None:
+    """A dónde lleva el enlace del correo: la misma página web que pidió el cambio (si es un origen
+    permitido por CORS) o URL_FRONTEND (la app del teléfono no envía Origin). Supabase además exige
+    que esa dirección esté en Authentication > URL Configuration > Redirect URLs."""
+    origen = (request.headers.get("origin") or "").rstrip("/")
+    if origen and _origen_permitido(origen):
+        return f"{origen}/restablecer"
+    base = os.environ.get("URL_FRONTEND", "").strip().rstrip("/")
+    return f"{base}/restablecer" if base else None
+
+
+@app.post("/auth/recuperar", response_model=MensajeOut, tags=["Autenticación"])
+def recuperar_contrasena(d: RecuperarIn, request: Request):
+    """Envía al correo un enlace para crear una contraseña nueva. Responde lo mismo exista o no la
+    cuenta, para no revelar qué correos están registrados."""
+    destino = _url_restablecer(request)
+    try:
+        db.nuevo_cliente_anon().auth.reset_password_for_email(d.email, {"redirect_to": destino} if destino else {})
+    except AuthApiError as error:
+        if str(error.code or "") in ("over_email_send_rate_limit", "over_request_rate_limit"):
+            raise HTTPException(status_code=429, detail="Ya pediste varios enlaces seguidos. Espera unos minutos e intenta de nuevo.")
+        # Cualquier otro error (correo inexistente, inválido…) se responde igual que un envío correcto.
+    return MensajeOut(
+        mensaje=f"Si {d.email} tiene una cuenta, te llegará un enlace para crear una contraseña nueva. Revisa también la carpeta de spam."
+    )
+
+
+ERRORES_RESTABLECER = {
+    "weak_password": (422, "La contraseña es muy débil. Prueba con una más larga que combine letras, números y símbolos."),
+    "same_password": (422, "La contraseña nueva debe ser distinta de la anterior."),
+}
+
+
+@app.post("/auth/restablecer", response_model=MensajeOut, tags=["Autenticación"])
+def restablecer_contrasena(d: RestablecerIn):
+    """Guarda la contraseña nueva. El token es el que trae el enlace del correo (dura una hora)."""
+    try:
+        usuario = db.get_admin().auth.get_user(d.access_token).user
+    except Exception:
+        usuario = None
+    if usuario is None:
+        raise HTTPException(status_code=401, detail="El enlace venció o ya se usó. Pide uno nuevo.")
+    try:
+        db.get_admin().auth.admin.update_user_by_id(str(usuario.id), {"password": d.password})
+    except (AuthApiError, AuthWeakPasswordError) as error:
+        estado, mensaje = ERRORES_RESTABLECER.get(str(error.code or ""), (400, "No se pudo cambiar la contraseña. Intenta de nuevo."))
+        raise HTTPException(status_code=estado, detail=mensaje)
+    return MensajeOut(mensaje="Listo: ya puedes iniciar sesión con tu contraseña nueva.")
+
+
 # ================================== Catálogos ====================================
 @app.get("/catalogos", response_model=Catalogos, tags=["Catálogos"])
 def catalogos():
@@ -296,7 +357,13 @@ def crear_arbol(datos_arbol: ArbolCrear, respuesta: Response, perfil: Perfil = D
         respuesta.status_code = 200
         return resumen_por_id(cliente, str(existente["id"]))
 
-    # 1) Validar que las casillas marcadas existan en el catálogo
+    # 1) La zona debe existir en la institución. Si dejó de existir mientras el registro esperaba
+    #    sin conexión (la renombraron o la borraron), se guarda como "Otra" con ese nombre para no
+    #    perder el árbol.
+    if not zonas.zona_valida(datos_arbol.institucion_id, datos_arbol.zona):
+        datos_arbol = datos_arbol.model_copy(update={"zona_otra": datos_arbol.zona_otra or datos_arbol.zona, "zona": ZONA_OTRA})
+
+    # 2) Validar que las casillas marcadas existan en el catálogo
     codigos = sorted(set(datos_arbol.observaciones))
     if codigos:
         validos = {f["codigo"] for f in cliente.table("observaciones_catalogo").select("codigo").execute().data}
@@ -304,7 +371,7 @@ def crear_arbol(datos_arbol: ArbolCrear, respuesta: Response, perfil: Perfil = D
         if invalidos:
             raise HTTPException(status_code=422, detail=f"Observaciones no válidas: {invalidos}")
 
-    # 2) Guardar el árbol (solo sus columnas: la precisión y las notas son de la inspección)
+    # 3) Guardar el árbol (solo sus columnas: la precisión y las notas son de la inspección)
     fila = datos_arbol.model_dump(
         exclude={"observaciones", "precision_gps_m", "notas", "id_cliente", "capturado_en", "tamizaje", "ia_analisis_id",
                  *CAMPOS_BIOTICOS}
@@ -316,7 +383,7 @@ def crear_arbol(datos_arbol: ArbolCrear, respuesta: Response, perfil: Perfil = D
         respuesta.status_code = 200
         return resumen_por_id(cliente, str(creado["id"]))
 
-    # 3) Guardar las observaciones y la inspección de registro; si algo falla, se borra el
+    # 4) Guardar las observaciones y la inspección de registro; si algo falla, se borra el
     #    árbol (y en cascada lo que alcanzó a guardarse) para no dejarlo a medias.
     try:
         if codigos:
@@ -356,28 +423,51 @@ def crear_arbol(datos_arbol: ArbolCrear, respuesta: Response, perfil: Perfil = D
     return {**resumen, "riesgo_caida": tamizaje["categoria"] if tamizaje else None}
 
 
+# Caracteres que romperían el filtro "or" de PostgREST o que serían comodines de LIKE.
+_FUERA_DE_BUSQUEDA = re.compile(r'[,()"\\%_*:]')
+CAMPOS_BUSQUEDA = ("codigo", "nombre_comun", "nombre_cientifico", "zona", "zona_otra")
+
+
+def _filtro_busqueda(texto: str) -> str | None:
+    """Filtro "or" de PostgREST que busca el texto en el código, la especie (común o científica) y la zona."""
+    limpio = " ".join(_FUERA_DE_BUSQUEDA.sub(" ", texto).split())
+    if not limpio:
+        return None
+    return ",".join(f'{campo}.ilike."%{limpio}%"' for campo in CAMPOS_BUSQUEDA)
+
+
 @app.get("/arboles", response_model=list[ArbolResumen], tags=["Árboles"])
 def listar_arboles(
     institucion_id: str | None = Query(None, max_length=64),
     estado: Estado | None = None,
     especie: str | None = Query(None, max_length=60, description="Texto contenido en el nombre común"),
     zona: Zona | None = None,
+    q: str | None = Query(None, max_length=60, description="Busca en el código, la especie (común o científica) y la zona"),
+    registrado_por: UUID | None = Query(None, description="Solo los árboles que registró esta persona"),
     limite: int = Query(50, ge=1, le=200),
     desplazamiento: int = Query(0, ge=0),
-    sesion: Sesion = Depends(usuario_actual),
+    perfil: Perfil = Depends(perfil_actual),
 ):
-    """Lista de árboles (pantalla de lista del prototipo) con filtros y paginación."""
-    cliente = db.cliente_de_usuario(sesion.token)
-    q = cliente.table("arboles_resumen").select("*")
+    """Inventario con búsqueda, filtros y paginación. El filtro por persona lo usan docentes y
+    administradores (por alumno); los estudiantes solo pueden pedir sus propios registros."""
+    if registrado_por and str(registrado_por) != perfil.usuario_id and not perfil.es_revisor:
+        raise HTTPException(status_code=403, detail="Solo docentes y administradores pueden ver los registros de otra persona")
+    cliente = db.cliente_de_usuario(perfil.sesion.token)
+    consulta = cliente.table("arboles_resumen").select("*")
     if institucion_id:
-        q = q.eq("institucion_id", institucion_id)
+        consulta = consulta.eq("institucion_id", institucion_id)
     if estado:
-        q = q.eq("estado", estado)
+        consulta = consulta.eq("estado", estado)
     if zona:
-        q = q.eq("zona", zona)
+        consulta = consulta.eq("zona", zona)
+    if registrado_por:
+        consulta = consulta.eq("registrado_por", str(registrado_por))
     if especie and especie.strip():
-        q = q.ilike("nombre_comun", f"%{escapar_like(especie.strip())}%")
-    filas = q.order("registrado_en", desc=True).range(desplazamiento, desplazamiento + limite - 1).execute().data
+        consulta = consulta.ilike("nombre_comun", f"%{escapar_like(especie.strip())}%")
+    busqueda = _filtro_busqueda(q) if q else None
+    if busqueda:
+        consulta = consulta.or_(busqueda)
+    filas = consulta.order("registrado_en", desc=True).range(desplazamiento, desplazamiento + limite - 1).execute().data
     portadas = portadas_de_arboles(cliente, [f["id"] for f in filas])
     riesgos = riesgo.categorias_actuales([str(f["id"]) for f in filas])
     return [{**f, "foto_url": portadas.get(f["id"]), "riesgo_caida": riesgos.get(str(f["id"]))} for f in filas]
@@ -408,6 +498,70 @@ def detalle_arbol(arbol_id: UUID, sesion: Sesion = Depends(usuario_actual)):
     fotos = [FotoOut(id=str(f["id"]), tipo=f["tipo"], url=url_firmada(cliente, f["storage_path"])) for f in filas_fotos]
 
     return ArbolDetalle(**resumen, observaciones=observaciones, fotos=fotos)
+
+
+class ArbolBorrar(BaseModel):
+    motivo: str = Field(min_length=5, max_length=300, description="Por qué se borra (queda en la constancia)")
+
+    @field_validator("motivo", mode="before")
+    @classmethod
+    def _limpiar(cls, v):
+        return " ".join(v.split()) if isinstance(v, str) else v
+
+
+def _rutas_de_fotos(admin, arbol_id: str) -> list[str]:
+    rutas = [f["storage_path"] for f in admin.table("arbol_fotos").select("storage_path").eq("arbol_id", arbol_id).execute().data]
+    inspecciones = [str(i["id"]) for i in admin.table("inspecciones").select("id").eq("arbol_id", arbol_id).execute().data]
+    if inspecciones:
+        rutas += [
+            f["storage_path"]
+            for f in admin.table("inspeccion_fotos").select("storage_path").in_("inspeccion_id", inspecciones).execute().data
+        ]
+    return [r for r in rutas if r]
+
+
+def _dejar_constancia(admin, arbol: dict, motivo: str, usuario_id: str) -> None:
+    """Guarda quién borró el árbol, cuándo y por qué (migración 016). Sin la migración se borra igual."""
+    try:
+        admin.table("arboles_eliminados").insert({
+            "arbol_id": str(arbol["id"]),
+            "codigo": arbol.get("codigo"),
+            "institucion_id": arbol.get("institucion_id"),
+            "nombre_comun": arbol.get("nombre_comun"),
+            "motivo": motivo,
+            "eliminado_por": usuario_id,
+            "datos": {k: arbol.get(k) for k in ("zona", "zona_otra", "lat", "lng", "dap_cm", "altura_m", "copa_m", "etapa",
+                                                "estado", "registrado_por", "registrado_en", "n_inspecciones")},
+        }).execute()
+    except APIError as error:
+        if not zonas.es_tabla_faltante(error):
+            raise
+
+
+@app.delete("/arboles/{arbol_id}", status_code=204, tags=["Árboles"])
+def borrar_arbol(arbol_id: UUID, d: ArbolBorrar, perfil: Perfil = Depends(perfil_actual)):
+    """Borra un árbol registrado por error (duplicado, en otra institución, datos inventados).
+    Solo un docente de la institución del árbol o el administrador. Con el árbol se borran sus
+    inspecciones, intervenciones, tamizajes y alertas, y sus fotos; los puntos y las horas de
+    servicio social que dieron esas inspecciones dejan de contar. Queda constancia con el motivo."""
+    cliente = db.cliente_de_usuario(perfil.sesion.token)
+    filas = cliente.table("arboles_resumen").select("*").eq("id", str(arbol_id)).execute().data
+    if not filas:
+        raise HTTPException(status_code=404, detail="Árbol no encontrado")
+    arbol = filas[0]
+    if not perfil.gestiona(arbol.get("institucion_id")):
+        raise HTTPException(status_code=403, detail="Solo un docente de la institución del árbol o un administrador puede borrarlo")
+
+    admin = db.get_admin()
+    rutas = _rutas_de_fotos(admin, str(arbol_id))
+    _dejar_constancia(admin, arbol, d.motivo, perfil.usuario_id)
+    admin.table("arboles").delete().eq("id", str(arbol_id)).execute()
+    for inicio in range(0, len(rutas), 100):
+        try:
+            admin.storage.from_(BUCKET_FOTOS).remove(rutas[inicio:inicio + 100])
+        except Exception:
+            pass  # una foto que no se pudo borrar no deshace el borrado del árbol
+    return Response(status_code=204)
 
 
 def _metodo_del_arbol(cliente, arbol: dict):

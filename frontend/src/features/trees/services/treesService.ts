@@ -18,6 +18,8 @@ export interface TreesGateway {
   create(payload: ArbolCrear, envio?: Envio): Promise<ArbolResumen>;
   getById(id: string): Promise<ArbolDetalle>;
   getCalculos(id: string): Promise<Calculos>;
+  /** Solo docentes de la institución del árbol y administradores. El motivo queda en la constancia. */
+  borrar(id: string, motivo: string): Promise<void>;
 }
 
 const apiTreesGateway: TreesGateway = {
@@ -30,6 +32,8 @@ const apiTreesGateway: TreesGateway = {
         estado: query.estado,
         especie: query.especie,
         zona: query.zona,
+        q: query.q,
+        registrado_por: query.registradoPor,
       },
     });
 
@@ -60,6 +64,10 @@ const apiTreesGateway: TreesGateway = {
   getById: (id) => getValidado(`/arboles/${id}`, arbolDetalleSchema),
 
   getCalculos: (id) => getValidado(`/arboles/${id}/calculos`, calculosSchema),
+
+  async borrar(id, motivo) {
+    await api.delete(`/arboles/${id}`, { data: { motivo } });
+  },
 };
 
 export const treesService = apiTreesGateway;

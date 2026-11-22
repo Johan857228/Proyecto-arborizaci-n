@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
-export const ZONAS = ['Patio central', 'Entrada principal', 'Zona deportiva', 'Bloques académicos', 'Otra'] as const;
-export const zonaSchema = z.enum(ZONAS);
+// Las zonas las define cada institución (features/zonas).
+export const zonaSchema = z.string().min(1);
 export type Zona = z.infer<typeof zonaSchema>;
 
 // 10.° y 11.° prestan servicio social (features/servicio).

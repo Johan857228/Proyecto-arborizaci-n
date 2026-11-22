@@ -1,12 +1,14 @@
 import { Image } from 'expo-image';
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Linking, Platform, Pressable, Text, View, type GestureResponderEvent, type LayoutChangeEvent, type ViewStyle } from 'react-native';
 import { useReducedMotion } from 'react-native-reanimated';
+import Svg, { Circle, Polygon, Polyline } from 'react-native-svg';
 
 import { fonts } from '@/config/constants';
 import { COLOR_SEDE } from '@/features/mapa/capas';
 import {
   acercarEn,
+  aLatLng,
   aMundo,
   desplazar,
   encuadrar,
@@ -18,11 +20,12 @@ import {
   ZOOM_MIN,
   zoomDeTeselas,
   type Camara,
+  type LatLng,
   type Limites,
   type Punto,
   type Tesela,
 } from '@/features/mapa/geo';
-import { ATRIBUCION, ENLACE_ATRIBUCION, fuenteTesela } from '@/features/mapa/teselas';
+import { ATRIBUCION, ATRIBUCION_SATELITE, ENLACE_ATRIBUCION, ENLACE_ATRIBUCION_SATELITE, fuenteTesela } from '@/features/mapa/teselas';
 import { Icon, type IconName } from '@/shared/components/Icon';
 import { crearEstilos, useTema } from '@/theme';
 
@@ -56,6 +59,22 @@ interface PuntoEnMundo extends PuntoMapa {
   mundo: Punto;
 }
 
+/** Un área del plano del colegio (una zona dibujada) o el contorno que se está dibujando. */
+export interface PoligonoMapa {
+  id: string;
+  puntos: LatLng[];
+  color: string;
+  /** Nombre en el centro, visible de cerca. */
+  etiqueta?: string;
+  /** Línea abierta con sus esquinas marcadas: el contorno que se está dibujando. */
+  abierto?: boolean;
+  resaltado?: boolean;
+}
+
+interface PoligonoEnMundo extends PoligonoMapa {
+  mundo: Punto[];
+}
+
 interface Cobertura {
   z: number;
   desde: Punto;
@@ -85,12 +104,12 @@ function visible(p: PuntoMapa, z: number) {
   return (p.zoomDesde == null || z >= p.zoomDesde) && (p.zoomHasta == null || z < p.zoomHasta);
 }
 
-const CapaTeselas = memo(function CapaTeselas({ cobertura, origen }: { cobertura: Cobertura; origen: Punto }) {
+const CapaTeselas = memo(function CapaTeselas({ cobertura, origen, satelite }: { cobertura: Cobertura; origen: Punto; satelite: boolean }) {
   const s = escala(cobertura.z);
   const dibujar = (t: Tesela, tam: number) => (
     <Image
-      key={`${t.z}/${t.x}/${t.y}`}
-      source={fuenteTesela(t)}
+      key={`${satelite ? 's' : 'm'}/${t.z}/${t.x}/${t.y}`}
+      source={fuenteTesela(t, satelite)}
       cachePolicy="disk"
       allowDownscaling={false}
       contentFit="fill"
@@ -108,6 +127,65 @@ const CapaTeselas = memo(function CapaTeselas({ cobertura, origen }: { cobertura
     <>
       {cobertura.padres.map((t) => dibujar(t, 512))}
       {cobertura.teselas.map((t) => dibujar(t, 256))}
+    </>
+  );
+});
+
+/** Zonas dibujadas: un solo SVG del tamaño justo para todas, debajo de los árboles. */
+const CapaPoligonos = memo(function CapaPoligonos({
+  poligonos,
+  cobertura,
+  origen,
+}: {
+  poligonos: PoligonoEnMundo[];
+  cobertura: Cobertura;
+  origen: Punto;
+}) {
+  const styles = useStyles();
+  const s = escala(cobertura.z);
+  const pixeles = poligonos.map((p) => p.mundo.map((w) => ({ x: (w.x - origen.x) * s, y: (w.y - origen.y) * s })));
+  const todos = pixeles.flat();
+  if (!todos.length) return null;
+  const margen = 12;
+  const x0 = Math.min(...todos.map((q) => q.x)) - margen;
+  const y0 = Math.min(...todos.map((q) => q.y)) - margen;
+  const ancho = Math.max(...todos.map((q) => q.x)) - x0 + margen;
+  const alto = Math.max(...todos.map((q) => q.y)) - y0 + margen;
+  const texto = (lista: Punto[]) => lista.map((q) => `${q.x - x0},${q.y - y0}`).join(' ');
+  return (
+    <>
+      <Svg width={ancho} height={alto} style={{ position: 'absolute', left: x0, top: y0 }}>
+        {poligonos.map((p, i) => (p.abierto ? (
+          <Fragment key={p.id}>
+            {pixeles[i].length > 1 ? <Polyline points={texto(pixeles[i])} fill="none" stroke={p.color} strokeWidth={3} strokeDasharray="6 4" /> : null}
+            {pixeles[i].map((q, k) => (
+              <Circle key={k} cx={q.x - x0} cy={q.y - y0} r={k === 0 ? 7 : 5} fill={k === 0 ? p.color : '#FFFFFF'} stroke={p.color} strokeWidth={2.5} />
+            ))}
+          </Fragment>
+        ) : (
+          <Polygon
+            key={p.id}
+            points={texto(pixeles[i])}
+            fill={p.color}
+            fillOpacity={p.resaltado ? 0.38 : 0.22}
+            stroke={p.color}
+            strokeWidth={p.resaltado ? 3.5 : 2}
+            strokeLinejoin="round"
+          />
+        )))}
+      </Svg>
+      {cobertura.z >= 17
+        ? poligonos.map((p, i) => {
+          if (p.abierto || !p.etiqueta || pixeles[i].length < 3) return null;
+          const cx = pixeles[i].reduce((t, q) => t + q.x, 0) / pixeles[i].length;
+          const cy = pixeles[i].reduce((t, q) => t + q.y, 0) / pixeles[i].length;
+          return (
+            <View key={`e-${p.id}`} style={[styles.zonaEtiqueta, { left: cx - 70, top: cy - 10 }]}>
+              <Text style={[styles.zonaEtiquetaTexto, { color: p.color }]} numberOfLines={1}>{p.etiqueta}</Text>
+            </View>
+          );
+        })
+        : null}
     </>
   );
 });
@@ -205,25 +283,33 @@ function toquesDe(e: GestureResponderEvent, origen: Punto): Punto[] {
 
 export function MapaVista({
   puntos,
+  poligonos,
   encuadre,
   enfocar,
   seleccionado,
   onTocar,
+  onTocarLugar,
   onCamara,
   fondo = true,
+  satelite = false,
   alto,
   aviso,
 }: {
   puntos: PuntoMapa[];
+  poligonos?: PoligonoMapa[];
   /** Al cambiar `clave` (o al medir el mapa por primera vez) se encuadran estos límites. */
   encuadre: { clave: string; limites: Limites | null };
   /** Al cambiar `clave` el mapa se acerca a ese punto. */
   enfocar?: { clave: string; lat: number; lng: number } | null;
   seleccionado: string | null;
   onTocar: (id: string | null) => void;
+  /** Modo dibujo: cada toque entrega el lugar tocado (y no elige puntos ni acerca con doble toque). */
+  onTocarLugar?: (lugar: LatLng) => void;
   /** Cámara y tamaño cuando el mapa se queda quieto (para guardar la zona que se ve). */
   onCamara?: (camara: Camara, ancho: number, alto: number) => void;
   fondo?: boolean;
+  /** Foto satelital en lugar del mapa de calles. */
+  satelite?: boolean;
   alto: number;
   aviso?: string | null;
 }) {
@@ -242,6 +328,10 @@ export function MapaVista({
   const enfocado = useRef<string | null>(null);
 
   const puntosMundo = useMemo<PuntoEnMundo[]>(() => puntos.map((p) => ({ ...p, mundo: aMundo(p) })), [puntos]);
+  const poligonosMundo = useMemo<PoligonoEnMundo[]>(
+    () => (poligonos ?? []).filter((p) => p.puntos.length > 0).map((p) => ({ ...p, mundo: p.puntos.map(aMundo) })),
+    [poligonos],
+  );
 
   // ----------------------------------- Cámara -----------------------------------
   function fijar(c: Camara, inmediato = false) {
@@ -441,6 +531,11 @@ export function MapaVista({
     const c = camaraRef.current;
     if (!c) return;
     const p = { x: e.nativeEvent.pageX - g.origenPagina.x, y: e.nativeEvent.pageY - g.origenPagina.y };
+    // Dibujando, cada toque es una esquina (dos esquinas seguidas no deben acercar el mapa).
+    if (onTocarLugar) {
+      onTocarLugar(aLatLng(pantallaAMundo(c, p, tamRef.current.ancho, tamRef.current.alto)));
+      return;
+    }
     // Doble toque: acercar ahí.
     if (ahora - ultimoToque.current < 300) {
       ultimoToque.current = 0;
@@ -503,7 +598,8 @@ export function MapaVista({
     >
       {camara && cobertura ? (
         <View style={[styles.capa, { transform }]}>
-          {fondo ? <CapaTeselas cobertura={cobertura} origen={origen} /> : null}
+          {fondo ? <CapaTeselas cobertura={cobertura} origen={origen} satelite={satelite} /> : null}
+          {poligonosMundo.length ? <CapaPoligonos poligonos={poligonosMundo} cobertura={cobertura} origen={origen} /> : null}
           <CapaPuntos puntos={puntosMundo} cobertura={cobertura} origen={origen} seleccionado={seleccionado} />
         </View>
       ) : null}
@@ -519,8 +615,12 @@ export function MapaVista({
         <BotonMapa icono="encuadrar" etiqueta="Ver todo" onPress={verTodo} />
       </View>
       {fondo ? (
-        <Pressable accessibilityRole="link" onPress={() => void Linking.openURL(ENLACE_ATRIBUCION)} style={styles.atribucion}>
-          <Text style={styles.atribucionTexto}>{ATRIBUCION}</Text>
+        <Pressable
+          accessibilityRole="link"
+          onPress={() => void Linking.openURL(satelite ? ENLACE_ATRIBUCION_SATELITE : ENLACE_ATRIBUCION)}
+          style={styles.atribucion}
+        >
+          <Text style={styles.atribucionTexto}>{satelite ? ATRIBUCION_SATELITE : ATRIBUCION}</Text>
         </Pressable>
       ) : null}
     </View>
@@ -541,6 +641,17 @@ const useStyles = crearEstilos(({ palette }) => ({
   capa: { position: 'absolute', left: 0, top: 0, width: 0, height: 0, pointerEvents: 'none' },
   anillo: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
   sede: { position: 'absolute', width: 140, alignItems: 'center', gap: 2 },
+  zonaEtiqueta: { position: 'absolute', width: 140, alignItems: 'center' },
+  zonaEtiquetaTexto: {
+    maxWidth: 140,
+    fontSize: 11,
+    fontFamily: fonts.bold,
+    backgroundColor: 'rgba(255, 255, 255, 0.85)',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 6,
+    overflow: 'hidden',
+  },
   sedePin: {
     minWidth: 32,
     height: 32,

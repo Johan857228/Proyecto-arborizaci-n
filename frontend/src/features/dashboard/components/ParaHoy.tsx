@@ -402,17 +402,23 @@ function ProgresoCompacto() {
   );
 }
 
-/** Bloque "Para hoy" según el rol. */
-export function ParaHoy({ perfil }: { perfil: MiPerfil }) {
+/** Si el perfil tiene algo que mostrar en "Para hoy" (sin institución solo el administrador). */
+export function tieneParaHoy(perfil: MiPerfil | undefined) {
+  return Boolean(perfil && (perfil.institucion_id || esAdmin(perfil)));
+}
+
+/** Bloque "Para hoy" según el rol. En el tablero de escritorio va sin título propio. */
+export function ParaHoy({ perfil, sinTitulo = false }: { perfil: MiPerfil; sinTitulo?: boolean }) {
   const styles = useStyles();
-  const a = alcance(perfil);
-  if (!perfil.institucion_id && !a.admin) return null;
+  if (!tieneParaHoy(perfil)) return null;
   return (
     <View style={styles.bloque}>
-      <View style={styles.encabezado}>
-        <View style={styles.raya} />
-        <Text style={styles.titulo}>Para hoy</Text>
-      </View>
+      {sinTitulo ? null : (
+        <View style={styles.encabezado}>
+          <View style={styles.raya} />
+          <Text style={styles.titulo}>Para hoy</Text>
+        </View>
+      )}
       {perfil.rol === 'estudiante' ? <TuZona perfil={perfil} /> : <ParaAtender perfil={perfil} />}
       {perfil.rol === 'estudiante' ? <ServicioHoy /> : null}
       {perfil.rol === 'docente' ? <TusCursos perfil={perfil} /> : null}

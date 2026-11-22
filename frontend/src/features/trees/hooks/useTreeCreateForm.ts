@@ -1,13 +1,14 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as ImagePicker from 'expo-image-picker';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Platform } from 'react-native';
-import { useForm, useWatch, type Path, type PathValue } from 'react-hook-form';
+import { useForm, useWatch, type DefaultValues, type Path, type PathValue } from 'react-hook-form';
 
 import type { Catalogos } from '@/features/catalogs/types';
-import { combinarValor } from '@/features/ia/sugerencias';
+import { combinarValor, sugerenciasDeAnalisis } from '@/features/ia/sugerencias';
 import { payloadBiotico, valoresBioticosIniciales } from '@/features/inspections/bioticos';
 import { TAMIZAJE_INICIAL, type Tamizaje } from '@/features/riesgo/reglas';
+import type { RegistroDesdeSavia } from '@/features/savia/registroDesdeSavia';
 import { useCaptureLocation } from '@/features/trees/hooks/useCaptureLocation';
 import { createArbolCreateSchema, fotosRegistroSchema, type ArbolFormInput } from '@/features/trees/schemas';
 import type { ArbolCrear, FotoLocal } from '@/features/trees/types';
@@ -20,25 +21,49 @@ function isAllowedPhotoType(value: string | null | undefined): value is FotoLoca
   return value === 'image/jpeg' || value === 'image/png' || value === 'image/webp';
 }
 
+/** Valores iniciales con las sugerencias de Savia ya aplicadas (las listas se suman). */
+function conSugerencias(
+  base: DefaultValues<ArbolFormInput>,
+  catalogs: Catalogos,
+  desdeSavia?: RegistroDesdeSavia,
+): DefaultValues<ArbolFormInput> {
+  if (!desdeSavia) return base;
+  const valores: Record<string, unknown> = { ...base };
+  for (const sugerencia of sugerenciasDeAnalisis(desdeSavia.analisis, catalogs)) {
+    for (const [campo, valor] of Object.entries(sugerencia.valores ?? {})) {
+      valores[campo] = combinarValor(valores[campo], valor);
+    }
+  }
+  return valores as DefaultValues<ArbolFormInput>;
+}
+
 export function useTreeCreateForm(
   catalogs: Catalogos,
   onSubmit: (values: ArbolCrear, photos: FotoLocal[]) => Promise<void>,
+  opciones: {
+    /** Institución de la persona: queda elegida de entrada. */
+    institucionId?: string;
+    /** Foto y análisis que trae Savia al tocar "Registrar este árbol". */
+    desdeSavia?: RegistroDesdeSavia;
+  } = {},
 ) {
-  const [photos, setPhotos] = useState<FotoLocal[]>([]);
+  const { institucionId, desdeSavia } = opciones;
+  const [photos, setPhotos] = useState<FotoLocal[]>(() => (desdeSavia ? [desdeSavia.foto] : []));
   const [formError, setFormError] = useState<string>();
   const [tamizaje, setTamizaje] = useState<Tamizaje>(TAMIZAJE_INICIAL);
   const [tamizajeError, setTamizajeError] = useState<string>();
   // Último análisis de la IA hecho con estas fotos: va con el árbol para medir sus aciertos.
-  const [iaAnalisisId, setIaAnalisisId] = useState<string>();
+  const [iaAnalisisId, setIaAnalisisId] = useState<string | undefined>(desdeSavia?.analisis.analisis_id ?? undefined);
   const gps = useCaptureLocation();
   const schema = useMemo(() => createArbolCreateSchema(catalogs), [catalogs]);
   const { control, handleSubmit, setValue, getValues, formState: { errors } } = useForm<ArbolFormInput>({
     resolver: zodResolver(schema),
     mode: 'onChange',
     reValidateMode: 'onChange',
-    defaultValues: {
-      institucion_id: '',
-      zona: 'Patio central',
+    defaultValues: conSugerencias({
+      institucion_id: institucionId && catalogs.instituciones.some((item) => item.id === institucionId) ? institucionId : '',
+      // La zona se elige cuando cargan las de la institución (TreeCreateForm).
+      zona: '',
       zona_otra: '',
       lat: 0,
       lng: 0,
@@ -54,7 +79,7 @@ export function useTreeCreateForm(
       observaciones: [],
       notas: '',
       ...valoresBioticosIniciales,
-    },
+    }, catalogs, desdeSavia),
   });
 
   const zonaActual = useWatch({ control, name: 'zona' });
@@ -128,6 +153,20 @@ export function useTreeCreateForm(
     setValue('lng', value.lng, { shouldValidate: true });
     setValue('gps_confirmado', true, { shouldValidate: true });
     setValue('precision_gps_m', value.accuracy == null ? null : Math.round(value.accuracy * 10) / 10, { shouldValidate: true });
+  }
+
+  // Desde Savia la persona suele estar junto al árbol: la ubicación se toma de una vez.
+  const gpsPedido = useRef(false);
+  useEffect(() => {
+    if (!desdeSavia || gpsPedido.current) return;
+    gpsPedido.current = true;
+    void updateLocation();
+    // Solo al abrir el formulario.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function fijarZona(zona: string) {
+    setValue('zona', zona, { shouldValidate: true });
   }
 
   function toggleObservation(code: string) {
@@ -207,6 +246,7 @@ export function useTreeCreateForm(
     gps,
     photos,
     zonaActual,
+    fijarZona,
     interferenciaActual,
     observacionesActuales,
     pickPhoto,

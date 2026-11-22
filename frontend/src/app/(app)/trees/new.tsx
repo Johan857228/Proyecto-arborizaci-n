@@ -1,12 +1,14 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, Text, View } from 'react-native';
 import { router, type Href } from 'expo-router';
 
 import { useCatalogs } from '@/features/catalogs/hooks/useCatalogs';
 import { evaluarTamizaje, type ResultadoLocal } from '@/features/riesgo/reglas';
+import { useRegistroDesdeSavia } from '@/features/savia/registroDesdeSavia';
 import { useRegisterTree } from '@/features/trees/hooks/useRegisterTree';
 import { RegistrationSuccess } from '@/features/trees/components/RegistrationSuccess';
 import { TreeCreateForm } from '@/features/trees/components/TreeCreateForm';
+import { ZONA_OTRA } from '@/features/zonas/api';
 import { getApiErrorMessage } from '@/services/api/client';
 import type { ArbolCrear, FotoLocal } from '@/features/trees/types';
 import { fonts } from '@/config/constants';
@@ -35,12 +37,17 @@ export default function NewTreeRoute() {
   const [registered, setRegistered] = useState<Registered>();
   // Cambiar la clave vuelve a montar el formulario vacío para registrar otro árbol.
   const [formKey, setFormKey] = useState(0);
+  // Si se llegó desde Savia, su foto y su análisis llenan el primer formulario (solo ese).
+  const [desdeSavia] = useState(() => useRegistroDesdeSavia.getState().pendiente ?? undefined);
+  useEffect(() => {
+    useRegistroDesdeSavia.getState().tomar();
+  }, []);
 
   async function submit(values: ArbolCrear, photos: FotoLocal[]) {
     setSubmitError(undefined);
     const especie = catalogs.data?.especies.find((item) => item.id === values.especie_id);
     const institucion = catalogs.data?.instituciones.find((item) => item.id === values.institucion_id);
-    const zona = values.zona === 'Otra' ? values.zona_otra : values.zona;
+    const zona = values.zona === ZONA_OTRA ? values.zona_otra : values.zona;
     const etiqueta = {
       titulo: especie?.nombre_comun ?? 'Árbol',
       detalle: [institucion?.nombre_corto, zona].filter(Boolean).join(' · '),
@@ -120,6 +127,7 @@ export default function NewTreeRoute() {
       submitError={submitError}
       onCancel={() => router.navigate('/(app)/trees' as Href)}
       onSubmit={submit}
+      desdeSavia={formKey === 0 ? desdeSavia : undefined}
     />
   );
 }

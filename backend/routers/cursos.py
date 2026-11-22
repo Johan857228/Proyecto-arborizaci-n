@@ -10,7 +10,8 @@ import datos
 import db
 from auth import Perfil, perfil_actual
 from comun import es_columna_faltante, hoy, validar_periodo
-from schemas import ZONAS, Zona
+from routers.zonas import nombres_de_zonas
+from schemas import ZONA_OTRA, Zona
 from servicios import indicadores
 from servicios.servicio_social import grado_de_curso
 
@@ -101,6 +102,15 @@ def _armar(curso: dict, perfiles: dict[str, dict], perfil: Perfil) -> dict:
     }
 
 
+def _validar_zonas(institucion_id: str, zonas: list[str]) -> list[str]:
+    """Las zonas asignadas a un curso deben existir en su institución ("Otra" también vale)."""
+    validas = set(nombres_de_zonas(institucion_id)) | {ZONA_OTRA}
+    desconocidas = sorted(set(zonas) - validas)
+    if desconocidas:
+        raise HTTPException(status_code=422, detail=f"Estas zonas no existen en la institución: {', '.join(desconocidas)}")
+    return sorted(set(zonas))
+
+
 def _curso(cliente, curso_id: str) -> dict:
     cursos = datos.cursos(cliente)
     if curso_id not in cursos:
@@ -152,6 +162,7 @@ def crear(d: CursoCrear, perfil: Perfil = Depends(perfil_actual)):
     if d.institucion_id not in datos.instituciones(cliente):
         raise HTTPException(status_code=422, detail="La institución no existe")
     _validar_docente(cliente, d.docente_id, d.institucion_id)
+    zonas = _validar_zonas(d.institucion_id, d.zonas)
     fila = {
         "institucion_id": d.institucion_id,
         "nombre": d.nombre,
@@ -167,7 +178,6 @@ def crear(d: CursoCrear, perfil: Perfil = Depends(perfil_actual)):
             raise
         # Sin la migración 009 el grado se deduce del nombre del curso.
         creado = cliente.table("cursos").insert({k: v for k, v in fila.items() if k != "grado"}).execute().data[0]
-    zonas = sorted(set(d.zonas))
     if zonas:
         try:
             cliente.table("curso_zonas").insert([{"curso_id": creado["id"], "zona": z} for z in zonas]).execute()
@@ -210,7 +220,7 @@ def asignar_zonas(curso_id: UUID, d: ZonasIn, perfil: Perfil = Depends(perfil_ac
     cliente = db.cliente_de_usuario(perfil.sesion.token)
     curso = _curso(cliente, str(curso_id))
     _exigir_gestion(perfil, curso["institucion_id"])
-    nuevas = sorted(set(d.zonas))
+    nuevas = _validar_zonas(curso["institucion_id"], d.zonas)
     actuales = set(curso["zonas"])
     quitar = sorted(actuales - set(nuevas))
     agregar = [z for z in nuevas if z not in actuales]
@@ -260,6 +270,6 @@ def avance(
     resultado = indicadores.avance_curso(base, curso, curso["zonas"], integrantes, desde, hasta)
     return {
         "curso": {"id": curso["id"], "nombre": curso["nombre"], "anio": curso["anio"], "zonas": curso["zonas"]},
-        "zonas_disponibles": list(ZONAS),
+        "zonas_disponibles": [*nombres_de_zonas(curso["institucion_id"]), ZONA_OTRA],
         **resultado,
     }

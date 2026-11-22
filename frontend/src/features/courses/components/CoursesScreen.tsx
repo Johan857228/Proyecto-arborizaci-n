@@ -5,7 +5,8 @@ import { Controller, useForm } from 'react-hook-form';
 import { Text, View } from 'react-native';
 
 import { useCursos, useGuardarCurso } from '@/features/courses/api';
-import { GRADOS, ZONAS, cursoFormSchema, type CursoFormInput } from '@/features/courses/schemas';
+import { GRADOS, cursoFormSchema, type CursoFormInput } from '@/features/courses/schemas';
+import { nombresDeZonas, useZonas } from '@/features/zonas/api';
 import { InstitucionSelector, useInstitucionElegida } from '@/features/perfil/components/InstitucionSelector';
 import { useMiPerfil } from '@/features/perfil/hooks/usePerfil';
 import { gestiona } from '@/features/perfil/schemas';
@@ -61,6 +62,7 @@ export function CoursesScreen() {
 function NuevoCurso({ institucionId }: { institucionId: string }) {
   const styles = useStyles();
   const { crear } = useGuardarCurso();
+  const zonasDisponibles = nombresDeZonas(useZonas(institucionId).data);
   const [abierto, setAbierto] = useState(false);
   const [error, setError] = useState<string>();
   const { control, handleSubmit, reset } = useForm<CursoFormInput>({
@@ -96,7 +98,7 @@ function NuevoCurso({ institucionId }: { institucionId: string }) {
       <Text style={styles.texto}>10.° y 11.° prestan servicio social. Si no eliges el grado, se toma del nombre (por ejemplo, 10-A).</Text>
       <Controller name="zonas" control={control} render={({ field }) => (
         <View style={styles.chips}>
-          {ZONAS.map((zona) => (
+          {zonasDisponibles.map((zona) => (
             <ChoiceChip
               key={zona}
               label={zona}

@@ -45,6 +45,9 @@ const FIJAS: Record<Exclude<ModoColor, 'especie'>, { clave: string; etiqueta: st
 /** Las especies con más árboles tienen color propio; el resto va en "Otras" (paleta validada de 4). */
 const ESPECIES_CON_COLOR = chartColors.categorical.length;
 
+/** Color de cada estado del árbol (sano, riesgo, critico, sin_dato), el mismo de la leyenda. */
+export const COLOR_ESTADO: Record<string, string> = Object.fromEntries(FIJAS.estado.map((c) => [c.clave, c.color]));
+
 export const COLOR_ALERTA = '#B3122E';
 export const COLOR_SIEMBRA = '#7CB518';
 export const COLOR_SEDE = '#0F3D26';
@@ -97,10 +100,14 @@ export interface CapasVisibles {
   sedes: boolean;
   alertas: boolean;
   siembras: boolean;
+  /** Zonas dibujadas en el plano del colegio (Zonas de la sede). */
+  zonas: boolean;
   fondo: boolean;
+  /** Foto satelital en lugar del mapa de calles. */
+  satelite: boolean;
 }
 
-export const CAPAS_INICIALES: CapasVisibles = { arboles: true, sedes: true, alertas: true, siembras: true, fondo: true };
+export const CAPAS_INICIALES: CapasVisibles = { arboles: true, sedes: true, alertas: true, siembras: true, zonas: true, fondo: true, satelite: false };
 
 /** Anillo alrededor del punto: la alerta abierta pesa más que la siembra. */
 export function anilloDe(arbol: ArbolMapa, capas: CapasVisibles): string | null {

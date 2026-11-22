@@ -1,12 +1,8 @@
 import type { PayloadBiotico } from '@/features/inspections/bioticos';
 import type { Tamizaje } from '@/features/riesgo/reglas';
 
-export type Zona =
-  | 'Patio central'
-  | 'Entrada principal'
-  | 'Zona deportiva'
-  | 'Bloques académicos'
-  | 'Otra';
+/** Las zonas las define cada institución (features/zonas); "Otra" lleva el nombre en zona_otra. */
+export type Zona = string;
 export type Etapa = 'Plántula' | 'Juvenil' | 'Adulto' | 'Senescente';
 export type Interferencia =
   | 'Ninguna'
@@ -22,6 +18,10 @@ export interface FiltrosInventario {
   estado?: 'sano' | 'riesgo' | 'critico';
   especie?: string;
   zona?: Zona;
+  /** Texto que se busca en el servidor: código, especie (común o científica) y zona. */
+  q?: string;
+  /** Solo los árboles que registró esta persona (por alumno, o "mis registros"). */
+  registradoPor?: string;
 }
 
 export interface PaginaInventario extends FiltrosInventario {

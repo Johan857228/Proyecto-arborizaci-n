@@ -14,16 +14,24 @@ export const PLANTILLA_TESELAS = process.env.EXPO_PUBLIC_MAPA_TESELAS || 'https:
 export const ATRIBUCION = process.env.EXPO_PUBLIC_MAPA_ATRIBUCION || '© OpenStreetMap';
 export const ENLACE_ATRIBUCION = 'https://www.openstreetmap.org/copyright';
 
+/** Vista satelital para dibujar el plano del colegio sobre la foto real (World Imagery de Esri,
+ *  con su atribución). Se cambia con EXPO_PUBLIC_MAPA_SATELITE si el equipo usa otro proveedor. */
+export const PLANTILLA_SATELITE = process.env.EXPO_PUBLIC_MAPA_SATELITE
+  || 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+export const ATRIBUCION_SATELITE = process.env.EXPO_PUBLIC_MAPA_SATELITE_ATRIBUCION || 'Imágenes © Esri, Maxar, Earthstar Geographics';
+export const ENLACE_ATRIBUCION_SATELITE = 'https://www.esri.com/en-us/legal/terms/full-master-agreement';
+
 // OpenStreetMap pide que cada app se identifique. En web el navegador manda los suyos.
 const ENCABEZADOS: Record<string, string> | undefined =
   Platform.OS === 'web' ? undefined : { 'User-Agent': 'ArboladoEscolar/1.0 (co.edu.upc.arboladoescolar)' };
 
-export function urlTesela({ z, x, y }: Tesela) {
-  return PLANTILLA_TESELAS.replace('{z}', String(z)).replace('{x}', String(x)).replace('{y}', String(y));
+export function urlTesela({ z, x, y }: Tesela, plantilla = PLANTILLA_TESELAS) {
+  return plantilla.replace('{z}', String(z)).replace('{x}', String(x)).replace('{y}', String(y));
 }
 
-export function fuenteTesela(t: Tesela) {
-  return ENCABEZADOS ? { uri: urlTesela(t), headers: ENCABEZADOS } : { uri: urlTesela(t) };
+export function fuenteTesela(t: Tesela, satelite = false) {
+  const uri = urlTesela(t, satelite ? PLANTILLA_SATELITE : PLANTILLA_TESELAS);
+  return ENCABEZADOS ? { uri, headers: ENCABEZADOS } : { uri };
 }
 
 // ================================ Zonas sin conexión ================================
@@ -73,7 +81,7 @@ export async function guardarZona(
 ): Promise<{ zona: ZonaGuardada; fallidas: number }> {
   const plan = planDeZona(limites, zoomActual);
   if (!plan) throw new ZonaMuyGrande();
-  const urls = plan.teselas.map(urlTesela);
+  const urls = plan.teselas.map((t) => urlTesela(t));
   let fallidas = 0;
   for (let i = 0; i < urls.length; i += LOTE) {
     const lote = urls.slice(i, i + LOTE);
