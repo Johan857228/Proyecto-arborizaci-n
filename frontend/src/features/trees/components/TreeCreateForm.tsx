@@ -1,5 +1,5 @@
 import { router, type Href } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Controller, useController, useWatch } from 'react-hook-form';
 import { Image } from 'expo-image';
 import { Pressable, ScrollView, Text, View } from 'react-native';
@@ -17,6 +17,7 @@ import { useMiPerfil } from '@/features/perfil/hooks/usePerfil';
 import { gestiona } from '@/features/perfil/schemas';
 import type { RegistroDesdeSavia } from '@/features/savia/registroDesdeSavia';
 import { ZONA_OTRA, nombresDeZonas, useZonas } from '@/features/zonas/api';
+import { zonaEnPunto } from '@/features/zonas/geo';
 import {
   Field,
   Heading,
@@ -126,6 +127,20 @@ export function TreeCreateForm({ catalogs, submitting, submitError, onCancel, on
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [claveZonas, zonaActual]);
   const editaZonas = Boolean(institucionId) && gestiona(perfil.data, institucionId);
+  // Si la zona está dibujada en el plano del colegio, el GPS la elige solo (se puede cambiar).
+  const gpsLat = form.gps.location?.lat;
+  const gpsLng = form.gps.location?.lng;
+  const zonaPorGps = useMemo(
+    () => (gpsLat != null && gpsLng != null && zonasInstitucion.data
+      ? zonaEnPunto(zonasInstitucion.data.zonas, gpsLat, gpsLng)?.nombre ?? null
+      : null),
+    [gpsLat, gpsLng, zonasInstitucion.data],
+  );
+  useEffect(() => {
+    if (zonaPorGps) fijarZona(zonaPorGps);
+    // Solo cuando el GPS cae en otra zona: si la persona la cambia a mano, se respeta.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [zonaPorGps]);
   // Avisos (no bloquean): precisión baja del GPS o punto lejos de la institución elegida.
   const ubicacion = form.gps.location;
   const precisionBaja = ubicacion?.accuracy != null && ubicacion.accuracy > PRECISION_GPS_MAX_M;
@@ -187,6 +202,9 @@ export function TreeCreateForm({ catalogs, submitting, submitError, onCancel, on
                   />
                 )}
               />
+              {zonaPorGps && form.zonaActual === zonaPorGps ? (
+                <Text style={styles.zonaGps}>El GPS cae en «{zonaPorGps}» según el plano del colegio. Puedes cambiarla.</Text>
+              ) : null}
               {editaZonas ? (
                 <Text accessibilityRole="link" style={styles.zonasLink} onPress={() => router.push('/(app)/zones' as Href)}>
                   ¿Falta una zona? Edita las zonas de la sede
@@ -502,6 +520,7 @@ const useStyles = crearEstilos(({ palette }) => ({
   content: { width: '100%', maxWidth: layout.formWidth, alignSelf: 'center', padding: 20, paddingTop: 16, paddingBottom: ESPACIO_FINAL, gap: 18 },
   backAction: { alignSelf: 'flex-start', marginLeft: -8 },
   zonasLink: { marginTop: -6, color: palette.forest, fontSize: 13, fontFamily: fonts.bold },
+  zonaGps: { marginTop: -6, marginBottom: 8, color: palette.muted, fontSize: 12, lineHeight: 17 },
   // Campos relacionados lado a lado cuando hay espacio; en teléfonos se apilan.
   row: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 12 },
   cell: { flexGrow: 1, flexBasis: 180 },

@@ -25,7 +25,8 @@ import {
   type ClaseLeyenda,
   type ModoColor,
 } from '@/features/mapa/capas';
-import { MapaVista, type PuntoMapa } from '@/features/mapa/components/MapaVista';
+import { MapaVista, type PoligonoMapa, type PuntoMapa } from '@/features/mapa/components/MapaVista';
+import { ESTILO_TIPO, useZonas } from '@/features/zonas/api';
 import { limitesVisibles, zoomDeTeselas, type Camara } from '@/features/mapa/geo';
 import type { ArbolMapa, EspecieMapa, Mapa, Origen, SedeMapa } from '@/features/mapa/schemas';
 import { planDeZona, ZonaMuyGrande } from '@/features/mapa/teselas';
@@ -133,7 +134,9 @@ function Capas({ capas, onCambiar, datos }: { capas: CapasVisibles; onCambiar: (
       <Casilla checked={capas.siembras} onChange={cambiar('siembras')}>
         <Text style={{ color: COLOR_SIEMBRA, fontFamily: fonts.bold }}>Anillo verde:</Text> siembras recientes ({datos.resumen.siembras}), plántulas registradas en los últimos 12 meses
       </Casilla>
+      <Casilla checked={capas.zonas} onChange={cambiar('zonas')}>Zonas dibujadas en el plano del colegio</Casilla>
       <Casilla checked={capas.fondo} onChange={cambiar('fondo')}>Mapa base (calles y manzanas)</Casilla>
+      <Casilla checked={capas.satelite} onChange={cambiar('satelite')}>Foto satelital en lugar del mapa de calles</Casilla>
       <Text style={styles.nota}>Para trabajar en un SIG (QGIS, ArcGIS) descarga el inventario en GeoJSON o Shapefile desde Exportar datos.</Text>
     </Card>
   );
@@ -275,6 +278,16 @@ export function MapaScreen() {
   const [inicial, setInicial] = useState<string | null>(null);
 
   const datos = mapa.data;
+  // Zonas dibujadas de la institución que se ve (con "todas las instituciones" no se pintan).
+  const zonas = useZonas(datos?.institucion_id ?? undefined);
+  const poligonos = useMemo<PoligonoMapa[]>(() => (capas.zonas ? (zonas.data?.zonas ?? []) : [])
+    .filter((z) => z.contorno && z.contorno.length >= 3)
+    .map((z) => ({
+      id: `zona:${z.id ?? z.nombre}`,
+      puntos: (z.contorno ?? []).map(([lat, lng]) => ({ lat, lng })),
+      color: ESTILO_TIPO[z.tipo].color,
+      etiqueta: z.nombre,
+    })), [capas.zonas, zonas.data]);
   // Abrir el mapa desde la ficha de un árbol (/map?arbol=…) lo selecciona y lo centra.
   if (datos && arbolInicial && inicial !== arbolInicial) {
     const a = datos.arboles.find((x) => x.id === arbolInicial);
@@ -366,6 +379,8 @@ export function MapaScreen() {
             <Tabs<ModoColor> value={modo} onChange={cambiarModo} options={MODOS.map((m) => ({ label: m.etiqueta, value: m.valor }))} />
             <MapaVista
               puntos={puntos}
+              poligonos={poligonos}
+              satelite={capas.satelite}
               encuadre={{ clave: datos.institucion_id ?? 'todas', limites: datos.limites }}
               enfocar={enfocar}
               seleccionado={seleccionado}

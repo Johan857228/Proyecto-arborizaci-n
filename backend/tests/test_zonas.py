@@ -14,6 +14,7 @@ def api(monkeypatch):
     mundo = _mundo()
     # La tabla arboles real tiene la zona; la vista arboles_resumen la repite.
     mundo["arboles"] = [{**a, "zona": "Patio central"} for a in mundo["arboles"]]
+    mundo["instituciones"] = [{**i, "lat": 10.4638, "lng": -73.254} for i in mundo["instituciones"]]
     base = BaseMemoria(mundo)
     monkeypatch.setattr(db, "cliente_de_usuario", lambda token: base)
     monkeypatch.setattr(db, "get_admin", lambda: base)
@@ -154,3 +155,60 @@ def test_arbol_con_zona_que_ya_no_existe_queda_como_otra(api):
     assert r.status_code == 201, r.text
     guardado = next(a for a in api.base.tablas["arboles"] if a["id"] == r.json()["id"])
     assert guardado["zona"] == "Otra" and guardado["zona_otra"] == "Cancha vieja"
+
+
+# ------------------------------- Tipo y plano -------------------------------
+CONTORNO = [[10.4640, -73.2542], [10.4640, -73.2538], [10.4636, -73.2538], [10.4636, -73.2542]]
+
+
+def _zona_json(r, nombre):
+    return next(z for z in r.json()["zonas"] if z["nombre"] == nombre)
+
+
+def test_las_de_siempre_arrancan_con_su_tipo(api):
+    r = api.get("/instituciones/sj/zonas")
+    assert _zona_json(r, "Zona deportiva")["tipo"] == "cancha"
+    assert _zona_json(r, "Bloques académicos")["tipo"] == "salones"
+    assert _zona_json(r, "Patio central")["contorno"] is None
+
+
+def test_crear_zona_con_tipo(api):
+    r = api.post("/instituciones/sj/zonas", json={"nombre": "Biblioteca", "tipo": "biblioteca"})
+    assert r.status_code == 201 and _zona_json(r, "Biblioteca")["tipo"] == "biblioteca"
+    assert api.post("/instituciones/sj/zonas", json={"nombre": "Coliseo", "tipo": "estadio"}).status_code == 422
+
+
+def test_cambiar_solo_el_tipo(api):
+    api.get("/instituciones/sj/zonas")
+    r = api.patch(f"/zonas/{_id(api, 'Patio central')}", json={"tipo": "otro"})
+    assert r.status_code == 200 and _zona_json(r, "Patio central")["tipo"] == "otro"
+
+
+def test_dibujar_y_quitar_el_contorno(api):
+    api.get("/instituciones/sj/zonas")
+    zona = _id(api, "Patio central")
+    # El último punto repite el primero (se cerró la figura) y hay un doble toque: se limpian.
+    r = api.put(f"/zonas/{zona}/contorno", json={"contorno": CONTORNO + [CONTORNO[3], CONTORNO[0]]})
+    assert r.status_code == 200, r.text
+    assert _zona_json(r, "Patio central")["contorno"] == CONTORNO
+    r = api.put(f"/zonas/{zona}/contorno", json={"contorno": None})
+    assert _zona_json(r, "Patio central")["contorno"] is None
+
+
+@pytest.mark.parametrize("contorno, texto", [
+    (CONTORNO[:2], "tres esquinas"),
+    ([[10.4640, -73.2542], [10.4640, -73.2542], [10.4636, -73.2538]], "tres esquinas"),
+    ([[40.41, -3.70], [40.42, -3.70], [40.42, -3.71]], "Colombia"),
+    ([[10.50, -73.2542], [10.50, -73.2538], [10.4990, -73.2538]], "km"),
+])
+def test_contornos_que_no_sirven(api, contorno, texto):
+    api.get("/instituciones/sj/zonas")
+    r = api.put(f"/zonas/{_id(api, 'Patio central')}/contorno", json={"contorno": contorno})
+    assert r.status_code == 422 and texto in r.text
+
+
+def test_solo_quien_gestiona_dibuja(api):
+    api.get("/instituciones/sj/zonas")
+    api.como("est1")
+    assert api.put(f"/zonas/{_id(api, 'Patio central')}/contorno", json={"contorno": CONTORNO}).status_code == 403
+

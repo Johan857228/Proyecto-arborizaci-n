@@ -6,7 +6,10 @@
 --                       las define un docente de la institución o el
 --                       administrador. Arrancan con las cuatro de siempre.
 --                       "Otra" no se guarda aquí: siempre está disponible y
---                       lleva el nombre en arboles.zona_otra.
+--                       lleva el nombre en arboles.zona_otra. Cada zona tiene
+--                       un tipo (patio, cancha, salones, biblioteca...) y,
+--                       si se dibujó en el plano del colegio, su contorno:
+--                       una lista de [latitud, longitud] (de 3 a 100 puntos).
 --   arboles_eliminados  constancia de cada árbol borrado: quién, cuándo, por
 --                       qué y los datos que tenía. El árbol, sus inspecciones,
 --                       intervenciones, tamizajes y alertas se borran en
@@ -31,12 +34,18 @@ create table if not exists public.zonas (
 );
 create unique index if not exists zonas_nombre_unico on public.zonas (institucion_id, lower(btrim(nombre)));
 
+alter table public.zonas add column if not exists tipo text not null default 'patio'
+  check (tipo in ('patio', 'cancha', 'salones', 'biblioteca', 'entrada', 'parqueadero', 'otro'));
+alter table public.zonas add column if not exists contorno jsonb
+  check (contorno is null or (jsonb_typeof(contorno) = 'array' and jsonb_array_length(contorno) between 3 and 100));
+
 -- Las cuatro zonas de siempre para cada institución que aún no tiene zonas.
-insert into public.zonas (institucion_id, nombre, orden)
-select i.id, z.nombre, z.orden
+insert into public.zonas (institucion_id, nombre, tipo, orden)
+select i.id, z.nombre, z.tipo, z.orden
 from public.instituciones i
-cross join (values ('Patio central', 1), ('Entrada principal', 2), ('Zona deportiva', 3), ('Bloques académicos', 4))
-  as z(nombre, orden)
+cross join (values ('Patio central', 'patio', 1), ('Entrada principal', 'entrada', 2), ('Zona deportiva', 'cancha', 3),
+                   ('Bloques académicos', 'salones', 4))
+  as z(nombre, tipo, orden)
 where not exists (select 1 from public.zonas x where x.institucion_id = i.id);
 
 -- Quitar la lista fija de zonas (los nombres de las restricciones dependen de cómo se creó cada tabla).
