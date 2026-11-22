@@ -7,10 +7,11 @@ import Animated from 'react-native-reanimated';
 import { fonts, layout } from '@/config/constants';
 import { AccesosRapidos, Distribucion, EstadoArbolado, Impacto, MetasEnCurso, Recientes } from '@/features/dashboard/components/Panorama';
 import { ParaHoy, usePendientesDeHoy } from '@/features/dashboard/components/ParaHoy';
+import { ANCHO_MAXIMO_TABLERO, ANCHO_TABLERO, MARGEN_TABLERO, TableroInicio } from '@/features/dashboard/components/Tablero';
 import { useDashboard } from '@/features/dashboard/hooks/useDashboard';
 import { claveDeCache } from '@/features/perfil/components/Avatar';
 import { useImagenPropia } from '@/features/perfil/hooks/useImagenPropia';
-import { AvisoPrivacidad } from '@/features/privacidad/components/AvisoPrivacidad';
+import { AvisoPrivacidad, useTextoAvisoPrivacidad } from '@/features/privacidad/components/AvisoPrivacidad';
 import { useMiPerfil, useRefrescarTodo } from '@/features/perfil/hooks/usePerfil';
 import { ETIQUETA_ROL, esAdmin, type MiPerfil } from '@/features/perfil/schemas';
 import { useEspaciado, useCarrilSavia } from '@/hooks/use-espaciado';
@@ -64,12 +65,14 @@ function lugarDe(perfil: MiPerfil | undefined) {
   return esAdmin(perfil) ? 'Todas las instituciones' : 'Sin institución';
 }
 
-/** Portada: la foto (propia o del campus), el saludo, el rol y cuántas tareas hay hoy. */
-function Portada({ perfil, pendientes, totalArboles, portada }: {
+/** Portada: la foto (propia o del campus), el saludo, el rol y cuántas tareas hay hoy. En el
+ *  tablero de escritorio (`compacta`) es más baja: el rol y los pendientes van en una sola línea. */
+function Portada({ perfil, pendientes, totalArboles, portada, compacta = false }: {
   perfil?: MiPerfil;
   pendientes?: number;
   totalArboles?: number;
   portada: ReturnType<typeof useImagenPropia>;
+  compacta?: boolean;
 }) {
   const styles = useStyles();
   const { palette, gradients } = useTema();
@@ -79,7 +82,7 @@ function Portada({ perfil, pendientes, totalArboles, portada }: {
   const rolCurso = perfil ? [ETIQUETA_ROL[perfil.rol], perfil.curso_nombre ? `Curso ${perfil.curso_nombre}` : null].filter(Boolean).join(' · ') : '';
   const sinArboles = totalArboles === 0;
   return (
-    <FadeIn index={0} style={[styles.portada, isWide && styles.portadaAncha]}>
+    <FadeIn index={0} style={[styles.portada, isWide && styles.portadaAncha, compacta && styles.portadaTablero]}>
       <Image
         source={portadaUrl ? { uri: portadaUrl, cacheKey: claveDeCache(portadaUrl) } : require('@/assets/images/login-campus-upc.jpg')}
         style={StyleSheet.absoluteFill}
@@ -103,23 +106,25 @@ function Portada({ perfil, pendientes, totalArboles, portada }: {
           <Icon name="location" size={13} color={palette.leaf} />
           <Text style={styles.lugarTexto} numberOfLines={1}>{lugarDe(perfil)}</Text>
         </View>
-        <Text style={[styles.saludo, isWide && styles.saludoAncho]}>{saludo()}{primerNombre ? `, ${primerNombre}` : ''}</Text>
-        {rolCurso ? <Text style={styles.rol}>{rolCurso}</Text> : null}
-        {pendientes !== undefined ? (
-          <View style={styles.pendientes}>
-            <View style={[styles.punto, { backgroundColor: pendientes > 0 ? palette.sun : palette.leaf }]} />
-            <Text style={styles.pendientesTexto}>
-              {pendientes > 0 ? `Tienes ${pendientes} ${pendientes === 1 ? 'pendiente' : 'pendientes'} hoy` : 'Todo al día'}
-            </Text>
-          </View>
-        ) : null}
+        <Text style={[styles.saludo, isWide && styles.saludoAncho, compacta && styles.saludoTablero]}>{saludo()}{primerNombre ? `, ${primerNombre}` : ''}</Text>
+        <View style={compacta ? styles.lineaRol : styles.columnaRol}>
+          {rolCurso ? <Text style={styles.rol}>{rolCurso}</Text> : null}
+          {pendientes !== undefined ? (
+            <View style={[styles.pendientes, compacta && styles.pendientesEnLinea]}>
+              <View style={[styles.punto, { backgroundColor: pendientes > 0 ? palette.sun : palette.leaf }]} />
+              <Text style={styles.pendientesTexto}>
+                {pendientes > 0 ? `Tienes ${pendientes} ${pendientes === 1 ? 'pendiente' : 'pendientes'} hoy` : 'Todo al día'}
+              </Text>
+            </View>
+          ) : null}
+        </View>
       </View>
       {sinArboles ? (
-        <View style={styles.portadaAccion}>
+        <View style={[styles.portadaAccion, compacta && styles.portadaAccionCentrada]}>
           <PrimaryButton title="Registrar el primer árbol" icon="add" compact onPress={() => router.navigate('/(app)/trees/new' as Href)} />
         </View>
       ) : isWide && perfil ? (
-        <View style={styles.portadaAccion}>
+        <View style={[styles.portadaAccion, compacta && styles.portadaAccionCentrada]}>
           {esAdmin(perfil)
             ? <PrimaryButton title="Ver reportes" icon="chart" compact onPress={() => router.navigate('/(app)/reports' as Href)} />
             : <PrimaryButton title="Registrar árbol" icon="add" compact onPress={() => router.navigate('/(app)/trees/new' as Href)} />}
@@ -137,15 +142,17 @@ function horaDe(ms: number) {
 
 /** Pie que ocupa el carril del botón de Savia: el texto a la izquierda y el botón a la derecha,
  *  sin franja vacía debajo. */
-function Pie({ actualizado }: { actualizado: number }) {
+function Pie({ actualizado, tablero = false }: { actualizado: number; tablero?: boolean }) {
   const styles = useStyles();
   const carril = useCarrilSavia();
   const { width } = useWindowDimensions();
   // En ventanas muy anchas el botón queda fuera de la columna de contenido.
-  const libre = (width - layout.maxWidth) / 2 >= carril.reservaDerecha;
+  const libre = (width - (tablero ? ANCHO_MAXIMO_TABLERO : layout.maxWidth)) / 2 >= carril.reservaDerecha;
   const hora = horaDe(actualizado);
+  // En el tablero el pie cierra la columna derecha, que ya termina MARGEN_TABLERO antes del borde.
+  const alto = tablero ? carril.alto - MARGEN_TABLERO : carril.alto;
   return (
-    <View style={[styles.pie, libre ? null : { minHeight: carril.alto, paddingRight: carril.reservaDerecha }]}>
+    <View style={[styles.pie, tablero && styles.pieTablero, libre ? null : { minHeight: alto, paddingRight: carril.reservaDerecha }]}>
       <Text style={styles.pieTexto}>{hora ? `Datos actualizados a las ${hora} · ` : ''}Arbolado Escolar</Text>
       <Text style={styles.pieTexto}>Con la Universidad Popular del Cesar</Text>
     </View>
@@ -165,7 +172,38 @@ export function DashboardScreen() {
   const hoy = usePendientesDeHoy(p);
   const refrescarTodo = useRefrescarTodo();
   const [refrescando, setRefrescando] = useState(false);
+  const { width } = useWindowDimensions();
+  const avisoPrivacidad = useTextoAvisoPrivacidad();
   const error = perfil.error ?? stats.error;
+
+  // Escritorio: todo en una pantalla, sin desplazar la página.
+  if (width >= ANCHO_TABLERO) {
+    const avisos = [
+      error ? <InlineMessage key="error">{getApiErrorMessage(error)}</InlineMessage> : null,
+      portada.error ? <InlineMessage key="portada">{portada.error}</InlineMessage> : null,
+      recentTrees.error ? <InlineMessage key="recientes">{getApiErrorMessage(recentTrees.error)}</InlineMessage> : null,
+      p && avisoPrivacidad ? <AvisoPrivacidad key="privacidad" /> : null,
+      p && !p.institucion_id ? (
+        <InlineMessage key="institucion" tone="info">
+          Tu cuenta aún no tiene institución asignada. Pídele al administrador que te la asigne para entrar a un curso y aparecer en el ranking de tu institución.
+        </InlineMessage>
+      ) : null,
+    ].filter(Boolean);
+    return (
+      <Screen>
+        <TableroInicio
+          perfil={p}
+          stats={stats.data}
+          cargandoStats={stats.isLoading || perfil.isLoading}
+          arboles={recentTrees.data}
+          cargandoArboles={recentTrees.isLoading}
+          portada={<Portada perfil={p} pendientes={hoy.total} totalArboles={stats.data?.total} portada={portada} compacta />}
+          avisos={avisos}
+          pie={<Pie actualizado={stats.dataUpdatedAt} tablero />}
+        />
+      </Screen>
+    );
+  }
 
   async function refrescar() {
     setRefrescando(true);
@@ -228,6 +266,8 @@ const useStyles = crearEstilos(({ palette, shadows }) => ({
   columna: { flex: 1, gap: 16 },
   portada: { gap: 14, padding: 18, paddingTop: 56, overflow: 'hidden', borderRadius: 24, backgroundColor: palette.forestDark, boxShadow: shadows.raised },
   portadaAncha: { minHeight: 220, flexDirection: 'row', alignItems: 'flex-end', padding: 32, paddingTop: 64 },
+  // paddingTop explícito: en React Native el paddingTop de portadaAncha le ganaría a un paddingVertical.
+  portadaTablero: { minHeight: 0, alignItems: 'center', gap: 20, paddingTop: 18, paddingBottom: 18, paddingLeft: 24, paddingRight: 66, borderRadius: 20 },
   velo: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
   // Lápiz pequeño pero visible: vidrio oscuro con borde claro, en la esquina superior derecha.
   lapiz: { position: 'absolute', top: 14, right: 14, zIndex: 2 },
@@ -237,11 +277,17 @@ const useStyles = crearEstilos(({ palette, shadows }) => ({
   lugarTexto: { flexShrink: 1, color: palette.white, fontSize: 12, fontFamily: fonts.semiBold },
   saludo: { color: palette.white, fontSize: 24, fontFamily: fonts.extraBold, letterSpacing: -0.5 },
   saludoAncho: { fontSize: 30 },
+  saludoTablero: { fontSize: 26 },
+  columnaRol: { gap: 4 },
+  lineaRol: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 16, rowGap: 4 },
   rol: { color: '#DCE9DF', fontSize: 14, fontFamily: fonts.semiBold },
   pendientes: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 },
+  pendientesEnLinea: { marginTop: 0 },
   punto: { width: 8, height: 8, borderRadius: 4 },
   pendientesTexto: { color: palette.white, fontSize: 14, fontFamily: fonts.bold },
   portadaAccion: { alignSelf: 'flex-start' },
+  portadaAccionCentrada: { alignSelf: 'center' },
   pie: { justifyContent: 'center', gap: 2, marginTop: 4 },
+  pieTablero: { marginTop: 0 },
   pieTexto: { color: palette.muted, fontSize: 12, lineHeight: 17 },
 }));

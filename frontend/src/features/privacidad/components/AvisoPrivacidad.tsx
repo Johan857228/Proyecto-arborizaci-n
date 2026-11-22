@@ -6,19 +6,24 @@ import { usePrivacidad } from '@/features/privacidad/api';
 import { Icon } from '@/shared/components/Icon';
 import { crearEstilos, useTema } from '@/theme';
 
-/** Aviso del inicio cuando falta aceptar la política o la autorización del acudiente. */
-export function AvisoPrivacidad() {
-  const styles = useStyles();
-  const { palette } = useTema();
-  const estado = usePrivacidad();
-  const e = estado.data;
+/** Texto del aviso, o null si no falta nada. El inicio lo usa para saber si el aviso ocupa lugar. */
+export function useTextoAvisoPrivacidad() {
+  const e = usePrivacidad().data;
   if (!e) return null;
   const faltaPolitica = e.politica_aceptada !== e.politica_vigente;
   const faltaAcudiente = e.requiere_consentimiento && !e.consentimiento;
   if (!faltaPolitica && !faltaAcudiente) return null;
-  const texto = faltaAcudiente
+  return faltaAcudiente
     ? 'Falta la autorización de tu acudiente para tratar tus datos. Fírmala con él o ella en la app.'
     : 'Lee y acepta la política de tratamiento de datos.';
+}
+
+/** Aviso del inicio cuando falta aceptar la política o la autorización del acudiente. */
+export function AvisoPrivacidad() {
+  const styles = useStyles();
+  const { palette } = useTema();
+  const texto = useTextoAvisoPrivacidad();
+  if (!texto) return null;
   return (
     <Pressable accessibilityRole="link" onPress={() => router.push('/(app)/privacy' as Href)} style={({ pressed }) => [styles.aviso, pressed && styles.pressed]}>
       <View style={styles.icono}><Icon name="lock" size={18} color={palette.amber} /></View>

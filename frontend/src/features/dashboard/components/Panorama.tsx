@@ -61,8 +61,9 @@ function Encabezado({ titulo, accion }: { titulo: string; accion?: { texto: stri
   );
 }
 
-/** Total, reparto sano/riesgo/crítico y tres casillas que abren el inventario filtrado. */
-export function EstadoArbolado({ stats, cargando, alcance }: { stats?: Estadisticas; cargando: boolean; alcance: string }) {
+/** Total, barra sano/riesgo/crítico y tres casillas que abren el inventario filtrado. Lo usan la
+ *  tarjeta del teléfono y el panel del tablero de escritorio. */
+export function EstadoContenido({ stats, cargando, compacto = false }: { stats?: Estadisticas; cargando: boolean; compacto?: boolean }) {
   const styles = useStyles();
   const estados = useEstadosArbol();
   const conteo: Record<EstadoArbol, number> = {
@@ -72,9 +73,11 @@ export function EstadoArbolado({ stats, cargando, alcance }: { stats?: Estadisti
   };
   const evaluados = conteo.sano + conteo.riesgo + conteo.critico;
   return (
-    <Card title="Estado del arbolado" subtitle={`${alcance} · según la última inspección de cada árbol`} icon="tree">
+    <>
       <View style={styles.totalFila}>
-        {cargando ? <Text style={styles.total}>—</Text> : <AnimatedNumber value={stats?.total ?? 0} style={styles.total} />}
+        {cargando
+          ? <Text style={[styles.total, compacto && styles.totalCompacto]}>—</Text>
+          : <AnimatedNumber value={stats?.total ?? 0} style={[styles.total, compacto && styles.totalCompacto]} />}
         <Text style={styles.totalTexto}>{stats?.total === 1 ? 'árbol registrado' : 'árboles registrados'}</Text>
       </View>
       <View style={styles.barra}>
@@ -87,20 +90,29 @@ export function EstadoArbolado({ stats, cargando, alcance }: { stats?: Estadisti
             accessibilityRole="link"
             accessibilityLabel={`Ver árboles en estado ${estados[estado].label}`}
             onPress={() => router.push(`/(app)/trees?estado=${estado}` as Href)}
-            style={({ pressed }) => [styles.casilla, { backgroundColor: estados[estado].background }, pressed && styles.pressed]}
+            style={({ pressed }) => [styles.casilla, compacto && styles.casillaCompacta, { backgroundColor: estados[estado].background }, pressed && styles.pressed]}
           >
-            <Text style={[styles.casillaValor, { color: estados[estado].color }]}>{cargando ? '—' : conteo[estado]}</Text>
-            <Text style={styles.casillaTexto}>{estados[estado].label}</Text>
+            <Text style={[styles.casillaValor, compacto && styles.casillaValorCompacto, { color: estados[estado].color }]}>{cargando ? '—' : conteo[estado]}</Text>
+            <Text style={styles.casillaTexto} numberOfLines={1}>{estados[estado].label}</Text>
             <Text style={[styles.casillaPct, { color: estados[estado].color }]}>{evaluados ? `${porcentaje(conteo[estado], evaluados)}%` : '—'}</Text>
           </Pressable>
         ))}
       </View>
+    </>
+  );
+}
+
+export function EstadoArbolado({ stats, cargando, alcance }: { stats?: Estadisticas; cargando: boolean; alcance: string }) {
+  return (
+    <Card title="Estado del arbolado" subtitle={`${alcance} · según la última inspección de cada árbol`} icon="tree">
+      <EstadoContenido stats={stats} cargando={cargando} />
     </Card>
   );
 }
 
-/** CO₂, O₂ y biomasa: la cifra que un colegio pone en su PRAE y una entidad en su informe. */
-export function Impacto({ stats }: { stats?: Estadisticas }) {
+/** CO₂, O₂ y biomasa: la cifra que un colegio pone en su PRAE y una entidad en su informe. En el
+ *  teléfono van en tres cuadros seguidos; en el tablero (`lista`), una debajo de la otra. */
+export function ImpactoContenido({ stats, lista = false }: { stats?: Estadisticas; lista?: boolean }) {
   const styles = useStyles();
   const { palette } = useTema();
   const ambiental = stats?.totales_ambientales;
@@ -110,22 +122,29 @@ export function Impacto({ stats }: { stats?: Estadisticas }) {
     { key: 'biomasa', label: 'Biomasa', value: ambiental?.biomasa_total_kg, icon: 'biomass', color: palette.clay, background: palette.claySoft },
   ];
   return (
-    <Card title="Impacto ambiental" subtitle="Estimado con las medidas registradas" icon="leaf">
-      <View style={styles.impacto}>
-        {items.map((item) => (
-          <View key={item.key} style={[styles.impactoItem, { backgroundColor: item.background }]}>
-            <View style={[styles.impactoIcono, { backgroundColor: item.color }]}>
-              <Icon name={item.icon} size={16} color={palette.paper} />
-            </View>
-            {item.value == null ? (
-              <Text style={styles.impactoValor}>—</Text>
-            ) : (
-              <AnimatedNumber value={item.value} format={formatMass} duration={1400} style={[styles.impactoValor, { color: item.color }]} />
-            )}
-            <Text style={styles.impactoTexto}>{item.label}</Text>
+    <View style={lista ? styles.impactoLista : styles.impacto}>
+      {items.map((item) => (
+        <View key={item.key} style={[lista ? styles.impactoFila : styles.impactoItem, { backgroundColor: item.background }]}>
+          <View style={[styles.impactoIcono, { backgroundColor: item.color }]}>
+            <Icon name={item.icon} size={16} color={palette.paper} />
           </View>
-        ))}
-      </View>
+          {lista ? <Text style={styles.impactoEtiqueta} numberOfLines={1}>{item.label}</Text> : null}
+          {item.value == null ? (
+            <Text style={styles.impactoValor}>—</Text>
+          ) : (
+            <AnimatedNumber value={item.value} format={formatMass} duration={1400} style={[styles.impactoValor, { color: item.color }]} />
+          )}
+          {lista ? null : <Text style={styles.impactoTexto}>{item.label}</Text>}
+        </View>
+      ))}
+    </View>
+  );
+}
+
+export function Impacto({ stats }: { stats?: Estadisticas }) {
+  return (
+    <Card title="Impacto ambiental" subtitle="Estimado con las medidas registradas" icon="leaf">
+      <ImpactoContenido stats={stats} />
     </Card>
   );
 }
@@ -202,25 +221,51 @@ export function MetasEnCurso({ perfil }: { perfil: MiPerfil }) {
 }
 
 type Pestana = 'especies' | 'etapas' | 'medidas' | 'instituciones';
+type ConteoInstitucion = Estadisticas['por_institucion'][number];
 
-/** Distribución: en el teléfono, una tarjeta con pestañas; en pantalla ancha, las donas en columnas. */
-export function Distribucion({ stats, isWide }: { stats?: Estadisticas; isWide: boolean }) {
-  const styles = useStyles();
-  const [pestana, setPestana] = useState<Pestana>('especies');
+/** Porciones de las donas y lista de instituciones (de mayor a menor) a partir de /estadisticas. */
+export function useDistribucion(stats?: Estadisticas) {
   const especies = topConOtras((stats?.especies_frecuentes ?? []).map((i) => ({ key: i.nombre_comun, label: i.nombre_comun, value: i.total })), stats?.total);
   const etapas: DonutSlice[] = ETAPAS.map((etapa, index) => ({ key: etapa, label: etapa, value: stats?.por_etapa[etapa] ?? 0, color: chartColors.etapas[index] }));
   const instituciones = [...(stats?.por_institucion ?? [])].sort((a, b) => b.total - a.total);
-  const maximo = instituciones[0]?.total ?? 0;
-  const varias = instituciones.length > 1;
+  return { especies, etapas, instituciones, varias: instituciones.length > 1 };
+}
 
-  const medidas = (
+/** DAP, altura y copa promedio. `enFila` las pone en tres columnas angostas (tablero). */
+export function Medidas({ stats, enFila = false }: { stats?: Estadisticas; enFila?: boolean }) {
+  const styles = useStyles();
+  if (enFila) {
+    const p = stats?.promedios;
+    const medidas = [
+      { label: 'Promedio DAP', value: p?.dap_cm != null ? `${formatNumero(p.dap_cm, 1)} cm` : '—' },
+      { label: 'Altura media', value: p?.altura_m != null ? `${formatNumero(p.altura_m, 1)} m` : '—' },
+      { label: 'Copa media', value: p?.copa_m != null ? `${formatNumero(p.copa_m, 1)} m` : '—' },
+    ];
+    return (
+      <View style={styles.medidasFila}>
+        {medidas.map((m) => (
+          <View key={m.label} style={styles.medida}>
+            <Text style={styles.medidaLabel} numberOfLines={1}>{m.label}</Text>
+            <Text style={styles.medidaValor} numberOfLines={1}>{m.value}</Text>
+          </View>
+        ))}
+      </View>
+    );
+  }
+  return (
     <View style={styles.medidas}>
       <KeyValue label="DAP promedio" value={stats?.promedios.dap_cm != null ? `${formatNumero(stats.promedios.dap_cm, 1)} cm` : '—'} />
       <KeyValue label="Altura promedio" value={stats?.promedios.altura_m != null ? `${formatNumero(stats.promedios.altura_m, 1)} m` : '—'} />
       <KeyValue label="Copa promedio" value={stats?.promedios.copa_m != null ? `${formatNumero(stats.promedios.copa_m, 1)} m` : '—'} />
     </View>
   );
-  const barras = (
+}
+
+/** Una barra por institución, proporcional a la que más árboles tiene. */
+export function BarrasInstituciones({ instituciones }: { instituciones: ConteoInstitucion[] }) {
+  const styles = useStyles();
+  const maximo = instituciones.reduce((max, inst) => Math.max(max, inst.total), 0);
+  return (
     <View style={styles.lista}>
       {instituciones.map((inst) => (
         <View key={inst.prefijo} style={styles.instFila}>
@@ -233,6 +278,15 @@ export function Distribucion({ stats, isWide }: { stats?: Estadisticas; isWide: 
       ))}
     </View>
   );
+}
+
+/** Distribución: en el teléfono, una tarjeta con pestañas; en pantalla ancha, las donas en columnas. */
+export function Distribucion({ stats, isWide }: { stats?: Estadisticas; isWide: boolean }) {
+  const styles = useStyles();
+  const [pestana, setPestana] = useState<Pestana>('especies');
+  const { especies, etapas, instituciones, varias } = useDistribucion(stats);
+  const medidas = <Medidas stats={stats} />;
+  const barras = <BarrasInstituciones instituciones={instituciones} />;
 
   if (isWide) {
     return (
@@ -292,11 +346,35 @@ function TarjetaArbol({ arbol }: { arbol: ArbolResumen }) {
   );
 }
 
-/** Últimos registros: carrusel en el teléfono y lista en pantalla ancha. */
-export function Recientes({ arboles, cargando, isWide }: { arboles?: ArbolResumen[]; cargando: boolean; isWide: boolean }) {
+/** Un árbol en lista: franja con el color del estado, miniatura, código, especie y zona. */
+export function FilaArbol({ arbol, compacta = false }: { arbol: ArbolResumen; compacta?: boolean }) {
   const styles = useStyles();
   const { palette } = useTema();
   const estados = useEstadosArbol();
+  return (
+    <Pressable
+      accessibilityRole="link"
+      accessibilityLabel={`Ver ficha de ${arbol.codigo}`}
+      onPress={() => router.push(`/(app)/trees/${arbol.id}` as Href)}
+      style={({ pressed }) => [styles.filaArbol, compacta && styles.filaArbolCompacta, pressed && styles.pressed]}
+    >
+      <View style={[styles.acento, { backgroundColor: estados[arbol.estado].color }]} />
+      {arbol.foto_url
+        ? <Image source={{ uri: arbol.foto_url }} style={[styles.miniatura, compacta && styles.miniaturaCompacta]} contentFit="cover" transition={150} />
+        : <View style={[styles.miniatura, compacta && styles.miniaturaCompacta, styles.glifo]}><Icon name="tree" size={compacta ? 18 : 20} color={palette.forest} /></View>}
+      <View style={styles.flex}>
+        <Text style={styles.metaNombre} numberOfLines={1}>{arbol.codigo}</Text>
+        <Text style={styles.detalle} numberOfLines={1}>{arbol.nombre_comun} · {arbol.zona}</Text>
+      </View>
+      <StatusBadge estado={arbol.estado} />
+      <Text style={styles.detalle}>{formatFecha(arbol.registrado_en)}</Text>
+    </Pressable>
+  );
+}
+
+/** Últimos registros: carrusel en el teléfono y lista en pantalla ancha. */
+export function Recientes({ arboles, cargando, isWide }: { arboles?: ArbolResumen[]; cargando: boolean; isWide: boolean }) {
+  const styles = useStyles();
   const lista = arboles ?? [];
   if (!cargando && lista.length === 0) return null;
   return (
@@ -306,24 +384,7 @@ export function Recientes({ arboles, cargando, isWide }: { arboles?: ArbolResume
       {isWide ? (
         <Card>
           <View style={styles.lista}>
-            {lista.map((arbol) => (
-              <Pressable
-                key={arbol.id}
-                accessibilityRole="link"
-                accessibilityLabel={`Ver ficha de ${arbol.codigo}`}
-                onPress={() => router.push(`/(app)/trees/${arbol.id}` as Href)}
-                style={({ pressed }) => [styles.filaArbol, pressed && styles.pressed]}
-              >
-                <View style={[styles.acento, { backgroundColor: estados[arbol.estado].color }]} />
-                {arbol.foto_url ? <Image source={{ uri: arbol.foto_url }} style={styles.miniatura} contentFit="cover" transition={150} /> : <View style={[styles.miniatura, styles.glifo]}><Icon name="tree" size={20} color={palette.forest} /></View>}
-                <View style={styles.flex}>
-                  <Text style={styles.metaNombre}>{arbol.codigo}</Text>
-                  <Text style={styles.detalle} numberOfLines={1}>{arbol.nombre_comun} · {arbol.zona}</Text>
-                </View>
-                <StatusBadge estado={arbol.estado} />
-                <Text style={styles.detalle}>{formatFecha(arbol.registrado_en)}</Text>
-              </Pressable>
-            ))}
+            {lista.map((arbol) => <FilaArbol key={arbol.id} arbol={arbol} />)}
           </View>
         </Card>
       ) : (
@@ -352,18 +413,24 @@ const useStyles = crearEstilos(({ palette, card }) => ({
   lista: { gap: 10 },
   totalFila: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
   total: { color: palette.ink, fontSize: 36, fontFamily: fonts.extraBold, letterSpacing: -1 },
+  totalCompacto: { fontSize: 28 },
   totalTexto: { color: palette.muted, fontSize: 14, fontFamily: fonts.semiBold },
   barra: { height: 8, flexDirection: 'row', gap: 2, overflow: 'hidden', borderRadius: 4, backgroundColor: palette.line },
   casillas: { flexDirection: 'row', gap: 8 },
   casilla: { flex: 1, gap: 2, paddingVertical: 10, paddingHorizontal: 10, borderRadius: 14 },
+  casillaCompacta: { gap: 0, paddingVertical: 8, paddingHorizontal: 9, borderRadius: 12 },
   casillaValor: { fontSize: 22, fontFamily: fonts.extraBold },
+  casillaValorCompacto: { fontSize: 19 },
   casillaTexto: { color: palette.ink, fontSize: 12, fontFamily: fonts.semiBold },
   casillaPct: { fontSize: 12, fontFamily: fonts.bold },
   impacto: { flexDirection: 'row', gap: 8 },
+  impactoLista: { gap: 6 },
+  impactoFila: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6, paddingLeft: 6, paddingRight: 12, borderRadius: 12 },
   impactoItem: { flex: 1, gap: 4, padding: 10, borderRadius: 14 },
   impactoIcono: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center', borderRadius: 9 },
   impactoValor: { color: palette.ink, fontSize: 16, fontFamily: fonts.extraBold },
   impactoTexto: { color: palette.muted, fontSize: 11, lineHeight: 15 },
+  impactoEtiqueta: { flex: 1, minWidth: 0, color: palette.ink, fontSize: 13, fontFamily: fonts.semiBold },
   accesos: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 14, ...card, borderRadius: 20, paddingVertical: 16, paddingHorizontal: 6 },
   acceso: { width: '25%', alignItems: 'center', gap: 6 },
   accesoTexto: { maxWidth: '100%', color: palette.ink, fontSize: 12, fontFamily: fonts.semiBold, textAlign: 'center' },
@@ -375,6 +442,10 @@ const useStyles = crearEstilos(({ palette, card }) => ({
   metaTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
   metaNombre: { flexShrink: 1, color: palette.ink, fontSize: 14, fontFamily: fonts.bold },
   medidas: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, paddingTop: 4 },
+  medidasFila: { flexDirection: 'row', gap: 6 },
+  medida: { flex: 1, minWidth: 0, gap: 2, paddingVertical: 7, paddingHorizontal: 9, borderRadius: 10, backgroundColor: palette.tile },
+  medidaLabel: { color: palette.muted, fontSize: 11, fontFamily: fonts.semiBold },
+  medidaValor: { color: palette.ink, fontSize: 14, fontFamily: fonts.bold },
   instFila: { gap: 4 },
   instBarra: { height: 8, borderRadius: 4, overflow: 'hidden', backgroundColor: palette.line },
   instRelleno: { height: 8, borderRadius: 4, backgroundColor: palette.forest },
@@ -387,6 +458,8 @@ const useStyles = crearEstilos(({ palette, card }) => ({
   glifo: { alignItems: 'center', justifyContent: 'center' },
   verTodo: { alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 190 },
   filaArbol: { minHeight: 60, overflow: 'hidden', flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8, paddingLeft: 14, paddingRight: 12, borderRadius: 14, backgroundColor: palette.tile },
+  filaArbolCompacta: { minHeight: 48, gap: 10, paddingVertical: 5, paddingLeft: 12, borderRadius: 12 },
   acento: { position: 'absolute', top: 0, bottom: 0, left: 0, width: 4 },
   miniatura: { width: 44, height: 44, borderRadius: 12, backgroundColor: palette.forestSoft },
+  miniaturaCompacta: { width: 36, height: 36, borderRadius: 10 },
 }));
