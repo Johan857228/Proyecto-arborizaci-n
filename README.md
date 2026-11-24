@@ -258,13 +258,19 @@ carpeta sin paréntesis.
 | Parte | Dónde | Dirección |
 |---|---|---|
 | Frontend (Expo web) | Vercel, proyecto `inventario-arboreo` | https://inventario-arboreo.vercel.app |
-| Backend (FastAPI) | Railway, proyecto `inventario-arboreo`, servicio `backend` | https://backend-production-2f7d.up.railway.app |
-| Base de datos, Auth y fotos | Supabase, proyecto `inventario-arboreo` | migraciones `backend/sql/001` → `002` → `003` → `004` ya aplicadas |
+| Backend (FastAPI) | Railway, proyecto `inventario-arboreo`, servicio `backend` | https://backend-production-5492eb14.up.railway.app |
+| Base de datos, Auth y fotos | Supabase, proyecto `inventario-arboreo` | aplicadas `001` a `004` y `016`; faltan `005` a `015` |
+
+Se volvió a publicar el 23 de noviembre de 2026 desde la rama `feature/frontend-inicio-una-pantalla`.
+Mientras falten las migraciones 005 a 015, privacidad, códigos DANE, modo sin conexión, riesgo de
+caída, servicio social, PRAE, origen de especies en el mapa, guías, siembras, tablero territorial y
+catálogo oficial fallan o funcionan a medias.
 
 Variables configuradas:
 
-- Railway (`backend`): `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_KEY` y `CORS_ORIGINS`
-  (los dominios de Vercel). El arranque y la comprobación de salud (`/salud`) están en `backend/railway.json`.
+- Railway (`backend`): `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_KEY`, `CORS_ORIGINS`
+  (los dominios de Vercel) y `URL_FRONTEND` (para el enlace de recuperar contraseña). El arranque y la
+  comprobación de salud (`/salud`) están en `backend/railway.json`.
 - Vercel: `EXPO_PUBLIC_API_URL` con la dirección del backend. Se lee al compilar, así que si cambia
   hay que volver a desplegar el frontend. La compilación y las rutas dinámicas están en `frontend/vercel.json`.
 
