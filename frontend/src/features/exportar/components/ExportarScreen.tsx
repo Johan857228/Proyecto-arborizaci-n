@@ -14,10 +14,17 @@ import { abrirDescarga } from '@/shared/utils/descarga';
 import { AppHeader, Card, EmptyState, LoadingState, Page } from '@/shared/components/UI';
 import { crearEstilos, useTema } from '@/theme';
 
-const ETIQUETA_FORMATO: Record<Formato, string> = { csv: 'CSV', geojson: 'GeoJSON', shp: 'Shapefile', zip: 'ZIP' };
+const ETIQUETA_FORMATO: Record<Formato, string> = {
+  csv: 'CSV',
+  geojson: 'GeoJSON',
+  shp: 'Shapefile',
+  zip: 'Descargar paquete (ZIP)',
+  pbit: 'Descargar para Power BI',
+};
 
-const OPCIONES: { conjunto: Conjunto; titulo: string; texto: string; icono: IconName; formatos: Formato[] }[] = [
+const OPCIONES: { clave: string; conjunto: Conjunto; titulo: string; texto: string; icono: IconName; formatos: Formato[] }[] = [
   {
+    clave: 'paquete',
     conjunto: 'todo',
     titulo: 'Paquete completo',
     texto: 'Inventario (CSV, GeoJSON y Shapefile), inspecciones, intervenciones, diccionario de datos y un LEEME. Ideal para entregar a la Secretaría, la alcaldía o Corpocesar.',
@@ -25,6 +32,15 @@ const OPCIONES: { conjunto: Conjunto; titulo: string; texto: string; icono: Icon
     formatos: ['zip'],
   },
   {
+    clave: 'power-bi',
+    conjunto: 'todo',
+    titulo: 'Power BI',
+    texto: 'Plantilla (.pbit) con los datos adentro y un informe ya armado: resumen, riesgo, inspecciones, intervenciones, medidas y carbono. Ábrela con doble clic en Power BI Desktop; no pide conexión ni contraseñas.',
+    icono: 'chart',
+    formatos: ['pbit'],
+  },
+  {
+    clave: 'arboles',
     conjunto: 'arboles',
     titulo: 'Inventario de árboles',
     texto: 'Un árbol por fila con especie, medidas, ubicación y estado actual. GeoJSON y Shapefile se abren en QGIS o ArcGIS.',
@@ -32,6 +48,7 @@ const OPCIONES: { conjunto: Conjunto; titulo: string; texto: string; icono: Icon
     formatos: ['csv', 'geojson', 'shp'],
   },
   {
+    clave: 'inspecciones',
     conjunto: 'inspecciones',
     titulo: 'Inspecciones',
     texto: 'Cada visita con medidas, hallazgos, agentes bióticos y revisión docente.',
@@ -39,6 +56,7 @@ const OPCIONES: { conjunto: Conjunto; titulo: string; texto: string; icono: Icon
     formatos: ['csv'],
   },
   {
+    clave: 'intervenciones',
     conjunto: 'intervenciones',
     titulo: 'Intervenciones',
     texto: 'Mantenimiento programado, ejecutado o cancelado, con fechas, costos y resultado.',
@@ -141,13 +159,13 @@ export function ExportarScreen() {
 
       <View style={styles.opciones}>
         {OPCIONES.map((opcion) => (
-          <Card key={opcion.conjunto} title={opcion.titulo} icon={opcion.icono}>
+          <Card key={opcion.clave} title={opcion.titulo} icon={opcion.icono}>
             <Text style={styles.texto}>{opcion.texto}</Text>
             <View style={styles.botones}>
               {opcion.formatos.map((formato) => (
                 <PrimaryButton
                   key={formato}
-                  title={opcion.conjunto === 'todo' ? 'Descargar paquete (ZIP)' : ETIQUETA_FORMATO[formato]}
+                  title={ETIQUETA_FORMATO[formato]}
                   icon="download"
                   compact
                   variant={opcion.conjunto === 'todo' ? 'primary' : 'secondary'}
@@ -167,6 +185,9 @@ export function ExportarScreen() {
         </Text>
         <Text style={styles.texto}>
           No incluye datos personales: ni nombres de estudiantes ni de responsables, ni notas de texto libre (Ley 1581 de 2012). Cada fila se identifica con el código del árbol.
+        </Text>
+        <Text style={styles.texto}>
+          La plantilla de Power BI trae los datos del momento en que se descarga, con los mismos cálculos de Reportes. Solo dice de qué curso era quien hizo cada inspección, sin nombres. Para guardarla, en Power BI usa Archivo, Guardar como.
         </Text>
         <Pressable accessibilityRole="button" onPress={() => setVerDiccionario((v) => !v)} style={styles.enlace}>
           <Text style={styles.enlaceTexto}>{verDiccionario ? 'Ocultar el diccionario de datos' : 'Ver el diccionario de datos'}</Text>
