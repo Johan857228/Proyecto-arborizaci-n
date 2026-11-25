@@ -2,16 +2,12 @@ import { router, useLocalSearchParams, type Href } from 'expo-router';
 import { useState } from 'react';
 import { Text, View } from 'react-native';
 
-import { useExportar } from '@/features/exportar/api';
+import { DescargarInforme } from '@/features/exportar/components/DescargarInforme';
 import { useTiposIntervencion } from '@/features/interventions/hooks/useIntervenciones';
 import { InstitucionSelector, useInstitucionElegida } from '@/features/perfil/components/InstitucionSelector';
-import { useMiPerfil } from '@/features/perfil/hooks/usePerfil';
-import { esRevisor } from '@/features/perfil/schemas';
 import { useReporte, type Reporte } from '@/features/reports/api';
-import { getApiErrorMessage } from '@/services/api/client';
 import { formatFecha, formatMes, formatNumero, formatPesos, formatPorcentaje } from '@/shared/format';
 import { fechaIso } from '@/shared/validacion';
-import { abrirDescarga } from '@/shared/utils/descarga';
 import { Field, InlineMessage, PrimaryButton } from '@/shared/components/FormControls';
 import {
   AppHeader,
@@ -70,7 +66,7 @@ export function ReportsScreen() {
         subtitle="Inventario y riesgo se calculan como estaban al cierre del periodo, usando el historial de inspecciones."
       />
       <InstitucionSelector value={institucion.institucionId} onChange={institucion.setInstitucionId} />
-      <DescargaPowerBI institucionId={institucion.institucionId} />
+      <DescargarInforme institucionId={institucion.institucionId} />
       <Row>
         <Cell basis={140}><Field label="Desde" value={desde} onChangeText={setDesde} placeholder="AAAA-MM-DD (1 ene)" autoCapitalize="none" /></Cell>
         <Cell basis={140}><Field label="Hasta" value={hasta} onChangeText={setHasta} placeholder="AAAA-MM-DD (hoy)" autoCapitalize="none" /></Cell>
@@ -103,38 +99,6 @@ export function ReportsScreen() {
         </>
       )}
     </Page>
-  );
-}
-
-/** Plantilla de Power BI con todo el historial: el periodo se elige dentro de Power BI. */
-function DescargaPowerBI({ institucionId }: { institucionId?: string }) {
-  const styles = useStyles();
-  const perfil = useMiPerfil();
-  const exportar = useExportar();
-  if (!esRevisor(perfil.data)) return null;
-
-  async function descargar() {
-    try {
-      const resultado = await exportar.mutateAsync({ conjunto: 'todo', formato: 'pbit', institucionId });
-      await abrirDescarga(resultado.url);
-    } catch {
-      // El error se muestra con exportar.error.
-    }
-  }
-
-  return (
-    <Card title="Analizar en Power BI" icon="chart">
-      <Text style={styles.texto}>
-        Plantilla con todos los datos{institucionId ? ' de la institución' : ''} y un informe ya armado con estas mismas cifras. Se abre con doble clic en Power BI Desktop, sin conexión ni contraseñas, y el periodo se elige allá.
-      </Text>
-      {exportar.error ? <InlineMessage>{getApiErrorMessage(exportar.error)}</InlineMessage> : null}
-      {exportar.data && !exportar.isPending ? (
-        <InlineMessage tone="success">Listo: {exportar.data.nombre}. Si la descarga no empezó, toca el botón otra vez.</InlineMessage>
-      ) : null}
-      <View style={styles.filaBoton}>
-        <PrimaryButton title="Descargar para Power BI" icon="download" compact loading={exportar.isPending} onPress={() => void descargar()} />
-      </View>
-    </Card>
   );
 }
 
@@ -290,7 +254,6 @@ function Intervenciones({ r }: { r: Reporte }) {
 
 const useStyles = crearEstilos(({ palette }) => ({
   texto: { color: palette.muted, fontSize: 13, lineHeight: 19 },
-  filaBoton: { flexDirection: 'row' },
   barras: { gap: 8 },
   barra: { gap: 4 },
   barraHeader: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },

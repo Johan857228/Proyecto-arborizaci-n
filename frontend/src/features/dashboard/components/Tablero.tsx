@@ -14,18 +14,18 @@ import {
 } from '@/features/dashboard/components/Panorama';
 import { ParaHoy, tieneParaHoy } from '@/features/dashboard/components/ParaHoy';
 import type { ArbolResumen, Estadisticas } from '@/features/dashboard/types';
-import { modulosPara } from '@/features/modules/modulos';
-import { useCuentasSinInstitucion } from '@/features/perfil/hooks/usePerfil';
-import { esAdmin, type MiPerfil } from '@/features/perfil/schemas';
+import { DescargarInforme } from '@/features/exportar/components/DescargarInforme';
+import { ANCHO_RIEL } from '@/features/modules/components/RielModulos';
+import type { MiPerfil } from '@/features/perfil/schemas';
 import { DonutChart } from '@/shared/components/DonutChart';
 import { Icon, type IconName } from '@/shared/components/Icon';
 import { FadeIn } from '@/shared/components/Motion';
 import { IconChip } from '@/shared/components/UI';
-import { gradient } from '@/shared/styles/gradient';
 import { crearEstilos, useTema } from '@/theme';
 
-/** Desde este ancho el inicio se arma como tablero de una sola pantalla, sin desplazamiento. */
-export const ANCHO_TABLERO = 1100;
+/** Desde este ancho el inicio se arma como tablero de una sola pantalla, sin desplazamiento. Es el
+ *  mismo ancho desde el que la app muestra el riel de módulos a la izquierda. */
+export const ANCHO_TABLERO = ANCHO_RIEL;
 /** Ancho máximo del tablero; en monitores más anchos queda centrado. */
 export const ANCHO_MAXIMO_TABLERO = 1680;
 /** Por debajo de este alto los paneles ya no caben: la página se desplaza en vez de aplastarlos. */
@@ -34,9 +34,6 @@ const ALTO_MINIMO = 600;
 export const MARGEN_TABLERO = 14;
 /** Máximo de instituciones con barra; el resto queda en Reportes. */
 const MAX_INSTITUCIONES = 4;
-
-/** Orden del riel: primero lo que más se usa en el colegio y después lo de gestión. */
-const ORDEN_RIEL = ['mapa', 'alertas', 'laboratorio', 'privacidad', 'siembras', 'servicio', 'reportes', 'especies', 'intervenciones', 'guias', 'cursos', 'prae'];
 
 function Enlace({ texto, href }: { texto: string; href: Href }) {
   const styles = useStyles();
@@ -69,72 +66,9 @@ function Panel({ titulo, icono, accion, style, children }: PropsWithChildren<{
   );
 }
 
-/** Columna angosta con los módulos (ícono y nombre corto). Si no caben todos, la columna se
- *  desplaza sola y un desvanecido abajo avisa que hay más; "Todos" abre la pantalla de Módulos. */
-function RielAccesos({ perfil }: { perfil?: MiPerfil }) {
-  const styles = useStyles();
-  const { palette } = useTema();
-  const cuentas = useCuentasSinInstitucion(esAdmin(perfil));
-  const [altoVisible, setAltoVisible] = useState(0);
-  const [altoContenido, setAltoContenido] = useState(0);
-  const [desplazado, setDesplazado] = useState(0);
-  const quedanMas = altoContenido - altoVisible - desplazado > 4;
-  const modulos = modulosPara(perfil)
-    .filter((m) => m.clave !== 'revision' && m.clave !== 'progreso')
-    .map((modulo, indice) => {
-      const posicion = ORDEN_RIEL.indexOf(modulo.clave);
-      return { modulo, orden: posicion >= 0 ? posicion : ORDEN_RIEL.length + indice };
-    })
-    .sort((a, b) => a.orden - b.orden)
-    .map(({ modulo }) => modulo);
-  return (
-    <View style={styles.riel}>
-      <Text style={styles.rielTitulo}>Accesos rápidos</Text>
-      <View style={styles.flex}>
-        <ScrollView
-          style={styles.flex}
-          contentContainerStyle={styles.rielLista}
-          showsVerticalScrollIndicator={false}
-          scrollEventThrottle={32}
-          onLayout={(evento) => setAltoVisible(evento.nativeEvent.layout.height)}
-          onContentSizeChange={(_, alto) => setAltoContenido(alto)}
-          onScroll={(evento) => setDesplazado(evento.nativeEvent.contentOffset.y)}
-        >
-          {modulos.map((modulo) => (
-            <Pressable
-              key={modulo.clave}
-              accessibilityRole="link"
-              accessibilityLabel={modulo.titulo}
-              onPress={() => router.push(modulo.href)}
-              style={({ pressed }) => [styles.rielItem, pressed && styles.pressed]}
-            >
-              <View>
-                <IconChip icon={modulo.icono} size={28} />
-                {modulo.clave === 'usuarios' && cuentas > 0 ? (
-                  <View style={styles.insignia}><Text style={styles.insigniaTexto}>{cuentas}</Text></View>
-                ) : null}
-              </View>
-              <Text style={styles.rielTexto} numberOfLines={1}>{modulo.corto}</Text>
-            </Pressable>
-          ))}
-        </ScrollView>
-        {quedanMas ? <View style={[styles.rielDesvanecido, gradient(`linear-gradient(180deg, ${palette.paper}00 0%, ${palette.paper} 85%)`)]} /> : null}
-      </View>
-      <Pressable
-        accessibilityRole="link"
-        accessibilityLabel="Ver todos los módulos"
-        onPress={() => router.push('/(app)/modules' as Href)}
-        style={({ pressed }) => [styles.rielTodos, pressed && styles.pressed]}
-      >
-        <Icon name="modules" size={16} color={palette.forest} />
-        <Text style={styles.enlaceTexto}>Todos</Text>
-      </Pressable>
-    </View>
-  );
-}
-
-/** Inicio en escritorio: accesos a la izquierda, portada y resumen en el centro, distribución a
- *  la derecha. Todo cabe en la ventana; lo que no alcanza se desplaza dentro de su propio panel. */
+/** Inicio en escritorio: portada y resumen en el centro, distribución a la derecha (los módulos van
+ *  en el riel de la izquierda, que pone el marco de la app). Todo cabe en la ventana; lo que no
+ *  alcanza se desplaza dentro de su propio panel. */
 export function TableroInicio({ perfil, stats, cargandoStats, arboles, cargandoArboles, portada, avisos, pie }: {
   perfil?: MiPerfil;
   stats?: Estadisticas;
@@ -158,10 +92,6 @@ export function TableroInicio({ perfil, stats, cargandoStats, arboles, cargandoA
 
   const tablero = (
     <View style={[styles.tablero, cabe ? styles.llenar : { height: ALTO_MINIMO }]}>
-      <FadeIn index={0} style={styles.columnaRiel}>
-        <RielAccesos perfil={perfil} />
-      </FadeIn>
-
       <View style={styles.centro}>
         {portada}
         {avisos.length ? (
@@ -175,6 +105,7 @@ export function TableroInicio({ perfil, stats, cargandoStats, arboles, cargandoA
             <ScrollView style={styles.flex} contentContainerStyle={styles.paraHoy} showsVerticalScrollIndicator={false}>
               <ParaHoy perfil={perfil} sinTitulo />
               <MetasEnCurso perfil={perfil} />
+              <DescargarInforme institucionId={perfil.institucion_id ?? undefined} compacto />
             </ScrollView>
           ) : null}
           <Panel titulo="Últimos registros" icono="list" accion={{ texto: 'Ver inventario', href: '/(app)/trees' as Href }} style={styles.flex}>
@@ -240,11 +171,11 @@ const useStyles = crearEstilos(({ palette, card }) => ({
     alignSelf: 'center',
     flexDirection: 'row',
     gap: 14,
-    paddingHorizontal: 16,
+    paddingLeft: 14,
+    paddingRight: 16,
     paddingTop: 14,
     paddingBottom: MARGEN_TABLERO,
   },
-  columnaRiel: { width: 84 },
   centro: { flex: 1, minWidth: 0, gap: 12 },
   derecha: { width: 330, gap: 12 },
   fila: { flexDirection: 'row', gap: 12 },
@@ -253,16 +184,6 @@ const useStyles = crearEstilos(({ palette, card }) => ({
   paraHoy: { gap: 12 },
   lista: { gap: 6 },
   detalle: { color: palette.muted, fontSize: 12, lineHeight: 17 },
-
-  riel: { flex: 1, gap: 4, paddingTop: 10, paddingBottom: 8, paddingHorizontal: 4, ...card, borderRadius: 18 },
-  rielTitulo: { color: palette.muted, fontSize: 9.5, lineHeight: 12, fontFamily: fonts.bold, letterSpacing: 0.6, textAlign: 'center', textTransform: 'uppercase' },
-  rielLista: { flexGrow: 1, justifyContent: 'space-between' },
-  rielItem: { alignItems: 'center', gap: 2, paddingVertical: 2, borderRadius: 12 },
-  rielTexto: { maxWidth: '100%', color: palette.ink, fontSize: 10.5, lineHeight: 13, fontFamily: fonts.semiBold, textAlign: 'center' },
-  rielDesvanecido: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 36, pointerEvents: 'none' },
-  rielTodos: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingTop: 7, borderTopWidth: 1, borderTopColor: palette.line },
-  insignia: { position: 'absolute', top: -5, right: -8, minWidth: 17, height: 17, paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center', borderRadius: 9, backgroundColor: palette.amber },
-  insigniaTexto: { color: palette.paper, fontSize: 10, fontFamily: fonts.extraBold },
 
   panel: { overflow: 'hidden', gap: 10, padding: 14, ...card, borderRadius: 18 },
   panelGrafico: { minHeight: 0 },

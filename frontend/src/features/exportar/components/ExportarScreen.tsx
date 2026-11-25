@@ -20,9 +20,19 @@ const ETIQUETA_FORMATO: Record<Formato, string> = {
   shp: 'Shapefile',
   zip: 'Descargar paquete (ZIP)',
   pbit: 'Descargar para Power BI',
+  pdf: 'Informe en PDF',
+  xlsx: 'Informe en Excel',
 };
 
 const OPCIONES: { clave: string; conjunto: Conjunto; titulo: string; texto: string; icono: IconName; formatos: Formato[] }[] = [
+  {
+    clave: 'informe',
+    conjunto: 'todo',
+    titulo: 'Informe del arbolado',
+    texto: 'Listo para imprimir o enviar: indicadores, estado, especies, zonas, carbono, inspecciones, intervenciones, árboles prioritarios e inventario completo. El Excel trae además gráficos y una hoja con filtros por cada tabla.',
+    icono: 'chart',
+    formatos: ['pdf', 'xlsx'],
+  },
   {
     clave: 'paquete',
     conjunto: 'todo',
@@ -131,12 +141,6 @@ export function ExportarScreen() {
       />
       {admin ? <InstitucionSelector value={institucion.institucionId} onChange={institucion.setInstitucionId} /> : null}
 
-      {sede && !sede.codigo_dane ? (
-        <InlineMessage tone="warning">
-          {sede.nombre_corto} aún no tiene código DANE. Sin él, la Secretaría no puede cruzar estos datos con el SIMAT.
-          {admin ? ' Agrégalo en Configuración → Sedes.' : ' Pídele al administrador que lo agregue.'}
-        </InlineMessage>
-      ) : null}
       {sede?.codigo_dane ? (
         <View style={styles.dane}>
           <Icon name="building" size={16} color={palette.forest} />
@@ -152,9 +156,6 @@ export function ExportarScreen() {
       ) : null}
       {ultima && !exportar.isPending ? (
         <PrimaryButton title="Descargar de nuevo" icon="download" variant="secondary" onPress={() => void abrirDescarga(ultima.url)} />
-      ) : null}
-      {ultima && ultima.sin_codigo_dane.length > 0 ? (
-        <InlineMessage tone="warning">Sedes incluidas sin código DANE: {ultima.sin_codigo_dane.join(', ')}.</InlineMessage>
       ) : null}
 
       <View style={styles.opciones}>
@@ -181,7 +182,7 @@ export function ExportarScreen() {
 
       <Card title="Qué incluye" icon="info">
         <Text style={styles.texto}>
-          Coordenadas en WGS84 (EPSG:4326), CSV separado por comas en UTF-8 (se abre en Excel) y cada sede con su código DANE y DIVIPOLA.
+          Coordenadas en WGS84 (EPSG:4326) y CSV separado por comas en UTF-8 (se abre en Excel). El código DANE de la sede es opcional: si la sede lo tiene, va en los archivos para que la Secretaría los cruce con el SIMAT; si no, la descarga sale igual.
         </Text>
         <Text style={styles.texto}>
           No incluye datos personales: ni nombres de estudiantes ni de responsables, ni notas de texto libre (Ley 1581 de 2012). Cada fila se identifica con el código del árbol.
@@ -196,7 +197,7 @@ export function ExportarScreen() {
         {verDiccionario ? <Diccionario /> : null}
         {admin ? (
           <Pressable accessibilityRole="link" onPress={() => router.push('/(app)/settings?vista=sedes' as Href)} style={styles.enlace}>
-            <Text style={styles.enlaceTexto}>Editar los códigos DANE de las sedes</Text>
+            <Text style={styles.enlaceTexto}>Agregar el código DANE de las sedes (opcional)</Text>
             <Icon name="chevronRight" size={16} color={palette.forest} />
           </Pressable>
         ) : null}

@@ -9,6 +9,7 @@ import { AccesosRapidos, Distribucion, EstadoArbolado, Impacto, MetasEnCurso, Re
 import { ParaHoy, usePendientesDeHoy } from '@/features/dashboard/components/ParaHoy';
 import { ANCHO_MAXIMO_TABLERO, ANCHO_TABLERO, MARGEN_TABLERO, TableroInicio } from '@/features/dashboard/components/Tablero';
 import { useDashboard } from '@/features/dashboard/hooks/useDashboard';
+import { DescargarInforme } from '@/features/exportar/components/DescargarInforme';
 import { claveDeCache } from '@/features/perfil/components/Avatar';
 import { useImagenPropia } from '@/features/perfil/hooks/useImagenPropia';
 import { AvisoPrivacidad, useTextoAvisoPrivacidad } from '@/features/privacidad/components/AvisoPrivacidad';
@@ -250,6 +251,7 @@ export function DashboardScreen() {
 
         <FadeIn index={4}><AccesosRapidos perfil={p} /></FadeIn>
         {p ? <FadeIn index={5}><MetasEnCurso perfil={p} /></FadeIn> : null}
+        {p ? <FadeIn index={5}><DescargarInforme institucionId={institucionId} compacto /></FadeIn> : null}
         <FadeIn index={6}><Distribucion stats={stats.data} isWide={isWide} /></FadeIn>
         <FadeIn index={7}><Recientes arboles={recentTrees.data} cargando={recentTrees.isLoading} isWide={isWide} /></FadeIn>
         {recentTrees.error ? <InlineMessage>{getApiErrorMessage(recentTrees.error)}</InlineMessage> : null}

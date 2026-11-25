@@ -5,7 +5,8 @@ import { enviarValidado, getValidado } from '@/services/api/client';
 
 export const CONJUNTOS = ['arboles', 'inspecciones', 'intervenciones', 'todo'] as const;
 export type Conjunto = (typeof CONJUNTOS)[number];
-export type Formato = 'csv' | 'geojson' | 'shp' | 'zip' | 'pbit';
+export const FORMATOS = ['csv', 'geojson', 'shp', 'zip', 'pbit', 'pdf', 'xlsx'] as const;
+export type Formato = (typeof FORMATOS)[number];
 
 export const institucionSchema = z.object({
   id: z.string().min(1),
@@ -22,7 +23,7 @@ export const exportacionSchema = z.object({
   url: z.string().min(1),
   nombre: z.string().min(1),
   conjunto: z.enum(CONJUNTOS),
-  formato: z.enum(['csv', 'geojson', 'shp', 'zip', 'pbit']),
+  formato: z.enum(FORMATOS),
   filas: z.number().int(),
   generado_en: z.string(),
   vence_en_segundos: z.number().int(),

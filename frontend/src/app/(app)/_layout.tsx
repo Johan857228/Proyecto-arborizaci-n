@@ -1,9 +1,10 @@
 import { isAxiosError } from 'axios';
 import { Stack } from 'expo-router';
 import { useEffect } from 'react';
-import { View } from 'react-native';
+import { useWindowDimensions, View } from 'react-native';
 
 import { useAuthStore } from '@/features/auth/store';
+import { ANCHO_RIEL, COLUMNA_RIEL, RielModulos } from '@/features/modules/components/RielModulos';
 import { useMiPerfil } from '@/features/perfil/hooks/usePerfil';
 import { useContactos } from '@/features/riesgo/api';
 import { SaviaFab } from '@/features/savia/components/SaviaFab';
@@ -15,6 +16,9 @@ import { crearEstilos } from '@/theme';
 export default function AppLayout() {
   const styles = useStyles();
   const isWide = useIsWide();
+  const { width } = useWindowDimensions();
+  // En escritorio los módulos quedan a la izquierda en todas las pantallas, no solo en el inicio.
+  const conRiel = width >= ANCHO_RIEL;
   const perfil = useMiPerfil();
   const signOut = useAuthStore((state) => state.signOut);
   // Los contactos de emergencia de la sede quedan en la copia del teléfono: la ruta de emergencia
@@ -36,17 +40,26 @@ export default function AppLayout() {
       <AppBackground />
       <AppHeader />
       <View style={styles.content}>
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            contentStyle: { backgroundColor: 'transparent' },
-            animation: 'fade',
-          }}
-        >
-          <Stack.Screen name="index" />
-          <Stack.Screen name="trees/index" />
-          <Stack.Screen name="trees/new" />
-        </Stack>
+        <View style={styles.fila}>
+          {conRiel ? (
+            <View style={styles.columnaRiel}>
+              <RielModulos perfil={perfil.data} />
+            </View>
+          ) : null}
+          <View style={styles.pantalla}>
+            <Stack
+              screenOptions={{
+                headerShown: false,
+                contentStyle: { backgroundColor: 'transparent' },
+                animation: 'fade',
+              }}
+            >
+              <Stack.Screen name="index" />
+              <Stack.Screen name="trees/index" />
+              <Stack.Screen name="trees/new" />
+            </Stack>
+          </View>
+        </View>
         {/* Savia, la IA de la app: siempre a mano en la esquina inferior derecha. */}
         <SaviaFab />
       </View>
@@ -58,4 +71,7 @@ export default function AppLayout() {
 const useStyles = crearEstilos(({ palette }) => ({
   root: { flex: 1, backgroundColor: palette.sage },
   content: { flex: 1 },
+  fila: { flex: 1, flexDirection: 'row' },
+  columnaRiel: { width: COLUMNA_RIEL + 16, paddingLeft: 16, paddingTop: 14, paddingBottom: 14 },
+  pantalla: { flex: 1, minWidth: 0 },
 }));
