@@ -271,6 +271,12 @@ Variables configuradas:
 - Railway (`backend`): `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_KEY`, `CORS_ORIGINS`
   (los dominios de Vercel) y `URL_FRONTEND` (para el enlace de recuperar contraseña). El arranque y la
   comprobación de salud (`/salud`) están en `backend/railway.json`.
+- `CONFIRMAR_CORREO` (opcional, apagada): sin ella, las cuentas que se registran en la app quedan
+  confirmadas y entran de una vez, y las que se registraron cuando se pedía confirmar se confirman
+  al iniciar sesión con su contraseña. Con `CONFIRMAR_CORREO=1` Supabase envía el correo de
+  confirmación; solo conviene encenderla cuando el proyecto de Supabase tenga SMTP propio y la
+  dirección de la app en Authentication > URL Configuration, porque el SMTP de prueba solo le
+  escribe al equipo del proyecto y el enlace abre el Site URL (hoy `http://localhost:3000`).
 - Vercel: `EXPO_PUBLIC_API_URL` con la dirección del backend. Se lee al compilar, así que si cambia
   hay que volver a desplegar el frontend. La compilación y las rutas dinámicas están en `frontend/vercel.json`.
 
