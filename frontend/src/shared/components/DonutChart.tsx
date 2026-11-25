@@ -30,6 +30,8 @@ export function DonutChart({
   thickness = 22,
   delay = 300,
   compacto = false,
+  seleccion,
+  onSelect,
 }: {
   slices: DonutSlice[];
   centerLabel: string;
@@ -38,6 +40,10 @@ export function DonutChart({
   delay?: number;
   /** Para paneles bajos: la leyenda siempre al lado de la dona y con filas más bajas. */
   compacto?: boolean;
+  /** Porción elegida desde afuera (p. ej. un filtro del tablero de Análisis). */
+  seleccion?: string;
+  /** Si se pasa, tocar una porción o su fila la elige (o la suelta) en vez de solo resaltarla. */
+  onSelect?: (key: string) => void;
 }) {
   const styles = useStyles();
   const { palette } = useTema();
@@ -48,7 +54,7 @@ export function DonutChart({
   const radius = (size - thickness) / 2 - 4;
   const circumference = 2 * Math.PI * radius;
   const gap = visibles.length > 1 ? 2 : 0;
-  const active = visibles.find((slice) => slice.key === activeKey);
+  const active = visibles.find((slice) => slice.key === (activeKey ?? seleccion));
 
   // Cada porción empieza donde termina la anterior; el progreso hace el barrido inicial.
   const arcs = visibles.reduce<{ slice: DonutSlice; length: number; offset: number }[]>((acc, slice) => {
@@ -57,7 +63,14 @@ export function DonutChart({
     return [...acc, { slice, length: (slice.value / total) * circumference * progress, offset }];
   }, []);
 
-  const toggle = (key: string) => setActiveKey((current) => (current === key ? undefined : key));
+  const toggle = (key: string) => {
+    if (onSelect) {
+      setActiveKey(undefined);
+      onSelect(key);
+      return;
+    }
+    setActiveKey((current) => (current === key ? undefined : key));
+  };
   // En web, react-native-svg pasa las props del responder táctil al DOM y React las rechaza;
   // por eso ahí se usan eventos de mouse (que además dan el resaltado al pasar el cursor).
   const sliceEvents = (key: string) => (Platform.OS === 'web'
