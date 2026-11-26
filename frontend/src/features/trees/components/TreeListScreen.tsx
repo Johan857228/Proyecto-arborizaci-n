@@ -64,6 +64,28 @@ function Detail({ icon, label, value }: { icon: IconName; label: string; value: 
   );
 }
 
+/** Ancho al que una tarjeta se lee cómoda: nombre, zona y las tres medidas. */
+const ANCHO_TARJETA = 268;
+const SEPARACION = 14;
+
+/**
+ * Cuántas tarjetas caben en [ancho], el espacio que la lista ocupa de verdad.
+ *
+ * Se mide la fila en pantalla en vez de mirar el ancho de la ventana: así vale
+ * igual con el carril de accesos rápidos, con otro margen o cuando se baja el
+ * zoom del navegador, que es cuando más sitio sobra. En una pantalla normal
+ * salen cuatro —doce de un vistazo sin bajar—, y al alejar el zoom se van
+ * repartiendo solas en vez de dejar franjas vacías a los lados.
+ */
+function columnasPara(ancho: number) {
+  if (ancho <= 0) return 1;
+  const caben = Math.floor((ancho + SEPARACION) / (ANCHO_TARJETA + SEPARACION));
+  // Un tope alto, pero tope: pasadas diez por fila la foto queda tan pequeña
+  // que ya no se distingue un árbol de otro.
+  return Math.max(1, Math.min(10, caben));
+}
+
+
 function TreeCard({ tree }: { tree: ArbolResumen }) {
   const styles = useStyles();
   const { palette, gradients } = useTema();
@@ -90,7 +112,7 @@ function TreeCard({ tree }: { tree: ArbolResumen }) {
             <Text style={styles.coverEmptyText}>Sin foto todavía</Text>
           </View>
         )}
-        <View style={[styles.coverVeil, gradient('linear-gradient(180deg, rgba(8, 24, 15, 0.25) 0%, rgba(8, 24, 15, 0) 35%, rgba(8, 24, 15, 0.8) 100%)')]} />
+        <View style={[styles.coverVeil, gradient('linear-gradient(180deg, rgba(8, 24, 15, 0.3) 0%, rgba(8, 24, 15, 0) 28%, rgba(8, 24, 15, 0) 48%, rgba(8, 24, 15, 0.78) 100%)')]} />
         <View style={styles.coverTop}>
           <View style={styles.codeChip}>
             <Text style={styles.code}>{tree.codigo}</Text>
@@ -104,7 +126,6 @@ function TreeCard({ tree }: { tree: ArbolResumen }) {
       </View>
       <View style={styles.cardBody}>
       <View style={styles.details}>
-        <Detail icon="building" label="Institución" value={tree.nombre_corto} />
         <Detail icon="location" label="Zona" value={`${tree.zona}${tree.zona_otra ? ` · ${tree.zona_otra}` : ''}`} />
       </View>
       <View style={styles.measures}>
@@ -138,6 +159,8 @@ export default function TreeListScreen() {
   const styles = useStyles();
   const { palette } = useTema();
   const isWide = useIsWide();
+  const [anchoLista, setAnchoLista] = useState(0);
+  const columnas = columnasPara(anchoLista);
   const espacio = useEspaciado();
   const catalogs = useCatalogs();
   const perfil = useMiPerfil();
@@ -439,17 +462,19 @@ export default function TreeListScreen() {
             )}
           </View>
         ) : (
-          <Grid
-            items={trees}
-            columns={isWide ? 2 : 1}
-            gap={16}
-            keyOf={(tree) => tree.id}
-            renderItem={(tree) => (
-              <FadeIn index={2 + trees.indexOf(tree)}>
-                <TreeCard tree={tree} />
-              </FadeIn>
-            )}
-          />
+          <View onLayout={(e) => setAnchoLista(e.nativeEvent.layout.width)}>
+            <Grid
+              items={trees}
+              columns={columnas}
+              gap={SEPARACION}
+              keyOf={(tree) => tree.id}
+              renderItem={(tree) => (
+                <FadeIn index={2 + trees.indexOf(tree)}>
+                  <TreeCard tree={tree} />
+                </FadeIn>
+              )}
+            />
+          </View>
         )}
 
         {inventory.hasNextPage ? (
@@ -467,7 +492,7 @@ export default function TreeListScreen() {
 }
 
 const useStyles = crearEstilos(({ palette, card }) => ({
-  content: { width: '100%', maxWidth: layout.maxWidth, alignSelf: 'center', padding: 20, paddingTop: 20, paddingBottom: ESPACIO_FINAL, gap: 18 },
+  content: { width: '100%', maxWidth: layout.maxAppWidth, alignSelf: 'center', padding: 20, paddingTop: 20, paddingBottom: ESPACIO_FINAL, gap: 18 },
   // Con espacio, el botón queda a la derecha del título; en teléfonos baja y ocupa todo el ancho.
   header: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-end', gap: 16 },
   heading: { flexGrow: 3, flexShrink: 1, flexBasis: 360, gap: 6 },
@@ -499,26 +524,26 @@ const useStyles = crearEstilos(({ palette, card }) => ({
   messageTitle: { color: palette.ink, fontSize: 17, fontFamily: fonts.extraBold, textAlign: 'center' },
   messageText: { maxWidth: 360, color: palette.muted, fontSize: 14, lineHeight: 20, textAlign: 'center' },
   treeCard: { overflow: 'hidden', ...card },
-  cover: { height: 190, backgroundColor: palette.forestSoft },
+  cover: { height: 150, backgroundColor: palette.forestSoft },
   coverEmpty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 6 },
   coverEmptyText: { color: palette.forestDark, fontSize: 12, fontFamily: fonts.semiBold },
   coverVeil: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 },
-  coverTop: { position: 'absolute', top: 12, left: 12, right: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  coverBottom: { position: 'absolute', left: 16, right: 16, bottom: 12 },
-  cardBody: { gap: 12, padding: 14 },
-  treeName: { color: palette.white, fontSize: 19, fontFamily: fonts.extraBold, letterSpacing: -0.2 },
-  scientificName: { marginTop: 2, color: '#DCE9DF', fontSize: 13, fontStyle: 'italic' },
+  coverTop: { position: 'absolute', top: 10, left: 10, right: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 },
+  coverBottom: { position: 'absolute', left: 12, right: 12, bottom: 10 },
+  cardBody: { gap: 8, padding: 12 },
+  treeName: { color: palette.white, fontSize: 16, fontFamily: fonts.extraBold, letterSpacing: -0.2 },
+  scientificName: { marginTop: 1, color: '#DCE9DF', fontSize: 11, fontStyle: 'italic' },
   codeChip: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, backgroundColor: 'rgba(255, 255, 255, 0.92)' },
   code: { color: palette.forestDark, fontSize: 12, fontFamily: fonts.extraBold, letterSpacing: 0.6 },
   details: { flexDirection: 'row', gap: 12 },
   detail: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 8 },
   detailText: { flex: 1, minWidth: 0 },
   detailLabel: { color: palette.muted, fontSize: 11 },
-  detailValue: { marginTop: 1, color: palette.ink, fontSize: 14, fontFamily: fonts.semiBold },
-  measures: { flexDirection: 'row', gap: 8 },
-  measure: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 12, backgroundColor: palette.tile },
-  measureValue: { color: palette.ink, fontSize: 15, fontFamily: fonts.extraBold },
-  measureLabel: { marginTop: 2, color: palette.muted, fontSize: 11 },
+  detailValue: { marginTop: 1, color: palette.ink, fontSize: 13, fontFamily: fonts.semiBold },
+  measures: { flexDirection: 'row', gap: 6 },
+  measure: { flex: 1, paddingVertical: 7, alignItems: 'center', borderRadius: 10, backgroundColor: palette.tile },
+  measureValue: { color: palette.ink, fontSize: 13, fontFamily: fonts.extraBold },
+  measureLabel: { marginTop: 1, color: palette.muted, fontSize: 10 },
   inspection: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
-  inspectionText: { color: palette.muted, fontSize: 12 },
+  inspectionText: { color: palette.muted, fontSize: 11 },
 }));
