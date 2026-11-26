@@ -2,7 +2,7 @@ import { useInfiniteQuery } from '@tanstack/react-query';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams, type Href } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 
 import { fonts, layout } from '@/config/constants';
 import { useCatalogs } from '@/features/catalogs/hooks/useCatalogs';
@@ -18,7 +18,7 @@ import { nombresDeZonas, useZonas } from '@/features/zonas/api';
 import { ESPACIO_FINAL, useEspaciado } from '@/hooks/use-espaciado';
 import { useIsWide } from '@/hooks/use-is-wide';
 import { getApiErrorMessage } from '@/services/api/client';
-import { formatFecha } from '@/shared/format';
+import { formatFecha, formatNumero } from '@/shared/format';
 import type { ArbolResumen, EstadoArbol } from '@/shared/types/entities';
 import { InlineMessage, PrimaryButton, Screen, SelectField } from '@/shared/components/FormControls';
 import { Grid } from '@/shared/components/Grid';
@@ -77,6 +77,9 @@ const SEPARACION = 14;
  * salen cuatro —doce de un vistazo sin bajar—, y al alejar el zoom se van
  * repartiendo solas en vez de dejar franjas vacías a los lados.
  */
+/** Lo que la lista NO ocupa: los márgenes de la página y el carril de módulos. */
+const RESERVA_LATERAL = 130;
+
 function columnasPara(ancho: number) {
   if (ancho <= 0) return 1;
   const caben = Math.floor((ancho + SEPARACION) / (ANCHO_TARJETA + SEPARACION));
@@ -130,11 +133,11 @@ function TreeCard({ tree }: { tree: ArbolResumen }) {
       </View>
       <View style={styles.measures}>
         <View style={styles.measure}>
-          <Text style={styles.measureValue}>{tree.altura_m} m</Text>
+          <Text style={styles.measureValue}>{formatNumero(tree.altura_m, 1)} m</Text>
           <Text style={styles.measureLabel}>Altura</Text>
         </View>
         <View style={styles.measure}>
-          <Text style={styles.measureValue}>{tree.dap_cm} cm</Text>
+          <Text style={styles.measureValue}>{formatNumero(tree.dap_cm, 1)} cm</Text>
           <Text style={styles.measureLabel}>DAP</Text>
         </View>
         <View style={styles.measure}>
@@ -159,8 +162,16 @@ export default function TreeListScreen() {
   const styles = useStyles();
   const { palette } = useTema();
   const isWide = useIsWide();
+  const { width: anchoVentana } = useWindowDimensions();
   const [anchoLista, setAnchoLista] = useState(0);
-  const columnas = columnasPara(anchoLista);
+  // La medida en pantalla es la buena, pero puede tardar o no llegar nunca: si la
+  // pestaña se carga en segundo plano, el observador de tamaño no dispara y la lista
+  // se quedaría en una sola columna a lo ancho de la página. Hasta que haya medida se
+  // estima desde la ventana, que siempre está disponible.
+  const anchoUtil = anchoLista > 0
+    ? anchoLista
+    : Math.min(anchoVentana, layout.maxAppWidth) - RESERVA_LATERAL;
+  const columnas = columnasPara(anchoUtil);
   const espacio = useEspaciado();
   const catalogs = useCatalogs();
   const perfil = useMiPerfil();
