@@ -274,7 +274,16 @@ def analizar(fotos: list[tuple[bytes, str]], especies: list[dict], observaciones
             betas=[BETA_RESPALDO],
             fallbacks="default",
             output_config={"effort": ESFUERZO},
-            system=instrucciones(especies, observaciones),
+            # Caché del prompt: las instrucciones, los catálogos y el esquema de la
+            # respuesta son idénticos en cada análisis y pesan unas tres cuartas partes
+            # de la petición. Marcando aquí el corte, Anthropic los cobra a tarifa de
+            # lectura de caché (veinte veces más barata que la de entrada) mientras la
+            # caché siga viva; lo único que cambia de una foto a otra es la imagen.
+            system=[{
+                "type": "text",
+                "text": instrucciones(especies, observaciones),
+                "cache_control": {"type": "ephemeral"},
+            }],
             messages=[{"role": "user", "content": contenido}],
             output_format=AnalisisIA,
         )
