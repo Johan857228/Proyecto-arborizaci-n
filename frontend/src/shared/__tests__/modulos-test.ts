@@ -4,6 +4,7 @@ import { AxiosError, AxiosHeaders } from 'axios';
 import { presupuestoFormSchema } from '@/features/budgets/api';
 import { arbolCreatePayloadSchema } from '@/features/trees/schemas';
 import { metaFormSchema } from '@/features/goals/api';
+import { accesosRapidosPara, modulosPara } from '@/features/modules/modulos';
 import { gestiona, type MiPerfil } from '@/features/perfil/schemas';
 import { metodoCamposSchema } from '@/features/settings/api';
 import { ApiContractError, getApiErrorMessage } from '@/services/api/client';
@@ -45,6 +46,18 @@ describe('permisos en la interfaz (igual que el backend)', () => {
     expect(gestiona(perfil('docente', 'sj'), 'la')).toBe(false);
     expect(gestiona(perfil('estudiante', 'sj'), 'sj')).toBe(false);
     expect(gestiona(undefined, 'sj')).toBe(false);
+  });
+
+  it.each(['estudiante', 'docente', 'administrador'] as const)('muestra cinco accesos rápidos para %s y conserva el menú completo', (rol) => {
+    const persona = perfil(rol, 'sj');
+    expect(accesosRapidosPara(persona).map((modulo) => modulo.clave)).toEqual(['reportes', 'mapa', 'alertas', 'metas', 'progreso']);
+    expect(modulosPara(persona).some((modulo) => modulo.clave === 'siembras')).toBe(true);
+  });
+
+  it('mantiene los permisos del perfil territorial en los accesos rápidos', () => {
+    const persona = perfil('territorial', null);
+    expect(accesosRapidosPara(persona)).toEqual([]);
+    expect(modulosPara(persona).map((modulo) => modulo.clave)).toEqual(['territorial']);
   });
 });
 

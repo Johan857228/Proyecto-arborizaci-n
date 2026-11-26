@@ -33,4 +33,6 @@ export const layout = {
   formWidth: 760,
   // A partir de este ancho se usa el diseño de escritorio (barra superior, columnas).
   wideBreakpoint: 768,
+  sidebarBreakpoint: 1100,
+  maxAppWidth: 1680,
 };

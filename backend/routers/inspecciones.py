@@ -391,7 +391,7 @@ def historial(arbol_id: UUID, perfil: Perfil = Depends(perfil_actual)):
     """Historial del árbol: todas sus inspecciones, de la más reciente a la más antigua
     (las anuladas también aparecen, marcadas como tales)."""
     cliente = db.cliente_de_usuario(perfil.sesion.token)
-    arbol = resumen_por_id(cliente, str(arbol_id))
+    arbol = resumen_por_id(cliente, str(arbol_id), perfil.institucion_para_leer())
     filas = traer_todo(
         cliente, "inspecciones", datos.COLUMNAS_INSPECCION, filtros=[("eq", ("arbol_id", str(arbol_id)))], orden="fecha, id"
     )
@@ -406,6 +406,7 @@ def crear_inspeccion(arbol_id: UUID, d: InspeccionCrear, respuesta: Response, pe
     id_cliente (se guardó sin conexión), responde 200 con la que ya existe."""
     cliente = db.cliente_de_usuario(perfil.sesion.token)
     arbol = resumen_por_id(cliente, str(arbol_id))
+    perfil.institucion_para_leer(arbol["institucion_id"])
     existente = buscar_por_id_cliente(cliente, "inspecciones", d.id_cliente)
     if existente:
         if ajeno(existente, "inspector_id", perfil.usuario_id) or str(existente["arbol_id"]) != str(arbol["id"]):
@@ -422,7 +423,7 @@ def crear_inspeccion(arbol_id: UUID, d: InspeccionCrear, respuesta: Response, pe
 def detalle_inspeccion(inspeccion_id: UUID, perfil: Perfil = Depends(perfil_actual)):
     cliente = db.cliente_de_usuario(perfil.sesion.token)
     inspeccion = _inspeccion(cliente, str(inspeccion_id))
-    arbol = resumen_por_id(cliente, inspeccion["arbol_id"])
+    arbol = resumen_por_id(cliente, inspeccion["arbol_id"], perfil.institucion_para_leer())
     return armar(cliente, [inspeccion], {arbol["id"]: arbol}, perfil)[0]
 
 
@@ -440,6 +441,7 @@ def subir_foto_inspeccion(
     contenido, tipo_real, extension = leer_foto(archivo, comun.MAX_FOTO_BYTES)
     cliente = db.cliente_de_usuario(perfil.sesion.token)
     inspeccion = _inspeccion(cliente, str(inspeccion_id))
+    resumen_por_id(cliente, inspeccion["arbol_id"], perfil.institucion_para_leer())
     if inspeccion.get("inspector_id") != perfil.usuario_id:
         raise HTTPException(status_code=403, detail="Solo quien registró la inspección puede agregarle fotos")
     # Reenvío de una foto que ya se guardó (la app no alcanzó a recibir la respuesta).

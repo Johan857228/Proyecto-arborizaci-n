@@ -226,6 +226,7 @@ def listar(
     perfil: Perfil = Depends(perfil_actual),
 ):
     """Intervenciones con filtros, de la más reciente a la más antigua."""
+    institucion_id = perfil.institucion_para_leer(institucion_id)
     cliente = db.cliente_de_usuario(perfil.sesion.token)
     arboles = {a["id"]: a for a in datos.arboles(cliente, institucion_id)}
     filtros = []
@@ -241,7 +242,7 @@ def listar(
 @router.get("/arboles/{arbol_id}/intervenciones", response_model=list[IntervencionOut])
 def de_un_arbol(arbol_id: UUID, perfil: Perfil = Depends(perfil_actual)):
     cliente = db.cliente_de_usuario(perfil.sesion.token)
-    arbol = resumen_por_id(cliente, str(arbol_id))
+    arbol = resumen_por_id(cliente, str(arbol_id), perfil.institucion_para_leer())
     filas = datos.intervenciones(cliente, [("eq", ("arbol_id", str(arbol_id)))])
     filas.sort(key=lambda i: i["creado_en"], reverse=True)
     return armar(filas, {arbol["id"]: arbol}, datos.tipos_intervencion(cliente))
@@ -250,7 +251,7 @@ def de_un_arbol(arbol_id: UUID, perfil: Perfil = Depends(perfil_actual)):
 @router.get("/arboles/{arbol_id}/recomendaciones", response_model=list[Recomendacion])
 def recomendaciones_arbol(arbol_id: UUID, perfil: Perfil = Depends(perfil_actual)):
     cliente = db.cliente_de_usuario(perfil.sesion.token)
-    arbol = resumen_por_id(cliente, str(arbol_id))
+    arbol = resumen_por_id(cliente, str(arbol_id), perfil.institucion_para_leer())
     intervenciones = datos.intervenciones(cliente, [("eq", ("arbol_id", str(arbol_id)))])
     return recomendaciones_de(cliente, [arbol], intervenciones)
 
@@ -262,6 +263,7 @@ def recomendaciones(
     perfil: Perfil = Depends(perfil_actual),
 ):
     """Acciones sugeridas para todos los árboles (o los de una institución)."""
+    institucion_id = perfil.institucion_para_leer(institucion_id)
     cliente = db.cliente_de_usuario(perfil.sesion.token)
     todas = recomendaciones_de(cliente, datos.arboles(cliente, institucion_id))
     return [r for r in todas if r["prioridad"] >= prioridad_minima]
@@ -271,7 +273,7 @@ def recomendaciones(
 def detalle(intervencion_id: UUID, perfil: Perfil = Depends(perfil_actual)):
     cliente = db.cliente_de_usuario(perfil.sesion.token)
     intervencion = _intervencion(cliente, str(intervencion_id))
-    arbol = resumen_por_id(cliente, intervencion["arbol_id"])
+    arbol = resumen_por_id(cliente, intervencion["arbol_id"], perfil.institucion_para_leer())
     return armar([intervencion], {arbol["id"]: arbol}, datos.tipos_intervencion(cliente))[0]
 
 

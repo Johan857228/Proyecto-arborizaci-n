@@ -42,6 +42,7 @@ def reporte(
 ):
     """Indicadores del periodo. Sin fechas: desde el 1 de enero del año en curso hasta hoy.
     El inventario y el riesgo se calculan como estaban al cierre del periodo."""
+    institucion_id = perfil.institucion_para_leer(institucion_id)
     if desde is None and hasta is None:
         hasta = hoy()
         desde = date(hasta.year, 1, 1)

@@ -98,6 +98,7 @@ def _validar_sin_cruce(cliente, institucion_id: str, inicio: date, fin: date, ex
 @router.get("/presupuestos", response_model=list[PresupuestoOut])
 def listar(institucion_id: str | None = None, perfil: Perfil = Depends(revisor_actual)):
     """Presupuestos con gasto ejecutado, comprometido y proyección (docentes y administradores)."""
+    institucion_id = perfil.institucion_para_leer(institucion_id)
     cliente = db.cliente_de_usuario(perfil.sesion.token)
     consulta = cliente.table("presupuestos").select("*")
     if institucion_id:
@@ -109,7 +110,9 @@ def listar(institucion_id: str | None = None, perfil: Perfil = Depends(revisor_a
 @router.get("/presupuestos/{presupuesto_id}", response_model=PresupuestoOut)
 def detalle(presupuesto_id: UUID, perfil: Perfil = Depends(revisor_actual)):
     cliente = db.cliente_de_usuario(perfil.sesion.token)
-    return _con_resumen(cliente, [_presupuesto(cliente, str(presupuesto_id))])[0]
+    presupuesto = _presupuesto(cliente, str(presupuesto_id))
+    perfil.institucion_para_leer(presupuesto["institucion_id"])
+    return _con_resumen(cliente, [presupuesto])[0]
 
 
 @router.post("/presupuestos", response_model=PresupuestoOut, status_code=201)

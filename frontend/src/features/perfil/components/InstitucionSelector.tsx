@@ -10,7 +10,7 @@ const TODAS = '__todas__';
 
 /** Institución con la que trabaja la pantalla. Empieza con la del perfil; quien no sea
  *  administrador queda fijo en la suya cuando `soloPropiaSiNoAdmin` es verdadero. */
-export function useInstitucionElegida({ soloPropiaSiNoAdmin = false } = {}) {
+export function useInstitucionElegida({ soloPropiaSiNoAdmin = true } = {}) {
   const perfil = useMiPerfil();
   // null = la persona todavía no eligió; undefined = eligió "todas"
   const [elegida, setElegida] = useState<string | undefined | null>(null);
@@ -29,7 +29,7 @@ export function InstitucionSelector({
   value,
   onChange,
   permitirTodas = true,
-  disabled = false,
+  disabled,
   label = 'Institución',
 }: {
   value: string | undefined;
@@ -39,9 +39,10 @@ export function InstitucionSelector({
   label?: string;
 }) {
   const styles = useStyles();
+  const perfil = useMiPerfil();
   const catalogos = useCatalogs();
   const instituciones = catalogos.data?.instituciones ?? [];
-  if (disabled) {
+  if (disabled ?? (perfil.data?.rol !== 'administrador')) {
     const actual = instituciones.find((i) => i.id === value);
     return (
       <View style={styles.fijo}>

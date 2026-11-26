@@ -142,6 +142,7 @@ export default function TreeListScreen() {
   const catalogs = useCatalogs();
   const perfil = useMiPerfil();
   const miId = perfil.data?.usuario_id;
+  const admin = esAdmin(perfil.data);
   const revisor = esRevisor(perfil.data);
   const [search, setSearch] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
@@ -157,20 +158,23 @@ export default function TreeListScreen() {
   const [zone, setZone] = useState<Zona>();
   const [registradoPor, setRegistradoPor] = useState<string>();
   // Las zonas y los alumnos son los de la institución elegida (o la propia).
-  const institucionDeFiltros = institution ?? perfil.data?.institucion_id ?? undefined;
+  const institucionPropia = perfil.data?.institucion_id ?? undefined;
+  const institucionInventario = admin ? institution : institucionPropia;
+  const institucionDeFiltros = institucionInventario ?? institucionPropia;
+  const puedeVer = perfil.isSuccess && (admin || Boolean(institucionPropia));
   const zonas = useZonas(institucionDeFiltros);
-  const usuarios = useUsuarios(institucionDeFiltros, revisor && (esAdmin(perfil.data) || Boolean(institucionDeFiltros)));
+  const usuarios = useUsuarios(institucionDeFiltros, revisor && puedeVer);
   const alumnos = (usuarios.data ?? [])
     .filter((u) => u.rol === 'estudiante')
     .sort((a, b) => Number(b.activo) - Number(a.activo) || a.nombre.localeCompare(b.nombre));
   const filters = useMemo<FiltrosInventario>(() => ({
     ...(estado ? { estado } : {}),
-    ...(institution ? { institucionId: institution } : {}),
+    ...(institucionInventario ? { institucionId: institucionInventario } : {}),
     ...(species ? { especie: species } : {}),
     ...(zone ? { zona: zone } : {}),
     ...(busqueda ? { q: busqueda } : {}),
     ...(registradoPor ? { registradoPor } : {}),
-  }), [estado, institution, species, zone, busqueda, registradoPor]);
+  }), [estado, institucionInventario, species, zone, busqueda, registradoPor]);
   const inventory = useInfiniteQuery({
     queryKey: treeKeys.list(filters),
     queryFn: ({ pageParam }) => treesService.getAll({
@@ -179,6 +183,7 @@ export default function TreeListScreen() {
       desplazamiento: pageParam,
     }),
     initialPageParam: 0,
+    enabled: puedeVer,
     getNextPageParam: (lastPage, pages) =>
       lastPage.length === PAGE_SIZE ? pages.length * PAGE_SIZE : undefined,
   });
@@ -190,7 +195,7 @@ export default function TreeListScreen() {
   // La búsqueda la hace el servidor sobre todo el inventario, no solo sobre lo ya cargado.
   const trees = inventory.data?.pages.flat() ?? [];
   // Con filtros o búsqueda activos, una lista vacía significa "sin coincidencias", no "inventario vacío".
-  const filtering = Object.keys(filters).length > 0 || search.trim().length > 0;
+  const filtering = Boolean(estado || (admin && institution) || species || zone || registradoPor || search.trim());
 
   function clearFilters() {
     setSearch('');
@@ -229,6 +234,24 @@ export default function TreeListScreen() {
   ];
   const misRegistros = Boolean(miId) && registradoPor === miId;
 
+  if (!puedeVer) {
+    return (
+      <Screen>
+        <View style={[styles.content, { paddingHorizontal: espacio.pagina }]}>
+          <Text style={styles.title}>Inventario de árboles</Text>
+          {perfil.isLoading ? <ActivityIndicator color={palette.forest} /> : perfil.isSuccess ? (
+            <>
+              <Notice tono="info">Pide a un docente o administrador que te asigne una institución para ver su inventario.</Notice>
+              <PrimaryButton title="Actualizar perfil" variant="secondary" compact loading={perfil.isFetching} onPress={() => void perfil.refetch()} />
+            </>
+          ) : (
+            <ErrorState error={perfil.error} onRetry={() => void perfil.refetch()} />
+          )}
+        </View>
+      </Screen>
+    );
+  }
+
   return (
     <Screen>
       <ScrollView contentContainerStyle={[styles.content, { paddingHorizontal: espacio.pagina, gap: espacio.separacion + 4 }]} keyboardShouldPersistTaps="handled">
@@ -237,7 +260,7 @@ export default function TreeListScreen() {
             <Text style={styles.eyebrow}>GESTIÓN AMBIENTAL</Text>
             <Text style={styles.title}>Inventario de árboles</Text>
             <Text style={styles.subtitle}>
-              Busca en todo el inventario y filtra por estado, institución, especie, zona o por quién registró el árbol.
+              Busca los árboles {admin ? 'de todas las instituciones' : 'de tu institución'} y filtra por estado, especie o zona.
               Toca un árbol para ver su ficha, su historial de inspecciones y sus intervenciones.
             </Text>
           </View>
@@ -256,7 +279,7 @@ export default function TreeListScreen() {
               <Icon name="search" size={20} color={palette.muted} />
               <TextInput
                 style={styles.searchInput}
-                placeholder="Buscar por código, especie o zona en todo el inventario"
+                placeholder="Buscar por código, especie o zona"
                 placeholderTextColor={palette.placeholder}
                 value={search}
                 onChangeText={setSearch}
@@ -287,15 +310,17 @@ export default function TreeListScreen() {
           </View>
 
           <View style={styles.filters}>
-            <View style={styles.filter}>
-              <SelectField
-                label="Institución"
-                value={institution ?? TODAS}
-                options={institutionOptions}
-                onChange={(value) => cambiarInstitucion(value === TODAS ? undefined : value)}
-                error={catalogs.error ? getApiErrorMessage(catalogs.error) : undefined}
-              />
-            </View>
+            {admin ? (
+              <View style={styles.filter}>
+                <SelectField
+                  label="Institución"
+                  value={institution ?? TODAS}
+                  options={institutionOptions}
+                  onChange={(value) => cambiarInstitucion(value === TODAS ? undefined : value)}
+                  error={catalogs.error ? getApiErrorMessage(catalogs.error) : undefined}
+                />
+              </View>
+            ) : null}
             <View style={styles.filter}>
               <SelectField
                 label="Especie"

@@ -7,7 +7,7 @@ import pytest
 from postgrest.exceptions import APIError
 
 import comun
-from tests.test_modulos_api import A1, A2, I1, I3, USUARIOS, _arbol, api  # noqa: F401 (api es un fixture)
+from tests.test_modulos_api import A1, A2, I1, I2, USUARIOS, _arbol, api  # noqa: F401 (api es un fixture)
 
 JPG = ("f.jpg", b"\xff\xd8\xff\xe0abc", "image/jpeg")
 ID_ARBOL = "0c1b8d7e-1111-4a5b-9c3d-000000000001"
@@ -93,7 +93,9 @@ def test_inspeccion_con_id_cliente_de_otro_arbol_o_persona(api):
     assert r.status_code == 201
     # en la base de datos el trigger pone el inspector; el cliente en memoria no lo hace
     next(i for i in api.base.tablas["inspecciones"] if i["id"] == r.json()["id"])["inspector_id"] = USUARIOS["est1"][0]
-    assert api.post(f"/arboles/{A2}/inspecciones", json={**VISITA, "id_cliente": ID_VISITA}).status_code == 409
+    otro_arbol = "33333333-3333-3333-3333-333333333333"
+    api.base.tablas["arboles_resumen"].append(_arbol(otro_arbol, "IE001-0002", "sj"))
+    assert api.post(f"/arboles/{otro_arbol}/inspecciones", json={**VISITA, "id_cliente": ID_VISITA}).status_code == 409
     api.como("docente")
     assert api.post(f"/arboles/{A1}/inspecciones", json={**VISITA, "id_cliente": ID_VISITA}).status_code == 409
 
@@ -128,7 +130,9 @@ def test_foto_de_inspeccion_reenviada_aunque_ya_se_haya_revisado(api):
     assert repetida.status_code == 200 and repetida.json()["id"] == primera.json()["id"]
     assert len(api.base.tablas["inspeccion_fotos"]) == 1 and len(api.base.archivos) == 1
     # el mismo id_cliente en la foto de otra inspección no se acepta
-    assert api.post(f"/inspecciones/{I3}/fotos?tipo=completo&id_cliente={ID_FOTO}", files={"archivo": JPG}).status_code == 409
+    otra = next(i for i in api.base.tablas["inspecciones"] if i["id"] == I2)
+    otra["inspector_id"] = USUARIOS["est1"][0]
+    assert api.post(f"/inspecciones/{I2}/fotos?tipo=completo&id_cliente={ID_FOTO}", files={"archivo": JPG}).status_code == 409
 
 
 # ------------------------------- Ayudas de comun.py -------------------------------

@@ -1,13 +1,16 @@
 import { isAxiosError } from 'axios';
-import { Stack } from 'expo-router';
+import { Stack, usePathname } from 'expo-router';
 import { useEffect } from 'react';
-import { View } from 'react-native';
+import { useWindowDimensions, View } from 'react-native';
 
+import { layout } from '@/config/constants';
 import { useAuthStore } from '@/features/auth/store';
+import { esRutaDeModulo } from '@/features/modules/modulos';
 import { useMiPerfil } from '@/features/perfil/hooks/usePerfil';
 import { useContactos } from '@/features/riesgo/api';
 import { SaviaFab } from '@/features/savia/components/SaviaFab';
 import { useIsWide } from '@/hooks/use-is-wide';
+import { AccesosRapidos } from '@/shared/components/AccesosRapidos';
 import { AppBackground } from '@/shared/components/AppBackground';
 import { AppHeader, BottomNav } from '@/shared/components/AppNavigation';
 import { crearEstilos } from '@/theme';
@@ -15,6 +18,10 @@ import { crearEstilos } from '@/theme';
 export default function AppLayout() {
   const styles = useStyles();
   const isWide = useIsWide();
+  const { width } = useWindowDimensions();
+  const pathname = usePathname();
+  const mostrarAccesos = pathname === '/' || esRutaDeModulo(pathname);
+  const lateral = mostrarAccesos && width >= layout.sidebarBreakpoint;
   const perfil = useMiPerfil();
   const signOut = useAuthStore((state) => state.signOut);
   // Los contactos de emergencia de la sede quedan en la copia del teléfono: la ruta de emergencia
@@ -29,24 +36,33 @@ export default function AppLayout() {
     }
   }, [cuentaDesactivada, signOut]);
 
-  // Barra superior en todas las pantallas; en teléfonos la navegación va abajo, como en una app nativa.
-  // Las pantallas son transparentes para que se vea el fondo decorativo común.
+  // El inicio y los módulos comparten los accesos rápidos. En teléfonos las secciones principales
+  // siguen disponibles en la barra inferior y el fondo decorativo es común.
   return (
     <View style={styles.root}>
       <AppBackground />
       <AppHeader />
       <View style={styles.content}>
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            contentStyle: { backgroundColor: 'transparent' },
-            animation: 'fade',
-          }}
-        >
-          <Stack.Screen name="index" />
-          <Stack.Screen name="trees/index" />
-          <Stack.Screen name="trees/new" />
-        </Stack>
+        <View style={[styles.content, lateral && styles.conRiel]}>
+          {mostrarAccesos ? (
+            <View style={lateral ? styles.riel : undefined}>
+              <AccesosRapidos perfil={perfil.data} pathname={pathname} lateral={lateral} />
+            </View>
+          ) : null}
+          <View style={styles.content}>
+            <Stack
+              screenOptions={{
+                headerShown: false,
+                contentStyle: { backgroundColor: 'transparent' },
+                animation: 'fade',
+              }}
+            >
+              <Stack.Screen name="index" />
+              <Stack.Screen name="trees/index" />
+              <Stack.Screen name="trees/new" />
+            </Stack>
+          </View>
+        </View>
         {/* Savia, la IA de la app: siempre a mano en la esquina inferior derecha. */}
         <SaviaFab />
       </View>
@@ -57,5 +73,7 @@ export default function AppLayout() {
 
 const useStyles = crearEstilos(({ palette }) => ({
   root: { flex: 1, backgroundColor: palette.sage },
-  content: { flex: 1 },
+  content: { flex: 1, minWidth: 0, minHeight: 0 },
+  conRiel: { width: '100%', maxWidth: layout.maxAppWidth, alignSelf: 'center', flexDirection: 'row' },
+  riel: { width: 108, flexShrink: 0, minHeight: 0, paddingLeft: 16, paddingVertical: 14 },
 }));

@@ -41,4 +41,6 @@ export const perfilService = {
 
   editarUsuario: (usuarioId: string, cambios: Partial<EditarUsuario>) =>
     enviarValidado('patch', `/usuarios/${usuarioId}`, cambios, usuarioSchema),
+
+  incorporarEstudiante: (correo: string) => enviarValidado('post', '/usuarios/incorporar', { correo }, usuarioSchema),
 };

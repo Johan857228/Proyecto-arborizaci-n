@@ -86,8 +86,11 @@ def traer_todo(cliente, tabla: str, columnas: str = "*", filtros=(), orden: str 
         inicio += tam
 
 
-def resumen_por_id(cliente, arbol_id: str) -> dict:
-    filas = cliente.table("arboles_resumen").select("*").eq("id", arbol_id).execute().data
+def resumen_por_id(cliente, arbol_id: str, institucion_id: str | None = None) -> dict:
+    consulta = cliente.table("arboles_resumen").select("*").eq("id", arbol_id)
+    if institucion_id is not None:
+        consulta = consulta.eq("institucion_id", institucion_id)
+    filas = consulta.execute().data
     if not filas:
         raise HTTPException(status_code=404, detail="Árbol no encontrado")
     return filas[0]

@@ -45,6 +45,11 @@ export function useEditarUsuario() {
   });
 }
 
+export function useIncorporarEstudiante() {
+  const refrescar = useRefrescarTodo();
+  return useMutation({ mutationFn: perfilService.incorporarEstudiante, onSuccess: refrescar });
+}
+
 export function useCambiarMiNombre() {
   const refrescar = useRefrescarTodo();
   return useMutation({ mutationFn: perfilService.cambiarMiNombre, onSuccess: refrescar });

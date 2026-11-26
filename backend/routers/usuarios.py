@@ -62,6 +62,15 @@ class UsuarioEditar(BaseModel):
         return v
 
 
+class IncorporarEstudiante(BaseModel):
+    correo: str = Field(max_length=254, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+    @field_validator("correo", mode="before")
+    @classmethod
+    def normalizar_correo(cls, valor):
+        return valor.strip().lower() if isinstance(valor, str) else valor
+
+
 COLUMNAS = "usuario_id, nombre, correo, rol, institucion_id, curso_id, activo"
 
 
@@ -230,4 +239,33 @@ def editar_usuario(usuario_id: UUID, d: UsuarioEditar, perfil: Perfil = Depends(
     actualizadas = cliente.table("perfiles").update(cambios).eq("usuario_id", str(usuario_id)).execute().data
     if not actualizadas:
         raise HTTPException(status_code=403, detail="No tienes permiso para editar este usuario")
+    return actualizadas[0]
+
+
+@router.post("/usuarios/incorporar", response_model=PerfilOut)
+def incorporar_estudiante(d: IncorporarEstudiante, perfil: Perfil = Depends(revisor_actual)):
+    """El docente incorpora por correo a un estudiante sin institución a su propio colegio."""
+    if perfil.rol != "docente" or not perfil.institucion_id:
+        raise HTTPException(status_code=403, detail="Esta acción requiere un perfil docente con institución asignada.")
+
+    # La búsqueda es por correo exacto. El docente conserva su acceso normal a la lista de su colegio.
+    admin = db.get_admin()
+    filas = (
+        admin.table("perfiles").select(COLUMNAS)
+        .eq("correo", d.correo).eq("rol", "estudiante").eq("activo", True)
+        .limit(2).execute().data
+    )
+    if len(filas) != 1 or filas[0]["institucion_id"] not in (None, perfil.institucion_id):
+        raise HTTPException(status_code=404, detail="No hay un estudiante disponible para incorporar con ese correo.")
+
+    estudiante = filas[0]
+    if estudiante["institucion_id"] == perfil.institucion_id:
+        return estudiante
+    actualizadas = (
+        admin.table("perfiles").update({"institucion_id": perfil.institucion_id, "curso_id": None})
+        .eq("usuario_id", estudiante["usuario_id"]).eq("correo", d.correo)
+        .eq("rol", "estudiante").eq("activo", True).is_("institucion_id", "null").execute().data
+    )
+    if not actualizadas:
+        raise HTTPException(status_code=409, detail="La cuenta cambió durante la asignación. Vuelve a intentarlo.")
     return actualizadas[0]

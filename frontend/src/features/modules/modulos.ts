@@ -8,7 +8,7 @@ export type GrupoModulo = 'campo' | 'seguimiento' | 'gestion';
 export interface Modulo {
   clave: string;
   titulo: string;
-  /** Nombre corto para la cuadrícula de accesos rápidos del inicio. */
+  /** Etiqueta para la navegación de accesos rápidos. */
   corto: string;
   texto: string;
   icono: IconName;
@@ -28,8 +28,11 @@ export const GRUPOS: { clave: GrupoModulo; titulo: string }[] = [
   { clave: 'gestion', titulo: 'Gestión institucional' },
 ];
 
+export const MENU_MODULOS = '/(app)/modules' as Href;
+const ACCESOS_RAPIDOS = ['reportes', 'mapa', 'alertas', 'metas', 'progreso'];
+
 export const MODULOS: Modulo[] = [
-  { clave: 'mapa', titulo: 'Mapa con capas', corto: 'Mapa', texto: 'Sedes y árboles por estado, riesgo de caída, especie y origen, también sin conexión.', icono: 'map', href: '/(app)/map' as Href, ruta: '/map', grupo: 'campo' },
+  { clave: 'mapa', titulo: 'Mapa con capas', corto: 'Mapa con capas', texto: 'Sedes y árboles por estado, riesgo de caída, especie y origen, también sin conexión.', icono: 'map', href: '/(app)/map' as Href, ruta: '/map', grupo: 'campo' },
   { clave: 'siembras', titulo: 'Siembras', corto: 'Siembras', texto: 'Jornadas, plántulas georreferenciadas, controles a los 3, 6, 12 y 24 meses y lista para el certificado Siembra Vida.', icono: 'siembra', href: '/(app)/plantings' as Href, ruta: '/plantings', grupo: 'campo' },
   { clave: 'especies', titulo: 'Catálogo de especies', corto: 'Especies', texto: 'Nativas, exóticas, invasoras, amenazadas y en veda según el Catálogo de Plantas de Colombia y el SiB, con la fuente de cada dato.', icono: 'leaf', href: '/(app)/species' as Href, ruta: '/species', grupo: 'campo' },
   { clave: 'guias', titulo: 'Guías de clase', corto: 'Guías', texto: 'Secuencias por grado con los árboles del colegio (DBA de Ciencias y Matemáticas), ficha para imprimir y bitácora.', icono: 'guia', href: '/(app)/guides' as Href, ruta: '/guides', grupo: 'campo' },
@@ -38,7 +41,7 @@ export const MODULOS: Modulo[] = [
   { clave: 'revision', titulo: 'Revisión', corto: 'Revisión', texto: 'Confirma o anula las inspecciones pendientes de tu institución.', icono: 'review', href: '/(app)/review' as Href, ruta: '/review', grupo: 'campo', soloRevisores: true },
   { clave: 'intervenciones', titulo: 'Intervenciones', corto: 'Cuidados', texto: 'Mantenimiento realizado, programado y recomendado por árbol.', icono: 'tools', href: '/(app)/interventions' as Href, ruta: '/interventions', grupo: 'campo' },
   { clave: 'cursos', titulo: 'Cursos y zonas', corto: 'Cursos', texto: 'Zonas asignadas a cada curso, cobertura y productividad.', icono: 'school', href: '/(app)/courses' as Href, ruta: '/courses', grupo: 'campo' },
-  { clave: 'progreso', titulo: 'Mi progreso', corto: 'Progreso', texto: 'Puntos, niveles, rachas, logros y rankings.', icono: 'trophy', href: '/(app)/progress' as Href, ruta: '/progress', grupo: 'seguimiento' },
+  { clave: 'progreso', titulo: 'Mi progreso', corto: 'Mi progreso', texto: 'Puntos, niveles, rachas, logros y rankings.', icono: 'trophy', href: '/(app)/progress' as Href, ruta: '/progress', grupo: 'seguimiento' },
   { clave: 'laboratorio', titulo: 'Laboratorio de datos', corto: 'Laboratorio', texto: 'Tablas de frecuencias, histogramas, media, mediana y dispersión DAP-altura con los árboles del colegio.', icono: 'laboratorio', href: '/(app)/lab' as Href, ruta: '/lab', grupo: 'seguimiento' },
   { clave: 'reportes', titulo: 'Reportes', corto: 'Reportes', texto: 'Inventario, riesgo, cobertura, productividad e intervenciones por periodo.', icono: 'chart', href: '/(app)/reports' as Href, ruta: '/reports', grupo: 'seguimiento' },
   { clave: 'metas', titulo: 'Metas', corto: 'Metas', texto: 'Metas institucionales por indicador y su avance.', icono: 'flag', href: '/(app)/goals' as Href, ruta: '/goals', grupo: 'seguimiento' },
@@ -59,6 +62,14 @@ export function modulosPara(perfil: MiPerfil | undefined) {
   const revisor = esRevisor(perfil);
   if (perfil?.rol === 'territorial') return MODULOS.filter((modulo) => modulo.roles?.includes('territorial'));
   return MODULOS.filter((modulo) => (!modulo.soloRevisores || revisor) && (!modulo.roles || !perfil || modulo.roles.includes(perfil.rol)));
+}
+
+export function accesosRapidosPara(perfil: MiPerfil | undefined) {
+  const disponibles = new Map(modulosPara(perfil).map((modulo) => [modulo.clave, modulo]));
+  return ACCESOS_RAPIDOS.flatMap((clave) => {
+    const modulo = disponibles.get(clave);
+    return modulo ? [modulo] : [];
+  });
 }
 
 /** Rutas que se consideran parte de "Módulos" en la barra de navegación (incluye el perfil). */

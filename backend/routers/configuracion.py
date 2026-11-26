@@ -127,6 +127,7 @@ def crear_metodo(d: MetodoCampos, perfil: Perfil = Depends(admin_actual)):
 def simular_metodo(d: SimulacionIn, perfil: Perfil = Depends(revisor_actual)):
     """Vista previa: cómo quedaría el semáforo de los árboles con un método, usando su última
     inspección válida. No cambia nada en la base de datos."""
+    institucion_id = perfil.institucion_para_leer(d.institucion_id)
     cliente = db.cliente_de_usuario(perfil.sesion.token)
     if d.metodo_id is not None:
         metodos = datos.metodos(cliente)
@@ -137,7 +138,7 @@ def simular_metodo(d: SimulacionIn, perfil: Perfil = Depends(revisor_actual)):
         _codigos_validos(cliente, d.metodo.pesos_observacion)
         metodo = Metodo.desde_fila({**d.metodo.model_dump(), "id": None, "version": 0})
 
-    arboles = [a for a in datos.arboles(cliente, d.institucion_id) if a.get("ultima_inspeccion_id")]
+    arboles = [a for a in datos.arboles(cliente, institucion_id) if a.get("ultima_inspeccion_id")]
     observaciones = datos.observaciones_por_inspeccion(
         cliente, [str(a["ultima_inspeccion_id"]) for a in arboles]
     ) if arboles else {}
@@ -170,12 +171,15 @@ def simular_metodo(d: SimulacionIn, perfil: Perfil = Depends(revisor_actual)):
 
 @router.get("/parametros", response_model=list[ParametrosOut])
 def listar_parametros(perfil: Perfil = Depends(perfil_actual)):
-    """Parámetros de cada institución (las que no tienen fila usan los valores por defecto)."""
+    """Parámetros de las instituciones visibles, incluidos sus valores por defecto."""
+    institucion_id = perfil.institucion_para_leer()
     cliente = db.cliente_de_usuario(perfil.sesion.token)
     metodos = datos.metodos(cliente)
     todos = datos.parametros(cliente, metodos)
     resultado = []
     for inst_id, inst in sorted(datos.instituciones(cliente).items(), key=lambda kv: kv[1]["prefijo"]):
+        if institucion_id is not None and inst_id != institucion_id:
+            continue
         p = datos.parametros_de(todos, inst_id, metodos)
         resultado.append({
             "institucion_id": inst_id,

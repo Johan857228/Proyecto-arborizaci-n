@@ -114,11 +114,13 @@ def _simular(cliente, d: SimulacionIn) -> dict:
 @router.post("/simular")
 def simular(d: SimulacionIn, perfil: Perfil = Depends(revisor_actual)):
     """Simula sin guardar nada."""
+    perfil.institucion_para_leer(d.institucion_id)
     return _simular(db.cliente_de_usuario(perfil.sesion.token), d)
 
 
 @router.get("", response_model=list[EscenarioOut])
 def listar(institucion_id: str | None = None, perfil: Perfil = Depends(revisor_actual)):
+    institucion_id = perfil.institucion_para_leer(institucion_id)
     cliente = db.cliente_de_usuario(perfil.sesion.token)
     consulta = cliente.table("escenarios_presupuestales").select("*")
     if institucion_id:
@@ -133,6 +135,7 @@ def detalle(escenario_id: UUID, perfil: Perfil = Depends(revisor_actual)):
     filas = cliente.table("escenarios_presupuestales").select("*").eq("id", str(escenario_id)).execute().data
     if not filas:
         raise HTTPException(status_code=404, detail="Escenario no encontrado")
+    perfil.institucion_para_leer(filas[0]["institucion_id"])
     return {**filas[0], "id": str(filas[0]["id"])}
 
 

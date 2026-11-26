@@ -141,6 +141,7 @@ def _exigir_gestion(perfil: Perfil, institucion_id: str):
 
 @router.get("/cursos", response_model=list[CursoOut])
 def listar(institucion_id: str | None = None, perfil: Perfil = Depends(perfil_actual)):
+    institucion_id = perfil.institucion_para_leer(institucion_id)
     cliente = db.cliente_de_usuario(perfil.sesion.token)
     perfiles = datos.perfiles_publicos(cliente)
     cursos = datos.cursos(cliente, institucion_id).values()
@@ -152,7 +153,9 @@ def listar(institucion_id: str | None = None, perfil: Perfil = Depends(perfil_ac
 @router.get("/cursos/{curso_id}", response_model=CursoDetalle)
 def detalle(curso_id: UUID, perfil: Perfil = Depends(perfil_actual)):
     cliente = db.cliente_de_usuario(perfil.sesion.token)
-    return _armar(_curso(cliente, str(curso_id)), datos.perfiles_publicos(cliente), perfil)
+    curso = _curso(cliente, str(curso_id))
+    perfil.institucion_para_leer(curso["institucion_id"])
+    return _armar(curso, datos.perfiles_publicos(cliente), perfil)
 
 
 @router.post("/cursos", response_model=CursoDetalle, status_code=201)

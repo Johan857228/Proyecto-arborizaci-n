@@ -57,9 +57,13 @@ def ranking(
 ):
     """Ranking por puntos. Por defecto solo estudiantes activos y todo el historial; con
     desde/hasta solo cuentan las inspecciones de ese periodo."""
+    institucion_id = perfil.institucion_para_leer(institucion_id)
     cliente = db.cliente_de_usuario(perfil.sesion.token)
-    arboles = datos.arboles(cliente)
+    arboles = datos.arboles(cliente, institucion_id)
     inspecciones = datos.inspecciones(cliente)
+    if institucion_id is not None:
+        ids = {a["id"] for a in arboles}
+        inspecciones = [i for i in inspecciones if i["arbol_id"] in ids]
     if desde or hasta:
         desde, hasta = validar_periodo(desde, hasta)
         inicio, fin = inicio_del_dia(desde), fin_del_dia(hasta)
@@ -79,7 +83,7 @@ def ranking(
         filas = gamificacion.ranking_cursos(individual, cursos)
         mio = next((f for f in filas if f["id"] == perfil.curso_id), None)
     else:
-        cursos = datos.cursos(cliente)
+        cursos = datos.cursos(cliente, institucion_id)
         for f in individual:
             f["curso_nombre"] = cursos.get(f.get("curso_id") or "", {}).get("nombre")
         filas = individual
