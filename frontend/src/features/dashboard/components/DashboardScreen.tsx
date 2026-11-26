@@ -5,9 +5,9 @@ import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, T
 import Animated from 'react-native-reanimated';
 
 import { fonts, layout } from '@/config/constants';
-import { AccesosRapidos, Distribucion, EstadoArbolado, Impacto, MetasEnCurso, Recientes } from '@/features/dashboard/components/Panorama';
+import { Distribucion, EstadoArbolado, Impacto, MetasEnCurso, Recientes } from '@/features/dashboard/components/Panorama';
 import { ParaHoy, usePendientesDeHoy } from '@/features/dashboard/components/ParaHoy';
-import { ANCHO_MAXIMO_TABLERO, ANCHO_TABLERO, MARGEN_TABLERO, TableroInicio } from '@/features/dashboard/components/Tablero';
+import { MARGEN_TABLERO, TableroInicio } from '@/features/dashboard/components/Tablero';
 import { useDashboard } from '@/features/dashboard/hooks/useDashboard';
 import { claveDeCache } from '@/features/perfil/components/Avatar';
 import { useImagenPropia } from '@/features/perfil/hooks/useImagenPropia';
@@ -147,7 +147,7 @@ function Pie({ actualizado, tablero = false }: { actualizado: number; tablero?: 
   const carril = useCarrilSavia();
   const { width } = useWindowDimensions();
   // En ventanas muy anchas el botón queda fuera de la columna de contenido.
-  const libre = (width - (tablero ? ANCHO_MAXIMO_TABLERO : layout.maxWidth)) / 2 >= carril.reservaDerecha;
+  const libre = (width - (tablero ? layout.maxAppWidth : layout.maxWidth)) / 2 >= carril.reservaDerecha;
   const hora = horaDe(actualizado);
   // En el tablero el pie cierra la columna derecha, que ya termina MARGEN_TABLERO antes del borde.
   const alto = tablero ? carril.alto - MARGEN_TABLERO : carril.alto;
@@ -182,7 +182,7 @@ export function DashboardScreen() {
   const error = perfil.error ?? (puedeVer ? stats.error : null);
 
   // Escritorio: todo en una pantalla, sin desplazar la página.
-  if (width >= ANCHO_TABLERO) {
+  if (width >= layout.sidebarBreakpoint) {
     const avisos = [
       error ? <InlineMessage key="error">{getApiErrorMessage(error)}</InlineMessage> : null,
       portada.error ? <InlineMessage key="portada">{portada.error}</InlineMessage> : null,
@@ -253,10 +253,9 @@ export function DashboardScreen() {
           </>
         )}
 
-        <FadeIn index={4}><AccesosRapidos perfil={p} /></FadeIn>
-        {p && puedeVer ? <FadeIn index={5}><MetasEnCurso perfil={p} /></FadeIn> : null}
-        <FadeIn index={6}><Distribucion stats={estadisticas} isWide={isWide} /></FadeIn>
-        <FadeIn index={7}><Recientes arboles={arboles} cargando={recentTrees.isLoading} isWide={isWide} /></FadeIn>
+        {p && puedeVer ? <FadeIn index={4}><MetasEnCurso perfil={p} /></FadeIn> : null}
+        <FadeIn index={5}><Distribucion stats={estadisticas} isWide={isWide} /></FadeIn>
+        <FadeIn index={6}><Recientes arboles={arboles} cargando={recentTrees.isLoading} isWide={isWide} /></FadeIn>
         {puedeVer && recentTrees.error ? <InlineMessage>{getApiErrorMessage(recentTrees.error)}</InlineMessage> : null}
 
         <Pie actualizado={puedeVer ? stats.dataUpdatedAt : 0} />

@@ -8,7 +8,7 @@ import { Avatar } from '@/features/perfil/components/Avatar';
 import { usePendientes } from '@/features/inspections/hooks/useInspecciones';
 import { useCuentasSinInstitucion, useMiPerfil } from '@/features/perfil/hooks/usePerfil';
 import { esAdmin, esRevisor } from '@/features/perfil/schemas';
-import { esRutaDeModulo } from '@/features/modules/modulos';
+import { esRutaDeModulo, MENU_MODULOS } from '@/features/modules/modulos';
 import { useAlertas } from '@/features/riesgo/api';
 import { EstadoConexion } from '@/features/sincronizacion/components/EstadoConexion';
 import { useIsWide } from '@/hooks/use-is-wide';
@@ -22,7 +22,7 @@ const navItems: { label: string; icon: IconName; href: Href; isActive: (path: st
   // La ficha de un árbol (/trees/<id>) también es parte del inventario.
   { label: 'Inventario', icon: 'list', href: '/(app)/trees' as Href, isActive: (path) => path === '/trees' || (path.startsWith('/trees/') && path !== '/trees/new'), delColegio: true },
   { label: 'Registrar', icon: 'addCircle', href: '/(app)/trees/new' as Href, isActive: (path) => path === '/trees/new', delColegio: true },
-  { label: 'Módulos', icon: 'modules', href: '/(app)/modules' as Href, isActive: esRutaDeModulo },
+  { label: 'Módulos', icon: 'modules', href: MENU_MODULOS, isActive: esRutaDeModulo },
 ];
 
 /** El funcionario territorial no pertenece a un colegio: no tiene inventario ni registra árboles. */

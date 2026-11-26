@@ -6,8 +6,6 @@ import { Pressable, ScrollView, Text, View } from 'react-native';
 import { chartColors, fonts } from '@/config/constants';
 import type { Estadisticas } from '@/features/dashboard/types';
 import { useMetas } from '@/features/goals/api';
-import { modulosPara } from '@/features/modules/modulos';
-import { useCuentasSinInstitucion } from '@/features/perfil/hooks/usePerfil';
 import { esAdmin, type MiPerfil } from '@/features/perfil/schemas';
 import { formatFecha, formatNumero } from '@/shared/format';
 import { DonutChart, type DonutSlice } from '@/shared/components/DonutChart';
@@ -146,37 +144,6 @@ export function Impacto({ stats }: { stats?: Estadisticas }) {
     <Card title="Impacto ambiental" subtitle="Estimado con las medidas registradas" icon="leaf">
       <ImpactoContenido stats={stats} />
     </Card>
-  );
-}
-
-/** Cuadrícula de íconos con los módulos (sin descripción); la lista completa está en Módulos. */
-export function AccesosRapidos({ perfil }: { perfil?: MiPerfil }) {
-  const styles = useStyles();
-  const cuentas = useCuentasSinInstitucion(esAdmin(perfil));
-  const modulos = modulosPara(perfil).filter((m) => m.clave !== 'revision' && m.clave !== 'progreso');
-  return (
-    <View style={styles.bloque}>
-      <Encabezado titulo="Accesos rápidos" accion={{ texto: 'Ver todos', href: '/(app)/modules' as Href }} />
-      <View style={styles.accesos}>
-        {modulos.map((modulo) => (
-          <Pressable
-            key={modulo.clave}
-            accessibilityRole="link"
-            accessibilityLabel={modulo.titulo}
-            onPress={() => router.push(modulo.href)}
-            style={({ pressed }) => [styles.acceso, pressed && styles.pressed]}
-          >
-            <View>
-              <IconChip icon={modulo.icono} size={46} />
-              {modulo.clave === 'usuarios' && cuentas > 0 ? (
-                <View style={styles.accesoBadge}><Text style={styles.accesoBadgeTexto}>{cuentas}</Text></View>
-              ) : null}
-            </View>
-            <Text style={styles.accesoTexto} numberOfLines={1}>{modulo.corto}</Text>
-          </Pressable>
-        ))}
-      </View>
-    </View>
   );
 }
 
@@ -431,11 +398,6 @@ const useStyles = crearEstilos(({ palette, card }) => ({
   impactoValor: { color: palette.ink, fontSize: 16, fontFamily: fonts.extraBold },
   impactoTexto: { color: palette.muted, fontSize: 11, lineHeight: 15 },
   impactoEtiqueta: { flex: 1, minWidth: 0, color: palette.ink, fontSize: 13, fontFamily: fonts.semiBold },
-  accesos: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 14, ...card, borderRadius: 20, paddingVertical: 16, paddingHorizontal: 6 },
-  acceso: { width: '25%', alignItems: 'center', gap: 6 },
-  accesoTexto: { maxWidth: '100%', color: palette.ink, fontSize: 12, fontFamily: fonts.semiBold, textAlign: 'center' },
-  accesoBadge: { position: 'absolute', top: -4, right: -6, minWidth: 18, height: 18, paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center', borderRadius: 9, backgroundColor: palette.amber },
-  accesoBadgeTexto: { color: palette.paper, fontSize: 11, fontFamily: fonts.extraBold },
   invitacion: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, ...card, borderRadius: 18, borderStyle: 'dashed', borderColor: palette.placeholder },
   invitacionTitulo: { color: palette.ink, fontSize: 15, fontFamily: fonts.bold },
   meta: { gap: 6 },
