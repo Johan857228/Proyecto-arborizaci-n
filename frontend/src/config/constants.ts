@@ -34,5 +34,11 @@ export const layout = {
   // A partir de este ancho se usa el diseño de escritorio (barra superior, columnas).
   wideBreakpoint: 768,
   sidebarBreakpoint: 1100,
-  maxAppWidth: 1680,
+  // Ancho máximo del armazón: la barra superior, el carril de módulos y el
+  // contenido de todas las pantallas. En monitores grandes o con el zoom bajo,
+  // 1680 dejaba franjas vacías a los lados en las pantallas que son rejillas
+  // —el inventario cabe a ocho tarjetas por fila y solo mostraba cinco—.
+  // Las pantallas de lectura siguen con su propio tope (maxWidth), que es más
+  // estrecho a propósito: una línea de texto de dos mil píxeles no se lee.
+  maxAppWidth: 2400,
 };
