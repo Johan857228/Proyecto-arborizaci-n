@@ -153,7 +153,13 @@ function Pie({ actualizado, tablero = false }: { actualizado: number; tablero?: 
   const alto = tablero ? carril.alto - MARGEN_TABLERO : carril.alto;
   return (
     <View style={[styles.pie, tablero && styles.pieTablero, libre ? null : { minHeight: alto, paddingRight: carril.reservaDerecha }]}>
-      <Text style={styles.pieTexto}>{hora ? `Datos actualizados a las ${hora} · ` : ''}Arbolado Escolar</Text>
+      {/* Un solo hijo de texto, no dos pegados. Con `{expresión}Arbolado Escolar` el
+          navegador junta los dos nodos de texto en uno y, cuando la hora pasa de vacía a
+          tener valor, React intenta insertar delante de un nodo que ya no es hijo del
+          elemento: «Failed to execute 'insertBefore' on 'Node'». */}
+      <Text style={styles.pieTexto}>
+        {hora ? `Datos actualizados a las ${hora} · Arbolado Escolar` : 'Arbolado Escolar'}
+      </Text>
       <Text style={styles.pieTexto}>Con la Universidad Popular del Cesar</Text>
     </View>
   );
