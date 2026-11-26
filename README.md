@@ -277,6 +277,12 @@ Variables configuradas:
   confirmación; solo conviene encenderla cuando el proyecto de Supabase tenga SMTP propio y la
   dirección de la app en Authentication > URL Configuration, porque el SMTP de prueba solo le
   escribe al equipo del proyecto y el enlace abre el Site URL (hoy `http://localhost:3000`).
+- Enlaces del correo (recuperar contraseña, confirmar cuenta): Supabase los manda a su Site URL si la
+  dirección de la app no está permitida. El dueño del proyecto debe poner, en Authentication > URL
+  Configuration, `https://inventario-arboreo.vercel.app` como Site URL y agregar
+  `https://inventario-arboreo.vercel.app/**` a Redirect URLs. Mientras no esté, `/auth/recuperar`
+  lo detecta y no manda el correo; quien olvidó su contraseña le pide al administrador (o a su
+  docente) una contraseña temporal en Usuarios y la cambia en Mi perfil.
 - Vercel: `EXPO_PUBLIC_API_URL` con la dirección del backend. Se lee al compilar, así que si cambia
   hay que volver a desplegar el frontend. La compilación y las rutas dinámicas están en `frontend/vercel.json`.
 
