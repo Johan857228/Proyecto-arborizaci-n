@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { contrasenaSchema } from '@/features/auth/schemas';
+
 // territorial: funcionario de una Secretaría, autoridad ambiental o Gobernación (migración 014).
 export const rolSchema = z.enum(['administrador', 'docente', 'estudiante', 'territorial']);
 export type Rol = z.infer<typeof rolSchema>;
@@ -69,3 +71,17 @@ export function gestiona(perfil: MiPerfil | undefined, institucionId: string | n
   if (!perfil || !institucionId) return false;
   return perfil.rol === 'administrador' || (perfil.rol === 'docente' && perfil.institucion_id === institucionId);
 }
+
+export const contrasenaTemporalSchema = z.object({ contrasena: z.string().min(8), mensaje: z.string() });
+export type ContrasenaTemporal = z.infer<typeof contrasenaTemporalSchema>;
+
+// Mismas reglas del backend (CambiarContrasenaIn en backend/routers/usuarios.py).
+export const cambiarContrasenaSchema = z
+  .object({
+    actual: z.string().min(1, 'Escribe tu contraseña actual.'),
+    nueva: contrasenaSchema,
+    confirmacion: z.string(),
+  })
+  .refine((v) => v.nueva === v.confirmacion, { message: 'Las contraseñas no coinciden.', path: ['confirmacion'] })
+  .refine((v) => v.nueva !== v.actual, { message: 'La contraseña nueva debe ser distinta de la actual.', path: ['nueva'] });
+export type CambiarContrasena = z.infer<typeof cambiarContrasenaSchema>;

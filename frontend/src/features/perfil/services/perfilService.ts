@@ -2,7 +2,7 @@ import { Platform } from 'react-native';
 import { z } from 'zod';
 
 import { api, enviarValidado, getValidado, validar } from '@/services/api/client';
-import { miPerfilSchema, usuarioSchema, type EditarUsuario, type ImagenPerfil } from '@/features/perfil/schemas';
+import { contrasenaTemporalSchema, miPerfilSchema, usuarioSchema, type EditarUsuario, type ImagenPerfil } from '@/features/perfil/schemas';
 
 /** Imagen elegida de la galería, lista para subir. */
 export interface ImagenLocal {
@@ -41,4 +41,12 @@ export const perfilService = {
 
   editarUsuario: (usuarioId: string, cambios: Partial<EditarUsuario>) =>
     enviarValidado('patch', `/usuarios/${usuarioId}`, cambios, usuarioSchema),
+
+  /** Contraseña temporal para otra persona (administrador, o docente con sus estudiantes). Se ve una sola vez. */
+  contrasenaTemporal: (usuarioId: string) =>
+    enviarValidado('post', `/usuarios/${usuarioId}/contrasena-temporal`, undefined, contrasenaTemporalSchema),
+
+  /** Cambia la contraseña propia; pide la actual. */
+  cambiarMiContrasena: (actual: string, nueva: string) =>
+    enviarValidado('post', '/perfil/contrasena', { actual, nueva }, z.object({ mensaje: z.string() })),
 };

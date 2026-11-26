@@ -25,6 +25,7 @@ from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, Respo
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
+import httpx
 from postgrest.exceptions import APIError
 from pydantic import BaseModel, Field, field_validator
 from supabase_auth.errors import AuthApiError, AuthError, AuthWeakPasswordError
@@ -388,19 +389,65 @@ def _url_restablecer(request: Request) -> str | None:
     return f"{base}/restablecer" if base else None
 
 
-@app.post("/auth/recuperar", response_model=MensajeOut, tags=["Autenticación"])
+# Si Supabase no tiene la dirección de la app en Authentication > URL Configuration, ignora
+# redirect_to y manda los enlaces del correo a su Site URL (hoy http://localhost:3000): la persona
+# abre el correo y cae en una página que no carga. Se comprueba con un token inválido (no toca
+# ninguna cuenta) y el resultado se guarda unos minutos.
+_redirecciones: dict[str, tuple[float, bool]] = {}
+
+
+def redireccion_permitida(destino: str) -> bool:
+    guardada = _redirecciones.get(destino)
+    if guardada and time.monotonic() - guardada[0] < 600:
+        return guardada[1]
+    base = os.environ.get("SUPABASE_URL", "").rstrip("/")
+    try:
+        r = httpx.get(
+            f"{base}/auth/v1/verify",
+            params={"token": "comprobacion-sin-valor", "type": "recovery", "redirect_to": destino},
+            headers={"apikey": os.environ.get("SUPABASE_ANON_KEY", "")},
+            follow_redirects=False,
+            timeout=5,
+        )
+    except httpx.HTTPError:
+        return True  # sin poder comprobarlo se manda el correo, como antes
+    ubicacion = r.headers.get("location", "")
+    if not ubicacion:
+        return True
+    permitida = ubicacion.startswith(destino)
+    _redirecciones[destino] = (time.monotonic(), permitida)
+    return permitida
+
+
+PIDE_TEMPORAL = ("Pídele a tu docente o al administrador una contraseña temporal: la crean en Usuarios "
+                 "y después la cambias en Mi perfil.")
+
+
+class RecuperarOut(MensajeOut):
+    enviado: bool = Field(description="False si no se mandó el correo porque su enlace no llevaría a la app")
+
+
+@app.post("/auth/recuperar", response_model=RecuperarOut, tags=["Autenticación"])
 def recuperar_contrasena(d: RecuperarIn, request: Request):
     """Envía al correo un enlace para crear una contraseña nueva. Responde lo mismo exista o no la
-    cuenta, para no revelar qué correos están registrados."""
+    cuenta, para no revelar qué correos están registrados. Si el enlace no llevaría a la app (falta
+    configurar Supabase), no lo manda y explica cómo pedir una contraseña temporal."""
     destino = _url_restablecer(request)
+    if destino and not redireccion_permitida(destino):
+        return RecuperarOut(
+            enviado=False,
+            mensaje=f"Por ahora la recuperación por correo no funciona en esta instalación. {PIDE_TEMPORAL}",
+        )
     try:
         db.nuevo_cliente_anon().auth.reset_password_for_email(d.email, {"redirect_to": destino} if destino else {})
     except AuthApiError as error:
         if str(error.code or "") in ("over_email_send_rate_limit", "over_request_rate_limit"):
             raise HTTPException(status_code=429, detail="Ya pediste varios enlaces seguidos. Espera unos minutos e intenta de nuevo.")
         # Cualquier otro error (correo inexistente, inválido…) se responde igual que un envío correcto.
-    return MensajeOut(
-        mensaje=f"Si {d.email} tiene una cuenta, te llegará un enlace para crear una contraseña nueva. Revisa también la carpeta de spam."
+    return RecuperarOut(
+        enviado=True,
+        mensaje=f"Si {d.email} tiene una cuenta, te llegará un enlace para crear una contraseña nueva. Revisa también la "
+                f"carpeta de spam. Si no llega, {PIDE_TEMPORAL[0].lower()}{PIDE_TEMPORAL[1:]}",
     )
 
 

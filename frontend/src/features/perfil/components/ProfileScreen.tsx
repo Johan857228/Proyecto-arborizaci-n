@@ -7,8 +7,8 @@ import { fonts } from '@/config/constants';
 import { useAuthStore } from '@/features/auth/store';
 import { Avatar } from '@/features/perfil/components/Avatar';
 import { useImagenPropia } from '@/features/perfil/hooks/useImagenPropia';
-import { useCambiarMiNombre, useMiPerfil } from '@/features/perfil/hooks/usePerfil';
-import { ETIQUETA_ROL, editarNombreSchema } from '@/features/perfil/schemas';
+import { useCambiarMiContrasena, useCambiarMiNombre, useMiPerfil } from '@/features/perfil/hooks/usePerfil';
+import { ETIQUETA_ROL, cambiarContrasenaSchema, editarNombreSchema } from '@/features/perfil/schemas';
 import { useContadorCola } from '@/features/sincronizacion/colaStore';
 import { getApiErrorMessage } from '@/services/api/client';
 import { ActionSheet } from '@/shared/components/ActionSheet';
@@ -171,6 +171,7 @@ export function ProfileScreen() {
         {error ? <InlineMessage>{error}</InlineMessage> : null}
         <PrimaryButton title="Guardar nombre" disabled={valor.trim() === p.nombre} loading={cambiar.isPending} onPress={() => void guardar()} />
       </Card>
+      <CambiarContrasena />
       {porEnviar > 0 ? (
         <InlineMessage tone="warning">
           Tienes {porEnviar === 1 ? 'un registro' : `${porEnviar} registros`} sin enviar en este teléfono. Si cierras sesión no se
@@ -202,3 +203,40 @@ const useStyles = crearEstilos(({ palette, card }) => ({
   pressed: { opacity: 0.75 },
   kvs: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
 }));
+
+/** Cambiar la contraseña propia (por ejemplo, la temporal que dio el administrador). */
+function CambiarContrasena() {
+  const cambiar = useCambiarMiContrasena();
+  const [valores, setValores] = useState({ actual: '', nueva: '', confirmacion: '' });
+  const [errores, setErrores] = useState<Partial<Record<keyof typeof valores, string>>>({});
+  const [mensaje, setMensaje] = useState<string>();
+  const poner = (campo: keyof typeof valores) => (texto: string) => setValores((v) => ({ ...v, [campo]: texto }));
+
+  async function guardar() {
+    setMensaje(undefined);
+    const validado = cambiarContrasenaSchema.safeParse(valores);
+    if (!validado.success) {
+      setErrores(Object.fromEntries(validado.error.issues.map((i) => [String(i.path[0]), i.message])));
+      return;
+    }
+    setErrores({});
+    try {
+      const respuesta = await cambiar.mutateAsync({ actual: valores.actual, nueva: valores.nueva });
+      setValores({ actual: '', nueva: '', confirmacion: '' });
+      setMensaje(respuesta.mensaje);
+    } catch {
+      // El error se muestra con cambiar.error.
+    }
+  }
+
+  return (
+    <Card title="Contraseña" subtitle="Si entraste con una contraseña temporal, cámbiala aquí por una tuya." icon="lock">
+      <Field label="Contraseña actual" value={valores.actual} onChangeText={poner('actual')} secureTextEntry autoCapitalize="none" error={errores.actual} />
+      <Field label="Contraseña nueva" value={valores.nueva} onChangeText={poner('nueva')} secureTextEntry autoCapitalize="none" error={errores.nueva} hint="Al menos 8 caracteres, con letras y números." />
+      <Field label="Repite la contraseña nueva" value={valores.confirmacion} onChangeText={poner('confirmacion')} secureTextEntry autoCapitalize="none" error={errores.confirmacion} />
+      {mensaje ? <InlineMessage tone="success">{mensaje}</InlineMessage> : null}
+      {cambiar.error ? <InlineMessage>{getApiErrorMessage(cambiar.error)}</InlineMessage> : null}
+      <PrimaryButton title="Cambiar contraseña" loading={cambiar.isPending} disabled={!valores.actual || !valores.nueva} onPress={() => void guardar()} />
+    </Card>
+  );
+}
