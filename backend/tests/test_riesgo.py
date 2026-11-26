@@ -68,6 +68,7 @@ def test_inspeccion_con_tamizaje_inminente_abre_alerta(api):  # noqa: F811
     assert len(api.base.tablas["alertas_riesgo"]) == 1
     assert api.base.tablas["alertas_riesgo"][0]["categoria"] == "inminente"
     # una de riesgo bajo no abre alerta
+    api.como("docente_la")
     assert _visita(api, BAJO, A2).status_code == 201
     assert len(api.base.tablas["alertas_riesgo"]) == 1
 
@@ -93,7 +94,7 @@ def test_historial_y_riesgo_vigente_del_arbol(api):  # noqa: F811
     assert api.post(f"/inspecciones/{segunda['id']}/anular", json={"motivo": "Datos de otro árbol"}).status_code == 200
     assert api.get(f"/arboles/{A1}/riesgo").json()["tamizaje"]["categoria"] == "alto"
     lista = {a["id"]: a for a in api.get("/arboles").json()}
-    assert lista[A1]["riesgo_caida"] == "alto" and lista[A2]["riesgo_caida"] is None
+    assert lista[A1]["riesgo_caida"] == "alto" and A2 not in lista
 
 
 def test_anular_la_inspeccion_descarta_su_alerta(api):  # noqa: F811
@@ -156,8 +157,9 @@ def test_ciclo_de_una_alerta(api):  # noqa: F811
 
 
 def test_descartar_pide_motivo_y_el_admin_ve_todas(api):  # noqa: F811
-    _visita(api, INMINENTE)
-    _visita(api, ALTO, A2)
+    assert _visita(api, INMINENTE).status_code == 201
+    api.como("docente_la")
+    assert _visita(api, ALTO, A2).status_code == 201
     api.como("admin")
     todas = api.get("/alertas").json()
     assert [a["categoria"] for a in todas] == ["inminente", "alto"]  # las inminentes primero

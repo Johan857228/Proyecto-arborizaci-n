@@ -2,7 +2,8 @@ from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
-from supabase_auth.errors import AuthApiError
+from httpx import ConnectError
+from supabase_auth.errors import AuthApiError, AuthRetryableError
 
 import db
 import main
@@ -34,16 +35,34 @@ def test_token_invalido_da_401(monkeypatch):
     assert r.status_code == 401
 
 
-def test_login_credenciales_malas(monkeypatch):
+@pytest.mark.parametrize(
+    "error, estado, mensaje",
+    [
+        (AuthApiError("Invalid login credentials", 400, "invalid_credentials"), 401, "Correo o contraseña incorrectos"),
+        (AuthApiError("Invalid login credentials", 400, None), 401, "Correo o contraseña incorrectos"),
+        (AuthApiError("User not found", 404, "user_not_found"), 401, "Correo o contraseña incorrectos"),
+        (AuthApiError("User is banned", 400, "user_banned"), 401, "Correo o contraseña incorrectos"),
+        (AuthApiError("Email not confirmed", 400, "email_not_confirmed"), 403, "Confirma tu correo"),
+        (AuthApiError("Email not confirmed", 400, None), 403, "Confirma tu correo"),
+        (AuthApiError("Too many requests", 429, None), 429, "Demasiados intentos"),
+        (AuthApiError("Rate limit", 400, "over_request_rate_limit"), 429, "Demasiados intentos"),
+        (AuthApiError("Invalid API key", 401, None), 503, "El servicio de inicio de sesión"),
+        (AuthApiError("Database error", 500, "unexpected_failure"), 503, "El servicio de inicio de sesión"),
+        (AuthRetryableError("Server unavailable", 502), 503, "El servicio de inicio de sesión"),
+        (ConnectError("Connection failed"), 503, "El servicio de inicio de sesión"),
+    ],
+)
+def test_login_distingue_errores_de_supabase(monkeypatch, error, estado, mensaje):
     class AnonMalo:
         class auth:
             @staticmethod
             def sign_in_with_password(datos):
-                raise AuthApiError("Invalid login credentials", 400, None)
+                raise error
 
     monkeypatch.setattr(db, "nuevo_cliente_anon", lambda: AnonMalo)
     r = TestClient(main.app).post("/auth/login", json={"email": "a@b.c", "password": "x"})
-    assert r.status_code == 401
+    assert r.status_code == estado
+    assert r.json()["detail"].startswith(mensaje)
 
 
 def test_login_ok(monkeypatch):
@@ -83,9 +102,11 @@ def test_login_normaliza_el_correo(monkeypatch):
                 )
 
     monkeypatch.setattr(db, "nuevo_cliente_anon", lambda: AnonBueno)
-    r = TestClient(main.app).post("/auth/login", json={"email": "  Docente@Colegio.edu.co ", "password": "x"})
+    r = TestClient(main.app).post(
+        "/auth/login", json={"email": "  Docente@Colegio.edu.co ", "password": " Árbol123 "},
+    )
     assert r.status_code == 200
-    assert enviados[0]["email"] == "docente@colegio.edu.co"
+    assert enviados == [{"email": "docente@colegio.edu.co", "password": " Árbol123 "}]
 
 
 # ------------------------------- Crear árbol (validación) -------------------------------
@@ -252,6 +273,8 @@ def test_estadisticas_por_institucion(entorno):
         {"id": "i1", "arbol_id": ARBOL["id"], "estado_revision": "pendiente"},
         {"id": "i2", "arbol_id": "arbol-de-otra-institucion", "estado_revision": "pendiente"},
     ]
+    assert cliente.get("/estadisticas").json()["inspecciones_pendientes"] == 1
+    almacen["perfiles"] = [{**almacen["perfiles"][0], "rol": "administrador"}]
     assert cliente.get("/estadisticas").json()["inspecciones_pendientes"] == 2
     j = cliente.get("/estadisticas?institucion_id=sj").json()
     assert j["inspecciones_pendientes"] == 1

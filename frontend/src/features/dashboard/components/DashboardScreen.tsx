@@ -61,8 +61,8 @@ function PortadaButton({ tienePortada, cargando, onCambiar, onQuitar }: { tieneP
 }
 
 function lugarDe(perfil: MiPerfil | undefined) {
-  if (perfil?.institucion_nombre) return perfil.institucion_nombre;
-  return esAdmin(perfil) ? 'Todas las instituciones' : 'Sin institución';
+  if (esAdmin(perfil)) return 'Todas las instituciones';
+  return perfil?.institucion_nombre ?? 'Sin institución';
 }
 
 /** Portada: la foto (propia o del campus), el saludo, el rol y cuántas tareas hay hoy. En el
@@ -123,7 +123,7 @@ function Portada({ perfil, pendientes, totalArboles, portada, compacta = false }
         <View style={[styles.portadaAccion, compacta && styles.portadaAccionCentrada]}>
           <PrimaryButton title="Registrar el primer árbol" icon="add" compact onPress={() => router.navigate('/(app)/trees/new' as Href)} />
         </View>
-      ) : isWide && perfil ? (
+      ) : isWide && (esAdmin(perfil) || perfil?.institucion_id) ? (
         <View style={[styles.portadaAccion, compacta && styles.portadaAccionCentrada]}>
           {esAdmin(perfil)
             ? <PrimaryButton title="Ver reportes" icon="chart" compact onPress={() => router.navigate('/(app)/reports' as Href)} />
@@ -166,26 +166,31 @@ export function DashboardScreen() {
   const espacio = useEspaciado();
   const perfil = useMiPerfil();
   const p = perfil.data;
-  const institucionId = p?.institucion_id ?? undefined;
-  const { stats, recentTrees } = useDashboard(institucionId, perfil.isSuccess);
+  const admin = esAdmin(p);
+  const institucionId = admin ? undefined : p?.institucion_id ?? undefined;
+  const sinInstitucion = Boolean(p && !admin && !institucionId);
+  const puedeVer = perfil.isSuccess && (admin || Boolean(institucionId));
+  const { stats, recentTrees } = useDashboard(institucionId, puedeVer);
+  const estadisticas = puedeVer ? stats.data : undefined;
+  const arboles = puedeVer ? recentTrees.data : undefined;
   const portada = useImagenPropia('portada');
   const hoy = usePendientesDeHoy(p);
   const refrescarTodo = useRefrescarTodo();
   const [refrescando, setRefrescando] = useState(false);
   const { width } = useWindowDimensions();
   const avisoPrivacidad = useTextoAvisoPrivacidad();
-  const error = perfil.error ?? stats.error;
+  const error = perfil.error ?? (puedeVer ? stats.error : null);
 
   // Escritorio: todo en una pantalla, sin desplazar la página.
   if (width >= ANCHO_TABLERO) {
     const avisos = [
       error ? <InlineMessage key="error">{getApiErrorMessage(error)}</InlineMessage> : null,
       portada.error ? <InlineMessage key="portada">{portada.error}</InlineMessage> : null,
-      recentTrees.error ? <InlineMessage key="recientes">{getApiErrorMessage(recentTrees.error)}</InlineMessage> : null,
+      puedeVer && recentTrees.error ? <InlineMessage key="recientes">{getApiErrorMessage(recentTrees.error)}</InlineMessage> : null,
       p && avisoPrivacidad ? <AvisoPrivacidad key="privacidad" /> : null,
-      p && !p.institucion_id ? (
+      sinInstitucion ? (
         <InlineMessage key="institucion" tone="info">
-          Tu cuenta aún no tiene institución asignada. Pídele al administrador que te la asigne para entrar a un curso y aparecer en el ranking de tu institución.
+          Pide a un docente o administrador que te asigne una institución para consultar su inventario.
         </InlineMessage>
       ) : null,
     ].filter(Boolean);
@@ -193,13 +198,13 @@ export function DashboardScreen() {
       <Screen>
         <TableroInicio
           perfil={p}
-          stats={stats.data}
+          stats={estadisticas}
           cargandoStats={stats.isLoading || perfil.isLoading}
-          arboles={recentTrees.data}
+          arboles={arboles}
           cargandoArboles={recentTrees.isLoading}
-          portada={<Portada perfil={p} pendientes={hoy.total} totalArboles={stats.data?.total} portada={portada} compacta />}
+          portada={<Portada perfil={p} pendientes={hoy.total} totalArboles={estadisticas?.total} portada={portada} compacta />}
           avisos={avisos}
-          pie={<Pie actualizado={stats.dataUpdatedAt} tablero />}
+          pie={<Pie actualizado={puedeVer ? stats.dataUpdatedAt : 0} tablero />}
         />
       </Screen>
     );
@@ -214,8 +219,8 @@ export function DashboardScreen() {
     }
   }
 
-  const estado = <EstadoArbolado stats={stats.data} cargando={stats.isLoading || perfil.isLoading} alcance={lugarDe(p)} />;
-  const impacto = <Impacto stats={stats.data} />;
+  const estado = <EstadoArbolado stats={estadisticas} cargando={stats.isLoading || perfil.isLoading} alcance={lugarDe(p)} />;
+  const impacto = <Impacto stats={estadisticas} />;
 
   return (
     <Screen>
@@ -224,14 +229,14 @@ export function DashboardScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refrescando} onRefresh={() => void refrescar()} tintColor={palette.forest} colors={[palette.forest]} />}
       >
-        <Portada perfil={p} pendientes={hoy.total} totalArboles={stats.data?.total} portada={portada} />
+        <Portada perfil={p} pendientes={hoy.total} totalArboles={estadisticas?.total} portada={portada} />
 
         {error ? <InlineMessage>{getApiErrorMessage(error)}</InlineMessage> : null}
         {portada.error ? <InlineMessage>{portada.error}</InlineMessage> : null}
         {p ? <AvisoPrivacidad /> : null}
-        {p && !p.institucion_id ? (
+        {sinInstitucion ? (
           <InlineMessage tone="info">
-            Tu cuenta aún no tiene institución asignada. Pídele al administrador que te la asigne para entrar a un curso y aparecer en el ranking de tu institución.
+            Pide a un docente o administrador que te asigne una institución para consultar su inventario.
           </InlineMessage>
         ) : null}
 
@@ -249,12 +254,12 @@ export function DashboardScreen() {
         )}
 
         <FadeIn index={4}><AccesosRapidos perfil={p} /></FadeIn>
-        {p ? <FadeIn index={5}><MetasEnCurso perfil={p} /></FadeIn> : null}
-        <FadeIn index={6}><Distribucion stats={stats.data} isWide={isWide} /></FadeIn>
-        <FadeIn index={7}><Recientes arboles={recentTrees.data} cargando={recentTrees.isLoading} isWide={isWide} /></FadeIn>
-        {recentTrees.error ? <InlineMessage>{getApiErrorMessage(recentTrees.error)}</InlineMessage> : null}
+        {p && puedeVer ? <FadeIn index={5}><MetasEnCurso perfil={p} /></FadeIn> : null}
+        <FadeIn index={6}><Distribucion stats={estadisticas} isWide={isWide} /></FadeIn>
+        <FadeIn index={7}><Recientes arboles={arboles} cargando={recentTrees.isLoading} isWide={isWide} /></FadeIn>
+        {puedeVer && recentTrees.error ? <InlineMessage>{getApiErrorMessage(recentTrees.error)}</InlineMessage> : null}
 
-        <Pie actualizado={stats.dataUpdatedAt} />
+        <Pie actualizado={puedeVer ? stats.dataUpdatedAt : 0} />
       </ScrollView>
     </Screen>
   );

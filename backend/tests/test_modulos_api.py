@@ -142,6 +142,63 @@ def test_usuario_desactivado_no_entra(api):
     assert api.get("/perfil").status_code == 403
 
 
+@pytest.mark.parametrize("cuenta", ["est1", "docente"])
+def test_registros_institucionales_incluyen_a_todos_los_autores(api, cuenta):
+    arbol_companero = "33333333-3333-3333-3333-333333333333"
+    api.base.tablas["arboles_resumen"].append(
+        _arbol(arbol_companero, "IE001-0002", "sj", registrado_por=USUARIOS["est2"][0])
+    )
+    api.como(cuenta)
+
+    inventario = api.get("/arboles")
+    assert inventario.status_code == 200
+    assert {a["id"] for a in inventario.json()} == {A1, arbol_companero}
+    assert api.get(f"/arboles/{arbol_companero}").status_code == 200
+    assert api.get(f"/arboles/{A2}").status_code == 404
+    assert api.get(f"/arboles/{A2}/inspecciones").status_code == 404
+    assert api.get(f"/inspecciones/{I3}").status_code == 404
+    assert api.get("/estadisticas").json()["total"] == 2
+    assert api.get("/reportes/indicadores").json()["institucion_id"] == "sj"
+    for ruta in ("/arboles", "/estadisticas", "/reportes/indicadores"):
+        assert api.get(ruta, params={"institucion_id": "la"}).status_code == 403
+
+
+def test_inventario_global_reservado_al_administrador(api):
+    estudiante = next(p for p in api.base.tablas["perfiles"] if p["usuario_id"] == USUARIOS["est1"][0])
+    estudiante["institucion_id"] = None
+    for ruta in ("/arboles", "/estadisticas", "/reportes/indicadores"):
+        assert api.get(ruta).status_code == 403
+        assert api.get(ruta, params={"institucion_id": "sj"}).status_code == 403
+
+    api.como("admin")
+    assert {a["id"] for a in api.get("/arboles").json()} == {A1, A2}
+    assert api.get("/estadisticas").json()["total"] == 2
+    assert [a["id"] for a in api.get("/arboles", params={"institucion_id": "la"}).json()] == [A2]
+
+
+def test_docente_incorpora_a_un_estudiante_a_su_institucion(api):
+    estudiante = next(p for p in api.base.tablas["perfiles"] if p["usuario_id"] == USUARIOS["est2"][0])
+    estudiante["institucion_id"] = None
+    solicitud = {"correo": " EST2@X.CO "}
+    assert api.post("/usuarios/incorporar", json=solicitud).status_code == 403
+    api.como("est2")
+    assert api.get("/arboles").status_code == 403
+
+    api.como("docente")
+    respuesta = api.post("/usuarios/incorporar", json=solicitud)
+    assert respuesta.status_code == 200, respuesta.text
+    assert respuesta.json()["institucion_id"] == "sj"
+    assert respuesta.json()["rol"] == "estudiante"
+    assert respuesta.json()["curso_id"] is None
+    assert api.post("/usuarios/incorporar", json=solicitud).status_code == 200
+    assert api.post("/usuarios/incorporar", json={"correo": "admin@x.co"}).status_code == 404
+
+    api.como("docente_la")
+    assert api.post("/usuarios/incorporar", json=solicitud).status_code == 404
+    api.como("est2")
+    assert [a["id"] for a in api.get("/arboles").json()] == [A1]
+
+
 def test_refrescar_sesion(monkeypatch):
     sesion = SimpleNamespace(access_token="nuevo", refresh_token="otro", expires_in=3600)
 
@@ -160,9 +217,11 @@ def test_refrescar_sesion(monkeypatch):
 def test_inspeccion_se_califica_con_el_metodo_de_la_institucion(api):
     cuerpo = {"dap_cm": 31, "altura_m": 8.4, "copa_m": 4.1, "etapa": "Adulto", "interferencia": "Ninguna",
               "observaciones": ["p_termitas", "p_termitas"]}
+    api.como("docente_la")
     r = api.post(f"/arboles/{A2}/inspecciones", json=cuerpo)  # 'la' usa la versión 2: plagas pesan 3
     assert r.status_code == 201, r.text
     assert r.json()["puntaje_riesgo"] == 3 and r.json()["calificacion"] == "riesgo" and r.json()["metodo_version"] == 2
+    api.como("est1")
     r = api.post(f"/arboles/{A1}/inspecciones", json={**cuerpo, "observaciones": ["p_termitas", "t_micelio", "f_manchas"]})
     assert r.json()["puntaje_riesgo"] == 3 and r.json()["metodo_version"] == 1  # 'sj' sin parámetros: versión 1
     obs = [o for o in api.base.tablas["inspeccion_observaciones"] if o["inspeccion_id"] == r.json()["id"]]
@@ -265,7 +324,10 @@ def test_fotos_de_inspeccion(api):
     api.como("est2")
     assert api.post(f"/inspecciones/{I1}/fotos?tipo=completo", files={"archivo": jpg}).status_code == 403
     api.como("est1")
-    assert api.post(f"/inspecciones/{I3}/fotos?tipo=completo", files={"archivo": jpg}).status_code == 409  # ya revisada
+    assert api.post(f"/inspecciones/{I3}/fotos?tipo=completo", files={"archivo": jpg}).status_code == 404
+    revisada = next(i for i in api.base.tablas["inspecciones"] if i["id"] == I2)
+    revisada.update(inspector_id=USUARIOS["est1"][0], estado_revision="confirmada")
+    assert api.post(f"/inspecciones/{I2}/fotos?tipo=completo", files={"archivo": jpg}).status_code == 409
     r = api.post(f"/inspecciones/{I1}/fotos?tipo=completo", files={"archivo": jpg})
     assert r.status_code == 201 and r.json()["storage_path"].startswith(f"{A1}/inspecciones/{I1}/")
     assert api.post(f"/inspecciones/{I1}/fotos?tipo=completo", files={"archivo": jpg}).status_code == 409
@@ -279,6 +341,7 @@ def test_fotos_de_inspeccion(api):
 
 
 def test_lista_de_arboles_trae_la_foto_general_mas_reciente(api):
+    api.como("admin")
     tablas = api.base.tablas
     tablas["arbol_fotos"] += [
         {"id": "f1", "arbol_id": A1, "tipo": "completo", "storage_path": f"{A1}/registro.jpg"},
@@ -444,7 +507,7 @@ def test_progreso_y_ranking(api):
     r = api.get("/gamificacion/ranking").json()
     assert r["filas"][0]["nombre"] == "Laura" and r["filas"][0]["curso_nombre"] == "10-A"
     cursos = api.get("/gamificacion/ranking?tipo=curso&institucion_id=sj").json()
-    assert cursos["filas"][0]["nombre"] == "10-A" and cursos["mi_posicion"]["puntos"] == 25
+    assert cursos["filas"][0]["nombre"] == "10-A" and cursos["mi_posicion"]["puntos"] == 0
 
 
 # ---------------------------- Reportes, metas y escenarios ----------------------------

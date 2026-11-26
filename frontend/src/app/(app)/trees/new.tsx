@@ -3,6 +3,8 @@ import { ActivityIndicator, Text, View } from 'react-native';
 import { router, type Href } from 'expo-router';
 
 import { useCatalogs } from '@/features/catalogs/hooks/useCatalogs';
+import { useMiPerfil } from '@/features/perfil/hooks/usePerfil';
+import { esAdmin } from '@/features/perfil/schemas';
 import { evaluarTamizaje, type ResultadoLocal } from '@/features/riesgo/reglas';
 import { useRegistroDesdeSavia } from '@/features/savia/registroDesdeSavia';
 import { useRegisterTree } from '@/features/trees/hooks/useRegisterTree';
@@ -32,6 +34,7 @@ export default function NewTreeRoute() {
   const styles = useStyles();
   const { palette } = useTema();
   const catalogs = useCatalogs();
+  const perfil = useMiPerfil();
   const registerTree = useRegisterTree();
   const [submitError, setSubmitError] = useState<string>();
   const [registered, setRegistered] = useState<Registered>();
@@ -96,33 +99,50 @@ export default function NewTreeRoute() {
     );
   }
 
-  if (catalogs.isLoading) {
+  if (catalogs.isLoading || perfil.isLoading) {
     return (
       <Screen>
         <View style={styles.state}>
           <ActivityIndicator color={palette.forest} />
-          <Text style={styles.stateText}>Cargando catálogos…</Text>
+          <Text style={styles.stateText}>Preparando el registro…</Text>
         </View>
       </Screen>
     );
   }
-  if (catalogs.error || !catalogs.data) {
+  if (perfil.error || !perfil.data || catalogs.error || !catalogs.data) {
     return (
       <Screen>
         <View style={styles.state}>
           <View style={styles.stateIcon}><Icon name="error" size={28} color={palette.red} /></View>
-          <Text style={styles.stateTitle}>{getApiErrorMessage(catalogs.error)}</Text>
-          <Text style={styles.stateText}>No se pudieron cargar especies, instituciones y observaciones.</Text>
-          <PrimaryButton title="Reintentar" icon="refresh" variant="secondary" onPress={() => void catalogs.refetch()} />
+          <Text style={styles.stateTitle}>{getApiErrorMessage(perfil.error ?? catalogs.error)}</Text>
+          <Text style={styles.stateText}>No se pudieron cargar el perfil y los catálogos del registro.</Text>
+          <PrimaryButton title="Reintentar" icon="refresh" variant="secondary" onPress={() => void Promise.all([perfil.refetch(), catalogs.refetch()])} />
         </View>
       </Screen>
     );
   }
 
+  const admin = esAdmin(perfil.data);
+  const institucionId = perfil.data.institucion_id;
+  if (!admin && !institucionId) {
+    return (
+      <Screen>
+        <View style={styles.state}>
+          <Text style={styles.stateTitle}>Tu cuenta aún no tiene una institución.</Text>
+          <Text style={styles.stateText}>Pide a un docente o administrador que te asigne una para registrar árboles.</Text>
+        </View>
+      </Screen>
+    );
+  }
+  const catalogosVisibles = admin ? catalogs.data : {
+    ...catalogs.data,
+    instituciones: catalogs.data.instituciones.filter((sede) => sede.id === institucionId),
+  };
+
   return (
     <TreeCreateForm
-      key={formKey}
-      catalogs={catalogs.data}
+      key={`${formKey}-${admin ? 'todas' : institucionId}`}
+      catalogs={catalogosVisibles}
       submitting={registerTree.isPending}
       submitError={submitError}
       onCancel={() => router.navigate('/(app)/trees' as Href)}

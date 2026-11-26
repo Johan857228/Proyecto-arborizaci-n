@@ -23,13 +23,14 @@ from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, Respo
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
+from httpx import RequestError
 from postgrest.exceptions import APIError
 from pydantic import BaseModel, Field, field_validator
 from supabase_auth.errors import AuthApiError, AuthError, AuthWeakPasswordError
 
 import datos
 import db
-from auth import Perfil, Sesion, perfil_actual, usuario_actual
+from auth import Perfil, perfil_actual
 from comun import (
     BUCKET_FOTOS,
     MAX_FOTOS_ADICIONALES,
@@ -186,6 +187,23 @@ def _sesion(res) -> SesionOut:
     )
 
 
+CREDENCIALES_INVALIDAS = (401, "Correo o contraseña incorrectos")
+LOGIN_NO_DISPONIBLE = (503, "El servicio de inicio de sesión no está disponible. Intenta de nuevo en unos minutos.")
+ERRORES_LOGIN = {
+    "invalid_credentials": CREDENCIALES_INVALIDAS,
+    "user_not_found": CREDENCIALES_INVALIDAS,
+    "user_banned": CREDENCIALES_INVALIDAS,
+    "email_not_confirmed": (403, "Confirma tu correo con el enlace de registro. Revisa también la carpeta de spam."),
+    "over_request_rate_limit": (429, "Demasiados intentos de inicio de sesión. Espera unos minutos e intenta de nuevo."),
+}
+# Algunas respuestas antiguas de Auth solo traen el mensaje, sin código.
+CODIGOS_LOGIN_ANTIGUOS = {
+    "Invalid login credentials": "invalid_credentials",
+    "Email not confirmed": "email_not_confirmed",
+    "User is banned": "user_banned",
+}
+
+
 @app.post("/auth/login", response_model=SesionOut, tags=["Autenticación"])
 def login(datos_login: LoginIn):
     """Inicia sesión y devuelve el token. El frontend lo envía luego como
@@ -194,8 +212,17 @@ def login(datos_login: LoginIn):
         res = db.nuevo_cliente_anon().auth.sign_in_with_password(
             {"email": datos_login.email, "password": datos_login.password}
         )
-    except AuthApiError:
-        raise HTTPException(status_code=401, detail="Correo o contraseña incorrectos")
+    except AuthApiError as error:
+        codigo = error.code
+        if error.status == 429:
+            codigo = "over_request_rate_limit"
+        elif codigo is None and error.status == 400:
+            codigo = CODIGOS_LOGIN_ANTIGUOS.get(error.message)
+        estado, mensaje = ERRORES_LOGIN.get(codigo, LOGIN_NO_DISPONIBLE)
+        raise HTTPException(status_code=estado, detail=mensaje) from None
+    except (AuthError, RequestError):
+        estado, mensaje = LOGIN_NO_DISPONIBLE
+        raise HTTPException(status_code=estado, detail=mensaje) from None
     return _sesion(res)
 
 
@@ -349,13 +376,14 @@ def crear_arbol(datos_arbol: ArbolCrear, respuesta: Response, perfil: Perfil = D
     'registro'), que queda pendiente de revisión. El código (IE001-0001) y el usuario que
     lo registra los asigna la base de datos. Si la app lo reenvía con el mismo id_cliente
     (se guardó sin conexión), responde 200 con el árbol que ya existe."""
+    institucion_id = perfil.institucion_para_leer(datos_arbol.institucion_id)
     cliente = db.cliente_de_usuario(perfil.sesion.token)
     existente = buscar_por_id_cliente(cliente, "arboles", datos_arbol.id_cliente, "id, registrado_por")
     if existente:
         if ajeno(existente, "registrado_por", perfil.usuario_id):
             raise HTTPException(status_code=409, detail="Ese identificador ya se usó en otro registro")
         respuesta.status_code = 200
-        return resumen_por_id(cliente, str(existente["id"]))
+        return resumen_por_id(cliente, str(existente["id"]), institucion_id)
 
     # 1) La zona debe existir en la institución. Si dejó de existir mientras el registro esperaba
     #    sin conexión (la renombraron o la borraron), se guarda como "Otra" con ese nombre para no
@@ -381,7 +409,7 @@ def crear_arbol(datos_arbol: ArbolCrear, respuesta: Response, perfil: Perfil = D
     creado, nuevo = insertar_sin_duplicar(cliente, "arboles", fila)
     if not nuevo:  # otro envío del mismo registro llegó primero
         respuesta.status_code = 200
-        return resumen_por_id(cliente, str(creado["id"]))
+        return resumen_por_id(cliente, str(creado["id"]), institucion_id)
 
     # 4) Guardar las observaciones y la inspección de registro; si algo falla, se borra el
     #    árbol (y en cascada lo que alcanzó a guardarse) para no dejarlo a medias.
@@ -418,7 +446,7 @@ def crear_arbol(datos_arbol: ArbolCrear, respuesta: Response, perfil: Perfil = D
 
     if datos_arbol.ia_analisis_id:
         ia.enlazar_analisis(str(datos_arbol.ia_analisis_id), str(creado["id"]), perfil.usuario_id)
-    resumen = resumen_por_id(cliente, creado["id"])
+    resumen = resumen_por_id(cliente, creado["id"], institucion_id)
     tamizaje = registro.get("_tamizaje")
     return {**resumen, "riesgo_caida": tamizaje["categoria"] if tamizaje else None}
 
@@ -448,8 +476,9 @@ def listar_arboles(
     desplazamiento: int = Query(0, ge=0),
     perfil: Perfil = Depends(perfil_actual),
 ):
-    """Inventario con búsqueda, filtros y paginación. El filtro por persona lo usan docentes y
-    administradores (por alumno); los estudiantes solo pueden pedir sus propios registros."""
+    """Inventario institucional con búsqueda, filtros y paginación. El filtro opcional por otra
+    persona se reserva a docentes y administradores."""
+    institucion_id = perfil.institucion_para_leer(institucion_id)
     if registrado_por and str(registrado_por) != perfil.usuario_id and not perfil.es_revisor:
         raise HTTPException(status_code=403, detail="Solo docentes y administradores pueden ver los registros de otra persona")
     cliente = db.cliente_de_usuario(perfil.sesion.token)
@@ -474,11 +503,12 @@ def listar_arboles(
 
 
 @app.get("/arboles/{arbol_id}", response_model=ArbolDetalle, tags=["Árboles"])
-def detalle_arbol(arbol_id: UUID, sesion: Sesion = Depends(usuario_actual)):
+def detalle_arbol(arbol_id: UUID, perfil: Perfil = Depends(perfil_actual)):
     """Un árbol con los hallazgos de su última inspección válida y sus fotos de registro
     (URLs temporales). El historial completo está en /arboles/{id}/inspecciones."""
-    cliente = db.cliente_de_usuario(sesion.token)
-    resumen = resumen_por_id(cliente, str(arbol_id))
+    institucion_id = perfil.institucion_para_leer()
+    cliente = db.cliente_de_usuario(perfil.sesion.token)
+    resumen = resumen_por_id(cliente, str(arbol_id), institucion_id)
     catalogo = datos.catalogo_observaciones(cliente)
 
     if resumen.get("ultima_inspeccion_id"):
@@ -570,11 +600,12 @@ def _metodo_del_arbol(cliente, arbol: dict):
 
 
 @app.get("/arboles/{arbol_id}/calculos", response_model=Calculos, tags=["Árboles"])
-def calculos_arbol(arbol_id: UUID, sesion: Sesion = Depends(usuario_actual)):
+def calculos_arbol(arbol_id: UUID, perfil: Perfil = Depends(perfil_actual)):
     """Biomasa, carbono, CO2 y O2 estimados para un árbol, con las constantes de la versión
     del método con que se calificó su última inspección."""
-    cliente = db.cliente_de_usuario(sesion.token)
-    a = resumen_por_id(cliente, str(arbol_id))
+    institucion_id = perfil.institucion_para_leer()
+    cliente = db.cliente_de_usuario(perfil.sesion.token)
+    a = resumen_por_id(cliente, str(arbol_id), institucion_id)
     metodo = _metodo_del_arbol(cliente, a)
     valores = calcular_ambientales(metodo, a["dap_cm"], a["altura_m"], a["nombre_comun"])
     return Calculos(
@@ -596,19 +627,23 @@ def subir_foto(
     tipo: TipoFoto = Query(..., description="completo, detalle o adicional"),
     archivo: UploadFile = File(...),
     id_cliente: UUID | None = Query(None, description="UUID de la app: si el envío se repite, no se duplica la foto"),
-    sesion: Sesion = Depends(usuario_actual),
+    perfil: Perfil = Depends(perfil_actual),
 ):
     """Sube una foto a Storage y registra su ruta. Solo quien registró el árbol puede hacerlo.
     Reglas: una foto 'completo', una 'detalle' y hasta 3 'adicional'. JPG, PNG o WebP, máx. 5 MB."""
     # Valida tipo, tamaño y formato real (por su firma) y quita los metadatos de la foto.
     contenido, tipo_real, extension = leer_foto(archivo, MAX_FOTO_BYTES)
 
-    cliente = db.cliente_de_usuario(sesion.token)
+    institucion_id = perfil.institucion_para_leer()
+    cliente = db.cliente_de_usuario(perfil.sesion.token)
 
-    arbol = cliente.table("arboles").select("id, registrado_por").eq("id", str(arbol_id)).execute().data
+    consulta = cliente.table("arboles").select("id, registrado_por").eq("id", str(arbol_id))
+    if institucion_id is not None:
+        consulta = consulta.eq("institucion_id", institucion_id)
+    arbol = consulta.execute().data
     if not arbol:
         raise HTTPException(status_code=404, detail="Árbol no encontrado")
-    if arbol[0]["registrado_por"] != sesion.user_id:
+    if arbol[0]["registrado_por"] != perfil.usuario_id:
         raise HTTPException(status_code=403, detail="Solo quien registró el árbol puede agregar fotos")
 
     # Reenvío de una foto que ya se guardó (la app no alcanzó a recibir la respuesta).
@@ -655,12 +690,13 @@ def _quitar_foto(ruta: str) -> None:
 # ================================= Estadísticas ==================================
 @app.get("/estadisticas", response_model=Estadisticas, tags=["Estadísticas"])
 def estadisticas(
-    institucion_id: str | None = Query(None, description="Solo los árboles de esta institución (opcional)"),
-    sesion: Sesion = Depends(usuario_actual),
+    institucion_id: str | None = Query(None, description="Institución solicitada por el administrador"),
+    perfil: Perfil = Depends(perfil_actual),
 ):
     """Datos para las pantallas de inicio y estadísticas. Con institucion_id, todo (también las
     inspecciones pendientes) se limita a los árboles de esa institución."""
-    cliente = db.cliente_de_usuario(sesion.token)
+    institucion_id = perfil.institucion_para_leer(institucion_id)
+    cliente = db.cliente_de_usuario(perfil.sesion.token)
     filas = traer_todo(
         cliente,
         "arboles_resumen",

@@ -101,6 +101,7 @@ def catalogo_indicadores(perfil: Perfil = Depends(perfil_actual)):
 
 @router.get("", response_model=list[MetaOut])
 def listar(institucion_id: str | None = None, perfil: Perfil = Depends(perfil_actual)):
+    institucion_id = perfil.institucion_para_leer(institucion_id)
     cliente = db.cliente_de_usuario(perfil.sesion.token)
     consulta = cliente.table("metas").select("*")
     if institucion_id:

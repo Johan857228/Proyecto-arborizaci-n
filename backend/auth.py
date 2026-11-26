@@ -46,6 +46,16 @@ class Perfil:
         """Administrador en cualquier institución; docente solo en la suya."""
         return self.es_admin or (self.rol == "docente" and institucion_id is not None and self.institucion_id == institucion_id)
 
+    def institucion_para_leer(self, solicitada: str | None = None) -> str | None:
+        """Resuelve el alcance de los registros institucionales. Solo el administrador puede consultar todas."""
+        if self.es_admin:
+            return solicitada
+        if not self.institucion_id:
+            raise HTTPException(status_code=403, detail="Tu cuenta aún no tiene una institución asignada.")
+        if solicitada is not None and solicitada != self.institucion_id:
+            raise HTTPException(status_code=403, detail="Solo puedes consultar los registros de tu institución.")
+        return self.institucion_id
+
 
 def usuario_actual(
     credenciales: HTTPAuthorizationCredentials | None = Depends(esquema_bearer),

@@ -61,6 +61,8 @@ estos archivos, que se pegan completos en **Supabase → SQL Editor → Run**, e
 13. `sql/013_siembras.sql` (jornadas de siembra, plántulas, controles de supervivencia y asistentes)
 14. `sql/014_territorial.sql` (rol territorial, territorios, sus funcionarios y el informe anual editable)
 15. `sql/015_catalogo_oficial.sql` (ficha oficial de cada especie con versión y DOI de la fuente, y análisis de IA para medir aciertos y costo)
+16. `sql/016_zonas_y_bajas.sql` (zonas de cada institución y constancias de baja de árboles)
+17. `sql/017_acceso_institucional.sql` (inventario, historial y fotos visibles por institución; acceso global para administradores)
 
 No borran datos: a cada árbol ya registrado le crean su inspección de registro (con los
 hallazgos que tenía) y a cada usuario de Supabase Auth su perfil. Se pueden ejecutar más de
@@ -165,6 +167,7 @@ triggers en Supabase (para que tampoco se puedan saltar llamando a la API de Sup
 | POST | `/auth/login` | Público | Devuelve el token (`access_token`) y el `refresh_token` |
 | POST | `/auth/refresh` | Público | Cambia el `refresh_token` por una sesión nueva |
 | POST | `/auth/registro` | Público | Crea una cuenta de estudiante sin institución (nombre, correo, contraseña y `acepta_politica`); devuelve la sesión o pide confirmar el correo |
+| POST | `/usuarios/incorporar` | Docente | Incorpora a su institución una cuenta activa de estudiante sin institución mediante su correo |
 | GET | `/catalogos` | Público | Especies, instituciones y casillas fitosanitarias |
 | GET / PATCH | `/perfil` | Usuario | Mi rol, institución y curso / cambiar mi nombre |
 | GET | `/usuarios` | Docente, admin | Usuarios (el docente ve los de su institución) |
@@ -482,7 +485,7 @@ Configuración sin tocar código. La versión 1 usa los mismos valores de `calcu
 
 ## Limitaciones conocidas
 
-- Los usuarios se crean a mano en Supabase Auth; al primer inicio de sesión tienen rol `estudiante` y el administrador les asigna institución, rol y curso desde la pantalla Usuarios.
+- Los usuarios nuevos tienen rol `estudiante`. En Usuarios, un docente puede incorporar por correo a un estudiante sin institución a su propio colegio y asignarle un curso. El administrador puede asignar o cambiar la institución, el rol y el curso.
 - La vista `perfiles_publicos` es *security definer* a propósito (expone nombre, rol, institución y curso de todos para rankings y revisiones, sin el correo). El linter de Supabase la marca como advertencia.
 - Los indicadores, el avance de los cursos y los rankings se calculan en memoria leyendo el historial completo; para un colegio (cientos o pocos miles de árboles) es suficiente.
 - Si el registro de observaciones falla, el árbol se borra para no quedar a medias, pero el consecutivo del código ya consumido no se recupera.

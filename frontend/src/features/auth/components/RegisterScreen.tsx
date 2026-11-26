@@ -152,7 +152,7 @@ export function RegisterScreen() {
           </Text>
         </FadeIn>
         <Text style={styles.note}>
-          Tu cuenta empieza como estudiante. Un docente o un administrador te asigna la institución y el rol.
+          Tu cuenta empieza como estudiante. Un docente o un administrador puede asignarte una institución.
         </Text>
       </View>
     </AuthLayout>

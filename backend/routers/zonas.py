@@ -204,6 +204,7 @@ def _actualizar(admin, zona_id: UUID, cambios: dict) -> None:
 @router.get("/instituciones/{institucion_id}/zonas", response_model=ZonasOut)
 def listar(institucion_id: str, perfil: Perfil = Depends(perfil_actual)):
     """Zonas de la institución con su tipo, su contorno y cuántos árboles y cursos tiene cada una."""
+    perfil.institucion_para_leer(institucion_id)
     return _respuesta(db.cliente_de_usuario(perfil.sesion.token), perfil, institucion_id)
 
 

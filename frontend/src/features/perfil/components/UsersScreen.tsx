@@ -4,10 +4,10 @@ import { Text, View } from 'react-native';
 import { useCatalogs } from '@/features/catalogs/hooks/useCatalogs';
 import { useCursos } from '@/features/courses/api';
 import { InstitucionSelector, useInstitucionElegida } from '@/features/perfil/components/InstitucionSelector';
-import { useEditarUsuario, useMiPerfil, useUsuarios } from '@/features/perfil/hooks/usePerfil';
+import { useEditarUsuario, useIncorporarEstudiante, useMiPerfil, useUsuarios } from '@/features/perfil/hooks/usePerfil';
 import { ETIQUETA_ROL, esAdmin, esRevisor, rolSchema, type Rol, type Usuario } from '@/features/perfil/schemas';
 import { getApiErrorMessage } from '@/services/api/client';
-import { InlineMessage, PrimaryButton, SelectField } from '@/shared/components/FormControls';
+import { Field, InlineMessage, PrimaryButton, SelectField } from '@/shared/components/FormControls';
 import { AppHeader, Badge, Card, EmptyState, ErrorState, LoadingState, Notice, Page, Tabs } from '@/shared/components/UI';
 import { crearEstilos } from '@/theme';
 
@@ -41,8 +41,9 @@ export function UsersScreen() {
         title="Usuarios"
         subtitle={admin
           ? 'Asigna rol, institución y curso. Las cuentas se crean en Supabase Auth; aquí aparecen al iniciar sesión por primera vez.'
-          : 'Asigna el curso a los estudiantes de tu institución.'}
+          : 'Incorpora estudiantes a tu institución y asígnales un curso.'}
       />
+      {perfil.data?.rol === 'docente' && perfil.data.institucion_id ? <Incorporacion /> : null}
       {sinInstitucion.length ? (
         <View style={styles.nuevas}>
           <Notice tono="riesgo">
@@ -67,6 +68,36 @@ export function UsersScreen() {
         lista.map((u) => <UsuarioCard key={u.usuario_id} usuario={u} admin={admin} propio={u.usuario_id === perfil.data?.usuario_id} />)
       )}
     </Page>
+  );
+}
+
+function Incorporacion() {
+  const [correo, setCorreo] = useState('');
+  const incorporar = useIncorporarEstudiante();
+
+  return (
+    <Card title="Incorporar estudiante">
+      <Field
+        label="Correo con el que se registró"
+        value={correo}
+        onChangeText={(valor) => {
+          setCorreo(valor);
+          incorporar.reset();
+        }}
+        autoCapitalize="none"
+        autoComplete="email"
+        keyboardType="email-address"
+        editable={!incorporar.isPending}
+      />
+      {incorporar.data ? <InlineMessage tone="info">{incorporar.data.nombre} ya pertenece a tu institución.</InlineMessage> : null}
+      {incorporar.error ? <InlineMessage>{getApiErrorMessage(incorporar.error)}</InlineMessage> : null}
+      <PrimaryButton
+        title="Añadir a mi institución"
+        disabled={!correo.trim()}
+        loading={incorporar.isPending}
+        onPress={() => incorporar.mutate(correo.trim(), { onSuccess: () => setCorreo('') })}
+      />
+    </Card>
   );
 }
 
