@@ -1,5 +1,5 @@
 import { ApiContractError, api, validar } from '@/services/api/client';
-import { mensajeSchema, registroRespuestaSchema, sessionSchema, type RegistroFormValues } from '@/features/auth/schemas';
+import { mensajeSchema, recuperarRespuestaSchema, registroRespuestaSchema, sessionSchema, type RegistroFormValues } from '@/features/auth/schemas';
 import type { LoginInput, Session } from '@/features/auth/types';
 
 export interface BackendStatus {
@@ -33,10 +33,11 @@ export const authService = {
     return validar(registroRespuestaSchema, data);
   },
 
-  /** Envía al correo el enlace para crear una contraseña nueva (la respuesta es la misma exista o no la cuenta). */
+  /** Envía al correo el enlace para crear una contraseña nueva (la respuesta es la misma exista o no la cuenta).
+   *  Si el enlace no llevaría a la app, el backend no lo manda (enviado = false) y explica qué hacer. */
   async recuperar(email: string) {
     const { data } = await api.post<unknown>('/auth/recuperar', { email });
-    return validar(mensajeSchema, data).mensaje;
+    return validar(recuperarRespuestaSchema, data);
   },
 
   /** Guarda la contraseña nueva con el token que trae el enlace del correo. */

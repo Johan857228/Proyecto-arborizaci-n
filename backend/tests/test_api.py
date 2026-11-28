@@ -42,8 +42,9 @@ def test_token_invalido_da_401(monkeypatch):
         (AuthApiError("Invalid login credentials", 400, None), 401, "Correo o contraseña incorrectos"),
         (AuthApiError("User not found", 404, "user_not_found"), 401, "Correo o contraseña incorrectos"),
         (AuthApiError("User is banned", 400, "user_banned"), 401, "Correo o contraseña incorrectos"),
-        (AuthApiError("Email not confirmed", 400, "email_not_confirmed"), 403, "Confirma tu correo"),
-        (AuthApiError("Email not confirmed", 400, None), 403, "Confirma tu correo"),
+        # "email_not_confirmed" no se prueba aquí: con CONFIRMAR_CORREO apagado la cuenta
+        # se confirma sola y la persona entra. Ese caso está en test_registro.py, con la
+        # bandera encendida y apagada.
         (AuthApiError("Too many requests", 429, None), 429, "Demasiados intentos"),
         (AuthApiError("Rate limit", 400, "over_request_rate_limit"), 429, "Demasiados intentos"),
         (AuthApiError("Invalid API key", 401, None), 503, "El servicio de inicio de sesión"),

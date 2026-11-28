@@ -29,19 +29,22 @@ export function RecuperarScreen() {
   }
 
   if (recuperar.data) {
+    const enviado = recuperar.data.enviado;
     return (
       <AuthLayout>
         <View style={authFormStyles.form}>
           <View style={styles.icono}>
-            <Icon name="mail" size={26} color={palette.forest} />
+            <Icon name={enviado ? 'mail' : 'users'} size={26} color={palette.forest} />
           </View>
           <View style={authFormStyles.formHeading}>
-            <Text style={authFormStyles.formTitle}>Revisa tu correo</Text>
-            <Text style={authFormStyles.formSubtitle}>{recuperar.data}</Text>
+            <Text style={authFormStyles.formTitle}>{enviado ? 'Revisa tu correo' : 'Pide una contraseña temporal'}</Text>
+            <Text style={authFormStyles.formSubtitle}>{recuperar.data.mensaje}</Text>
           </View>
-          <InlineMessage tone="info">
-            El enlace sirve una sola vez y vence en una hora. Ábrelo en este mismo dispositivo para crear la contraseña nueva.
-          </InlineMessage>
+          {enviado ? (
+            <InlineMessage tone="info">
+              El enlace sirve una sola vez y vence en una hora. Ábrelo en este mismo dispositivo para crear la contraseña nueva.
+            </InlineMessage>
+          ) : null}
           <PrimaryButton title="Volver a iniciar sesión" icon="forward" onPress={() => router.replace('/login' as Href)} />
           <Text accessibilityRole="link" style={[authFormStyles.switchLink, styles.centrado]} onPress={() => recuperar.reset()}>
             Usar otro correo

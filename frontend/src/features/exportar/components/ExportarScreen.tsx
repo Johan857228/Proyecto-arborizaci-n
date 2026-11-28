@@ -14,10 +14,27 @@ import { abrirDescarga } from '@/shared/utils/descarga';
 import { AppHeader, Card, EmptyState, LoadingState, Page } from '@/shared/components/UI';
 import { crearEstilos, useTema } from '@/theme';
 
-const ETIQUETA_FORMATO: Record<Formato, string> = { csv: 'CSV', geojson: 'GeoJSON', shp: 'Shapefile', zip: 'ZIP' };
+const ETIQUETA_FORMATO: Record<Formato, string> = {
+  csv: 'CSV',
+  geojson: 'GeoJSON',
+  shp: 'Shapefile',
+  zip: 'Descargar paquete (ZIP)',
+  pbit: 'Descargar para Power BI',
+  pdf: 'Informe en PDF',
+  xlsx: 'Informe en Excel',
+};
 
-const OPCIONES: { conjunto: Conjunto; titulo: string; texto: string; icono: IconName; formatos: Formato[] }[] = [
+const OPCIONES: { clave: string; conjunto: Conjunto; titulo: string; texto: string; icono: IconName; formatos: Formato[] }[] = [
   {
+    clave: 'informe',
+    conjunto: 'todo',
+    titulo: 'Informe del arbolado',
+    texto: 'Listo para imprimir o enviar: indicadores, estado, especies, zonas, carbono, inspecciones, intervenciones, árboles prioritarios e inventario completo. El Excel trae además gráficos y una hoja con filtros por cada tabla.',
+    icono: 'chart',
+    formatos: ['pdf', 'xlsx'],
+  },
+  {
+    clave: 'paquete',
     conjunto: 'todo',
     titulo: 'Paquete completo',
     texto: 'Inventario (CSV, GeoJSON y Shapefile), inspecciones, intervenciones, diccionario de datos y un LEEME. Ideal para entregar a la Secretaría, la alcaldía o Corpocesar.',
@@ -25,6 +42,15 @@ const OPCIONES: { conjunto: Conjunto; titulo: string; texto: string; icono: Icon
     formatos: ['zip'],
   },
   {
+    clave: 'power-bi',
+    conjunto: 'todo',
+    titulo: 'Power BI',
+    texto: 'Plantilla (.pbit) con los datos adentro y un informe ya armado: resumen, riesgo, inspecciones, intervenciones, medidas y carbono. Ábrela con doble clic en Power BI Desktop; no pide conexión ni contraseñas.',
+    icono: 'chart',
+    formatos: ['pbit'],
+  },
+  {
+    clave: 'arboles',
     conjunto: 'arboles',
     titulo: 'Inventario de árboles',
     texto: 'Un árbol por fila con especie, medidas, ubicación y estado actual. GeoJSON y Shapefile se abren en QGIS o ArcGIS.',
@@ -32,6 +58,7 @@ const OPCIONES: { conjunto: Conjunto; titulo: string; texto: string; icono: Icon
     formatos: ['csv', 'geojson', 'shp'],
   },
   {
+    clave: 'inspecciones',
     conjunto: 'inspecciones',
     titulo: 'Inspecciones',
     texto: 'Cada visita con medidas, hallazgos, agentes bióticos y revisión docente.',
@@ -39,6 +66,7 @@ const OPCIONES: { conjunto: Conjunto; titulo: string; texto: string; icono: Icon
     formatos: ['csv'],
   },
   {
+    clave: 'intervenciones',
     conjunto: 'intervenciones',
     titulo: 'Intervenciones',
     texto: 'Mantenimiento programado, ejecutado o cancelado, con fechas, costos y resultado.',
@@ -113,12 +141,6 @@ export function ExportarScreen() {
       />
       {admin ? <InstitucionSelector value={institucion.institucionId} onChange={institucion.setInstitucionId} /> : null}
 
-      {sede && !sede.codigo_dane ? (
-        <InlineMessage tone="warning">
-          {sede.nombre_corto} aún no tiene código DANE. Sin él, la Secretaría no puede cruzar estos datos con el SIMAT.
-          {admin ? ' Agrégalo en Configuración → Sedes.' : ' Pídele al administrador que lo agregue.'}
-        </InlineMessage>
-      ) : null}
       {sede?.codigo_dane ? (
         <View style={styles.dane}>
           <Icon name="building" size={16} color={palette.forest} />
@@ -135,19 +157,16 @@ export function ExportarScreen() {
       {ultima && !exportar.isPending ? (
         <PrimaryButton title="Descargar de nuevo" icon="download" variant="secondary" onPress={() => void abrirDescarga(ultima.url)} />
       ) : null}
-      {ultima && ultima.sin_codigo_dane.length > 0 ? (
-        <InlineMessage tone="warning">Sedes incluidas sin código DANE: {ultima.sin_codigo_dane.join(', ')}.</InlineMessage>
-      ) : null}
 
       <View style={styles.opciones}>
         {OPCIONES.map((opcion) => (
-          <Card key={opcion.conjunto} title={opcion.titulo} icon={opcion.icono}>
+          <Card key={opcion.clave} title={opcion.titulo} icon={opcion.icono}>
             <Text style={styles.texto}>{opcion.texto}</Text>
             <View style={styles.botones}>
               {opcion.formatos.map((formato) => (
                 <PrimaryButton
                   key={formato}
-                  title={opcion.conjunto === 'todo' ? 'Descargar paquete (ZIP)' : ETIQUETA_FORMATO[formato]}
+                  title={ETIQUETA_FORMATO[formato]}
                   icon="download"
                   compact
                   variant={opcion.conjunto === 'todo' ? 'primary' : 'secondary'}
@@ -163,10 +182,13 @@ export function ExportarScreen() {
 
       <Card title="Qué incluye" icon="info">
         <Text style={styles.texto}>
-          Coordenadas en WGS84 (EPSG:4326), CSV separado por comas en UTF-8 (se abre en Excel) y cada sede con su código DANE y DIVIPOLA.
+          Coordenadas en WGS84 (EPSG:4326) y CSV separado por comas en UTF-8 (se abre en Excel). El código DANE de la sede es opcional: si la sede lo tiene, va en los archivos para que la Secretaría los cruce con el SIMAT; si no, la descarga sale igual.
         </Text>
         <Text style={styles.texto}>
           No incluye datos personales: ni nombres de estudiantes ni de responsables, ni notas de texto libre (Ley 1581 de 2012). Cada fila se identifica con el código del árbol.
+        </Text>
+        <Text style={styles.texto}>
+          La plantilla de Power BI trae los datos del momento en que se descarga, con los mismos cálculos de Reportes. Solo dice de qué curso era quien hizo cada inspección, sin nombres. Para guardarla, en Power BI usa Archivo, Guardar como.
         </Text>
         <Pressable accessibilityRole="button" onPress={() => setVerDiccionario((v) => !v)} style={styles.enlace}>
           <Text style={styles.enlaceTexto}>{verDiccionario ? 'Ocultar el diccionario de datos' : 'Ver el diccionario de datos'}</Text>
@@ -175,7 +197,7 @@ export function ExportarScreen() {
         {verDiccionario ? <Diccionario /> : null}
         {admin ? (
           <Pressable accessibilityRole="link" onPress={() => router.push('/(app)/settings?vista=sedes' as Href)} style={styles.enlace}>
-            <Text style={styles.enlaceTexto}>Editar los códigos DANE de las sedes</Text>
+            <Text style={styles.enlaceTexto}>Agregar el código DANE de las sedes (opcional)</Text>
             <Icon name="chevronRight" size={16} color={palette.forest} />
           </Pressable>
         ) : null}

@@ -1,16 +1,19 @@
-"""Perfil propio (nombre, foto y portada) y gestión de usuarios (rol, institución, curso y estado)."""
+"""Perfil propio (nombre, foto, portada y contraseña) y gestión de usuarios (rol, institución, curso,
+estado y contraseña temporal)."""
+import secrets
 import uuid
 from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
+from supabase_auth.errors import AuthError, AuthWeakPasswordError
 
 import datos
 import db
 from auth import Perfil, perfil_actual, revisor_actual
 from comun import BUCKET_FOTOS, MAX_FOTO_BYTES, leer_foto, url_firmada
-from schemas import Rol
+from schemas import MensajeOut, Rol, _validar_contrasena
 
 router = APIRouter(tags=["Usuarios"])
 
@@ -269,3 +272,83 @@ def incorporar_estudiante(d: IncorporarEstudiante, perfil: Perfil = Depends(revi
     if not actualizadas:
         raise HTTPException(status_code=409, detail="La cuenta cambió durante la asignación. Vuelve a intentarlo.")
     return actualizadas[0]
+
+
+# ================================== Contraseñas ==================================
+# Mientras Supabase no tenga SMTP propio ni la dirección de la app configurada, el enlace de
+# "recuperar contraseña" no sirve. Por eso el administrador (o el docente, con sus estudiantes)
+# puede crear una contraseña temporal, y cada persona la cambia en Mi perfil.
+PALABRAS = ("ceiba", "mango", "guayacan", "roble", "cedro", "caracoli", "mamon", "nim", "olivo", "palma",
+            "acacia", "almendro", "cana", "guamo", "laurel", "totumo", "ciruelo", "trupillo", "carreto", "uvito")
+
+
+def contrasena_temporal() -> str:
+    """Fácil de dictar y con letras y números, como piden las reglas de la app: ceiba-482193-roble."""
+    return f"{secrets.choice(PALABRAS)}-{secrets.randbelow(900_000) + 100_000}-{secrets.choice(PALABRAS)}"
+
+
+class ContrasenaTemporalOut(BaseModel):
+    contrasena: str
+    mensaje: str
+
+
+@router.post("/usuarios/{usuario_id}/contrasena-temporal", response_model=ContrasenaTemporalOut)
+def crear_contrasena_temporal(usuario_id: UUID, perfil: Perfil = Depends(revisor_actual)):
+    """Crea una contraseña temporal para otra persona y la devuelve una sola vez. El administrador
+    puede hacerlo con cualquier cuenta que no sea de administrador; el docente, con los estudiantes
+    de su institución. También deja confirmado el correo de la cuenta."""
+    if str(usuario_id) == perfil.usuario_id:
+        raise HTTPException(status_code=409, detail="Para tu propia cuenta usa Cambiar contraseña en Mi perfil")
+    cliente = db.cliente_de_usuario(perfil.sesion.token)
+    filas = cliente.table("perfiles").select(COLUMNAS).eq("usuario_id", str(usuario_id)).execute().data
+    if not filas:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    usuario = filas[0]
+    if usuario["rol"] == "administrador":
+        raise HTTPException(status_code=403, detail="La contraseña de un administrador solo la cambia esa persona")
+    if not perfil.es_admin and (usuario["rol"] != "estudiante" or usuario.get("institucion_id") != perfil.institucion_id):
+        raise HTTPException(status_code=403, detail="Un docente solo puede hacerlo con estudiantes de su institución")
+    nueva = contrasena_temporal()
+    try:
+        db.get_admin().auth.admin.update_user_by_id(str(usuario_id), {"password": nueva, "email_confirm": True})
+    except AuthError:
+        raise HTTPException(status_code=502, detail="No se pudo cambiar la contraseña. Intenta de nuevo.")
+    return ContrasenaTemporalOut(
+        contrasena=nueva,
+        mensaje=f"Contraseña temporal de {usuario['nombre']}. Dásela en persona y pídele que la cambie en Mi perfil apenas entre.",
+    )
+
+
+class CambiarContrasenaIn(BaseModel):
+    actual: str = Field(min_length=1, max_length=72)
+    nueva: str = Field(min_length=8, max_length=72)
+
+    @field_validator("nueva")
+    @classmethod
+    def _segura(cls, v: str) -> str:
+        return _validar_contrasena(v)
+
+    @model_validator(mode="after")
+    def _distinta(self):
+        if self.actual == self.nueva:
+            raise ValueError("La contraseña nueva debe ser distinta de la actual")
+        return self
+
+
+@router.post("/perfil/contrasena", response_model=MensajeOut)
+def cambiar_mi_contrasena(d: CambiarContrasenaIn, perfil: Perfil = Depends(perfil_actual)):
+    """Cambia la contraseña propia. Pide la actual para que nadie la cambie con una sesión abierta ajena."""
+    correo = perfil.sesion.email or perfil.correo
+    if not correo:
+        raise HTTPException(status_code=409, detail="Tu cuenta no tiene correo; pídele al administrador una contraseña temporal")
+    try:
+        db.nuevo_cliente_anon().auth.sign_in_with_password({"email": correo, "password": d.actual})
+    except AuthError:
+        raise HTTPException(status_code=422, detail="La contraseña actual no es correcta")
+    try:
+        db.get_admin().auth.admin.update_user_by_id(perfil.usuario_id, {"password": d.nueva})
+    except AuthError as error:
+        if isinstance(error, AuthWeakPasswordError) or str(getattr(error, "code", "") or "") == "weak_password":
+            raise HTTPException(status_code=422, detail="La contraseña es muy débil. Prueba con una más larga que combine letras, números y símbolos.")
+        raise HTTPException(status_code=502, detail="No se pudo cambiar la contraseña. Intenta de nuevo.")
+    return MensajeOut(mensaje="Listo: tu contraseña quedó cambiada. Úsala la próxima vez que inicies sesión.")
