@@ -50,6 +50,16 @@ export function useIncorporarEstudiante() {
   return useMutation({ mutationFn: perfilService.incorporarEstudiante, onSuccess: refrescar });
 }
 
+export function useContrasenaTemporal() {
+  return useMutation({ mutationFn: (usuarioId: string) => perfilService.contrasenaTemporal(usuarioId) });
+}
+
+export function useCambiarMiContrasena() {
+  return useMutation({
+    mutationFn: ({ actual, nueva }: { actual: string; nueva: string }) => perfilService.cambiarMiContrasena(actual, nueva),
+  });
+}
+
 export function useCambiarMiNombre() {
   const refrescar = useRefrescarTodo();
   return useMutation({ mutationFn: perfilService.cambiarMiNombre, onSuccess: refrescar });

@@ -45,14 +45,14 @@ function FilaSede({ sede, admin }: { sede: Institucion; admin: boolean }) {
     <View style={styles.sede}>
       <View style={styles.sedeTop}>
         <Text style={styles.nombre}>{sede.nombre}</Text>
-        <Badge label={sede.codigo_dane ? 'Con código DANE' : 'Sin código DANE'} tono={sede.codigo_dane ? 'sano' : 'riesgo'} />
+        {sede.codigo_dane ? <Badge label="Con código DANE" tono="sano" /> : null}
       </View>
       <Text style={styles.meta}>Prefijo de los códigos de árbol: {sede.prefijo}</Text>
       {admin ? (
         <>
           <View style={styles.campos}>
             <View style={styles.campoAncho}>
-              <Field label="Código DANE de la sede" value={valores.codigo_dane} onChangeText={(v) => poner('codigo_dane', v.replace(/\D/g, ''))} keyboardType="number-pad" maxLength={12} error={errores.codigo_dane} hint="12 dígitos, como aparece en el SIMAT." />
+              <Field label="Código DANE de la sede (opcional)" value={valores.codigo_dane} onChangeText={(v) => poner('codigo_dane', v.replace(/\D/g, ''))} keyboardType="number-pad" maxLength={12} error={errores.codigo_dane} hint="12 dígitos, como aparece en el SIMAT." />
             </View>
             <View style={styles.campo}>
               <Field label="DIVIPOLA" value={valores.divipola} onChangeText={(v) => poner('divipola', v.replace(/\D/g, ''))} keyboardType="number-pad" maxLength={5} error={errores.divipola} />
@@ -83,7 +83,7 @@ export function SedesDane({ admin }: { admin: boolean }) {
   return (
     <Card
       title="Sedes y código DANE"
-      subtitle="Con el código DANE, la Secretaría cruza los datos exportados con el SIMAT y sus reportes."
+      subtitle="Opcional. Si la sede tiene código DANE, va en los datos exportados para que la Secretaría los cruce con el SIMAT; sin él todo funciona igual."
       icon="building"
     >
       <View style={styles.lista}>

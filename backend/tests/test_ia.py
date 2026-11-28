@@ -109,8 +109,11 @@ def test_analizar_envia_las_fotos_y_el_catalogo(con_ia):
     assert llamada["output_format"] is ia.AnalisisIA
     imagenes = [b for b in llamada["messages"][0]["content"] if b["type"] == "image"]
     assert [i["source"]["media_type"] for i in imagenes] == ["image/jpeg", "image/png"]
-    assert "1: Mango (Mangifera indica)" in llamada["system"]
-    assert "f_manchas [follaje]: Manchas en hojas" in llamada["system"]
+    # El sistema va como un bloque con marca de caché, no como texto suelto.
+    bloque = llamada["system"][0]
+    assert bloque["cache_control"] == {"type": "ephemeral"}
+    assert "1: Mango (Mangifera indica)" in bloque["text"]
+    assert "f_manchas [follaje]: Manchas en hojas" in bloque["text"]
 
 
 def test_analizar_quita_lo_que_no_esta_en_el_catalogo(con_ia):

@@ -258,13 +258,31 @@ carpeta sin paréntesis.
 | Parte | Dónde | Dirección |
 |---|---|---|
 | Frontend (Expo web) | Vercel, proyecto `inventario-arboreo` | https://inventario-arboreo.vercel.app |
-| Backend (FastAPI) | Railway, proyecto `inventario-arboreo`, servicio `backend` | https://backend-production-2f7d.up.railway.app |
-| Base de datos, Auth y fotos | Supabase, proyecto `inventario-arboreo` | migraciones `backend/sql/001` → `002` → `003` → `004` ya aplicadas |
+| Backend (FastAPI) | Railway, proyecto `inventario-arboreo`, servicio `backend` | https://backend-production-5492eb14.up.railway.app |
+| Base de datos, Auth y fotos | Supabase, proyecto `inventario-arboreo` | aplicadas `001` a `004` y `016`; faltan `005` a `015` |
+
+Se volvió a publicar el 23 de noviembre de 2026 desde la rama `feature/frontend-inicio-una-pantalla`.
+Mientras falten las migraciones 005 a 015, privacidad, códigos DANE, modo sin conexión, riesgo de
+caída, servicio social, PRAE, origen de especies en el mapa, guías, siembras, tablero territorial y
+catálogo oficial fallan o funcionan a medias.
 
 Variables configuradas:
 
-- Railway (`backend`): `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_KEY` y `CORS_ORIGINS`
-  (los dominios de Vercel). El arranque y la comprobación de salud (`/salud`) están en `backend/railway.json`.
+- Railway (`backend`): `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_KEY`, `CORS_ORIGINS`
+  (los dominios de Vercel) y `URL_FRONTEND` (para el enlace de recuperar contraseña). El arranque y la
+  comprobación de salud (`/salud`) están en `backend/railway.json`.
+- `CONFIRMAR_CORREO` (opcional, apagada): sin ella, las cuentas que se registran en la app quedan
+  confirmadas y entran de una vez, y las que se registraron cuando se pedía confirmar se confirman
+  al iniciar sesión con su contraseña. Con `CONFIRMAR_CORREO=1` Supabase envía el correo de
+  confirmación; solo conviene encenderla cuando el proyecto de Supabase tenga SMTP propio y la
+  dirección de la app en Authentication > URL Configuration, porque el SMTP de prueba solo le
+  escribe al equipo del proyecto y el enlace abre el Site URL (hoy `http://localhost:3000`).
+- Enlaces del correo (recuperar contraseña, confirmar cuenta): Supabase los manda a su Site URL si la
+  dirección de la app no está permitida. El dueño del proyecto debe poner, en Authentication > URL
+  Configuration, `https://inventario-arboreo.vercel.app` como Site URL y agregar
+  `https://inventario-arboreo.vercel.app/**` a Redirect URLs. Mientras no esté, `/auth/recuperar`
+  lo detecta y no manda el correo; quien olvidó su contraseña le pide al administrador (o a su
+  docente) una contraseña temporal en Usuarios y la cambia en Mi perfil.
 - Vercel: `EXPO_PUBLIC_API_URL` con la dirección del backend. Se lee al compilar, así que si cambia
   hay que volver a desplegar el frontend. La compilación y las rutas dinámicas están en `frontend/vercel.json`.
 

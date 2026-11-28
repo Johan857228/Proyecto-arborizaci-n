@@ -2,7 +2,7 @@ import { router, type Href } from 'expo-router';
 import { useState, type PropsWithChildren, type ReactNode } from 'react';
 import { Pressable, ScrollView, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
-import { fonts } from '@/config/constants';
+import { fonts, layout } from '@/config/constants';
 import {
   BarrasInstituciones,
   EstadoContenido,
@@ -14,6 +14,7 @@ import {
 } from '@/features/dashboard/components/Panorama';
 import { ParaHoy, tieneParaHoy } from '@/features/dashboard/components/ParaHoy';
 import type { ArbolResumen, Estadisticas } from '@/features/dashboard/types';
+import { DescargarInforme } from '@/features/exportar/components/DescargarInforme';
 import type { MiPerfil } from '@/features/perfil/schemas';
 import { DonutChart } from '@/shared/components/DonutChart';
 import { Icon, type IconName } from '@/shared/components/Icon';
@@ -21,6 +22,11 @@ import { FadeIn } from '@/shared/components/Motion';
 import { IconChip } from '@/shared/components/UI';
 import { crearEstilos, useTema } from '@/theme';
 
+/** Desde este ancho el inicio se arma como tablero de una sola pantalla, sin desplazamiento. Es el
+ *  mismo ancho desde el que la app muestra los accesos a módulos a la izquierda. */
+export const ANCHO_TABLERO = layout.sidebarBreakpoint;
+/** Ancho máximo del tablero; en monitores más anchos queda centrado. */
+export const ANCHO_MAXIMO_TABLERO = 1680;
 /** Por debajo de este alto los paneles ya no caben: la página se desplaza en vez de aplastarlos. */
 const ALTO_MINIMO = 600;
 /** Relleno inferior del tablero (el carril del botón de Savia se mide desde el borde). */
@@ -59,8 +65,9 @@ function Panel({ titulo, icono, accion, style, children }: PropsWithChildren<{
   );
 }
 
-/** Inicio en escritorio: portada y resumen en el centro, distribución a
- *  la derecha. Todo cabe en la ventana; lo que no alcanza se desplaza dentro de su propio panel. */
+/** Inicio en escritorio: portada y resumen en el centro, distribución a la derecha (los módulos van
+ *  en el riel de la izquierda, que pone el marco de la app). Todo cabe en la ventana; lo que no
+ *  alcanza se desplaza dentro de su propio panel. */
 export function TableroInicio({ perfil, stats, cargandoStats, arboles, cargandoArboles, portada, avisos, pie }: {
   perfil?: MiPerfil;
   stats?: Estadisticas;
@@ -97,6 +104,7 @@ export function TableroInicio({ perfil, stats, cargandoStats, arboles, cargandoA
             <ScrollView style={styles.flex} contentContainerStyle={styles.paraHoy} showsVerticalScrollIndicator={false}>
               <ParaHoy perfil={perfil} sinTitulo />
               <MetasEnCurso perfil={perfil} />
+              <DescargarInforme institucionId={perfil.institucion_id ?? undefined} compacto />
             </ScrollView>
           ) : null}
           <Panel titulo="Últimos registros" icono="list" accion={{ texto: 'Ver inventario', href: '/(app)/trees' as Href }} style={styles.flex}>
@@ -160,7 +168,8 @@ const useStyles = crearEstilos(({ palette, card }) => ({
     alignSelf: 'center',
     flexDirection: 'row',
     gap: 14,
-    paddingHorizontal: 16,
+    paddingLeft: 14,
+    paddingRight: 16,
     paddingTop: 14,
     paddingBottom: MARGEN_TABLERO,
   },

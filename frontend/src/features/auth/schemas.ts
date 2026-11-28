@@ -18,7 +18,7 @@ export const sessionSchema = z.object({
 export type LoginFormValues = z.infer<typeof loginSchema>;
 
 // Mismas reglas del backend (RegistroIn y RestablecerIn en backend/schemas.py).
-const contrasenaSchema = z
+export const contrasenaSchema = z
   .string()
   .min(8, 'Usa al menos 8 caracteres.')
   .max(72, 'Máximo 72 caracteres.')
@@ -67,6 +67,9 @@ export const restablecerSchema = z
 export type RestablecerFormValues = z.infer<typeof restablecerSchema>;
 
 export const mensajeSchema = z.object({ mensaje: z.string().min(1) });
+
+// enviado = false: el backend no mandó el correo porque su enlace no llevaría a la app.
+export const recuperarRespuestaSchema = z.object({ mensaje: z.string().min(1), enviado: z.boolean().default(true) });
 
 export type RegistroFormInput = z.input<typeof registroSchema>;
 export type RegistroFormValues = z.output<typeof registroSchema>;

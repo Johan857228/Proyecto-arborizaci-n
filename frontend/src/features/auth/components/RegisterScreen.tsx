@@ -37,16 +37,17 @@ export function RegisterScreen() {
     });
   }
 
-  // Supabase pidió confirmar el correo: no hay sesión todavía.
-  if (registro.data?.requiere_confirmacion) {
+  // Cuenta creada sin sesión: Supabase pidió confirmar el correo o hay que iniciar sesión a mano.
+  if (registro.data && !registro.data.sesion) {
+    const confirmar = registro.data.requiere_confirmacion;
     return (
       <AuthLayout>
         <View style={authFormStyles.form}>
           <View style={styles.doneIcon}>
-            <Icon name="mail" size={26} color={palette.forest} />
+            <Icon name={confirmar ? 'mail' : 'check'} size={26} color={palette.forest} />
           </View>
           <View style={authFormStyles.formHeading}>
-            <Text style={authFormStyles.formTitle}>Revisa tu correo</Text>
+            <Text style={authFormStyles.formTitle}>{confirmar ? 'Revisa tu correo' : 'Cuenta creada'}</Text>
             <Text style={authFormStyles.formSubtitle}>{registro.data.mensaje}</Text>
           </View>
           <InlineMessage tone="info">

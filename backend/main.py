@@ -15,8 +15,10 @@ Docs:      http://127.0.0.1:8000/docs
 """
 import os
 import re
+import threading
+import time
 import uuid
-from collections import Counter
+from collections import Counter, defaultdict, deque
 from uuid import UUID
 
 from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, Response, UploadFile
@@ -24,6 +26,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from httpx import RequestError
+import httpx
 from postgrest.exceptions import APIError
 from pydantic import BaseModel, Field, field_validator
 from supabase_auth.errors import AuthApiError, AuthError, AuthWeakPasswordError
@@ -47,6 +50,7 @@ from comun import (
     url_firmada,
 )
 from routers import (
+    analisis,
     configuracion,
     cursos,
     escenarios,
@@ -164,7 +168,7 @@ async def manejar_error_db(request, exc: APIError):
 
 for modulo in (inspecciones, intervenciones, cursos, usuarios, presupuestos, configuracion,
                gamificacion, reportes, metas, escenarios, ia, privacidad, exportar, riesgo, servicio_social, prae, mapa, guias, siembras, territorial,
-               especies, zonas):
+               especies, zonas, analisis):
     app.include_router(modulo.router)
 
 
@@ -193,7 +197,10 @@ ERRORES_LOGIN = {
     "invalid_credentials": CREDENCIALES_INVALIDAS,
     "user_not_found": CREDENCIALES_INVALIDAS,
     "user_banned": CREDENCIALES_INVALIDAS,
-    "email_not_confirmed": (403, "Confirma tu correo con el enlace de registro. Revisa también la carpeta de spam."),
+    "email_not_confirmed": (
+        403,
+        "Todavía no confirmas tu correo. Abre el enlace que te enviamos (revisa también spam) y vuelve a intentar.",
+    ),
     "over_request_rate_limit": (429, "Demasiados intentos de inicio de sesión. Espera unos minutos e intenta de nuevo."),
 }
 # Algunas respuestas antiguas de Auth solo traen el mensaje, sin código.
@@ -202,28 +209,73 @@ CODIGOS_LOGIN_ANTIGUOS = {
     "Email not confirmed": "email_not_confirmed",
     "User is banned": "user_banned",
 }
+def confirmar_correo() -> bool:
+    """CONFIRMAR_CORREO=1 hace que las cuentas nuevas confirmen el correo antes de entrar. Solo
+    sirve cuando el proyecto de Supabase tiene SMTP propio (el de prueba solo le escribe al equipo
+    del proyecto) y la dirección de la app en Authentication > URL Configuration; si no, el correo
+    no llega o el enlace abre localhost y la cuenta queda bloqueada. Por eso viene apagado."""
+    return os.environ.get("CONFIRMAR_CORREO", "").strip().lower() in ("1", "true", "si", "sí")
+
+
+def _buscar_usuario(email: str):
+    """La cuenta de Supabase Auth con ese correo (o None). La API de administración no busca por
+    correo, así que se recorren las páginas; solo se usa al confirmar cuentas que quedaron a medias."""
+    email = email.strip().lower()
+    admin = db.get_admin().auth.admin
+    for pagina in range(1, 51):
+        usuarios = admin.list_users(page=pagina, per_page=1000)
+        for u in usuarios:
+            if (u.email or "").lower() == email:
+                return u
+        if len(usuarios) < 1000:
+            return None
+    return None
+
+
+def _entrar(email: str, password: str):
+    return db.nuevo_cliente_anon().auth.sign_in_with_password({"email": email, "password": password})
 
 
 @app.post("/auth/login", response_model=SesionOut, tags=["Autenticación"])
 def login(datos_login: LoginIn):
     """Inicia sesión y devuelve el token. El frontend lo envía luego como
-    `Authorization: Bearer <access_token>`."""
+    `Authorization: Bearer <access_token>`.
+
+    Supabase revisa la contraseña antes de mirar si el correo está confirmado, así que
+    "email_not_confirmed" significa que la contraseña es la correcta. Si la app no pide confirmar el
+    correo (CONFIRMAR_CORREO apagado), esas cuentas que se registraron cuando sí se pedía se
+    confirman en ese momento y la persona entra."""
     try:
-        res = db.nuevo_cliente_anon().auth.sign_in_with_password(
-            {"email": datos_login.email, "password": datos_login.password}
-        )
+        return _sesion(_entrar(datos_login.email, datos_login.password))
     except AuthApiError as error:
         codigo = error.code
         if error.status == 429:
             codigo = "over_request_rate_limit"
         elif codigo is None and error.status == 400:
             codigo = CODIGOS_LOGIN_ANTIGUOS.get(error.message)
-        estado, mensaje = ERRORES_LOGIN.get(codigo, LOGIN_NO_DISPONIBLE)
-        raise HTTPException(status_code=estado, detail=mensaje) from None
+        # Cualquier fallo que no sea "falta confirmar el correo" se responde con su
+        # mensaje propio y se acaba aquí.
+        if codigo != "email_not_confirmed":
+            estado, mensaje = ERRORES_LOGIN.get(codigo, LOGIN_NO_DISPONIBLE)
+            raise HTTPException(status_code=estado, detail=mensaje) from None
+        # Falta confirmar el correo. Si la app lo exige, se le pide a la persona que
+        # abra el enlace; si no, se confirma aquí abajo y entra.
+        if confirmar_correo():
+            estado, mensaje = ERRORES_LOGIN["email_not_confirmed"]
+            raise HTTPException(status_code=estado, detail=mensaje) from None
     except (AuthError, RequestError):
         estado, mensaje = LOGIN_NO_DISPONIBLE
         raise HTTPException(status_code=estado, detail=mensaje) from None
-    return _sesion(res)
+
+    usuario = _buscar_usuario(datos_login.email)
+    if usuario is None:
+        estado, mensaje = CREDENCIALES_INVALIDAS
+        raise HTTPException(status_code=estado, detail=mensaje) from None
+    db.get_admin().auth.admin.update_user_by_id(str(usuario.id), {"email_confirm": True})
+    try:
+        return _sesion(_entrar(datos_login.email, datos_login.password))
+    except (AuthError, RequestError):
+        raise HTTPException(status_code=401, detail="No se pudo iniciar sesión. Intenta de nuevo.") from None
 
 
 # Errores de Supabase Auth al registrar → (código HTTP, mensaje para la persona)
@@ -251,20 +303,81 @@ def _registrar_politica(usuario_id: str) -> None:
         pass
 
 
+# Registros sin confirmar el correo: los crea el backend con la llave de servicio, así que no
+# pasan por el límite de Supabase. Este límite en memoria frena a quien cree cuentas en serie.
+REGISTROS_POR_IP = (5, 15 * 60)       # 5 cuentas cada 15 minutos desde la misma dirección
+REGISTROS_EN_TOTAL = (60, 60 * 60)    # 60 cuentas por hora entre todos
+_registros: dict[str, deque] = defaultdict(deque)
+_cerrojo_registros = threading.Lock()
+
+
+def _ip(request: Request) -> str:
+    # Railway agrega la dirección real al final de X-Forwarded-For; lo de antes lo puede escribir el cliente.
+    reenviada = request.headers.get("x-forwarded-for", "")
+    return reenviada.split(",")[-1].strip() or (request.client.host if request.client else "") or "?"
+
+
+def _limitar_registros(request: Request) -> None:
+    ahora_s = time.monotonic()
+    with _cerrojo_registros:
+        for clave, (maximo, ventana) in ((_ip(request), REGISTROS_POR_IP), ("*", REGISTROS_EN_TOTAL)):
+            cola = _registros[clave]
+            while cola and ahora_s - cola[0] > ventana:
+                cola.popleft()
+            if len(cola) >= maximo:
+                raise HTTPException(status_code=429, detail="Se crearon muchas cuentas seguidas. Espera unos minutos e intenta de nuevo.")
+        for clave in (_ip(request), "*"):
+            _registros[clave].append(ahora_s)
+
+
+def _error_registro(error) -> HTTPException:
+    estado, mensaje = ERRORES_REGISTRO.get(
+        str(getattr(error, "code", "") or ""), (400, "No se pudo crear la cuenta. Revisa los datos e intenta de nuevo.")
+    )
+    return HTTPException(status_code=estado, detail=mensaje)
+
+
+def _url_login(request: Request) -> str | None:
+    """A dónde lleva el enlace de confirmación: la página de inicio de sesión de la misma app web."""
+    destino = _url_restablecer(request)
+    return destino.rsplit("/", 1)[0] + "/login" if destino else None
+
+
 @app.post("/auth/registro", response_model=RegistroOut, status_code=201, tags=["Autenticación"])
-def registrar(d: RegistroIn):
+def registrar(d: RegistroIn, request: Request):
     """Crea una cuenta nueva como estudiante y sin institución; un docente o un administrador
-    le asigna institución y rol después (Usuarios). Si el proyecto de Supabase pide confirmar el
-    correo, la sesión llega solo después de abrir el enlace."""
+    le asigna institución y rol después (Usuarios).
+
+    Sin CONFIRMAR_CORREO la cuenta queda confirmada y la persona entra de una vez. Con
+    CONFIRMAR_CORREO=1 Supabase envía el correo y la sesión llega después de abrir el enlace."""
+    datos_cuenta = {"nombre": d.nombre, "politica_version": POLITICA_VERSION}
+    if not confirmar_correo():
+        _limitar_registros(request)
+        try:
+            creado = db.get_admin().auth.admin.create_user(
+                {"email": d.email, "password": d.password, "email_confirm": True, "user_metadata": datos_cuenta}
+            )
+        except (AuthApiError, AuthWeakPasswordError) as error:
+            raise _error_registro(error)
+        _registrar_politica(str(creado.user.id))
+        try:
+            sesion = _sesion(_entrar(d.email, d.password))
+        except (AuthApiError, HTTPException):
+            return RegistroOut(requiere_confirmacion=False, mensaje="Cuenta creada. Ya puedes iniciar sesión con tu correo y tu contraseña.")
+        return RegistroOut(
+            requiere_confirmacion=False,
+            sesion=sesion,
+            mensaje="Cuenta creada. Un docente o un administrador te asignará tu institución.",
+        )
+
+    opciones = {"data": datos_cuenta}
+    destino = _url_login(request)
+    if destino:
+        opciones["email_redirect_to"] = destino
     try:
-        res = db.nuevo_cliente_anon().auth.sign_up(
-            {"email": d.email, "password": d.password, "options": {"data": {"nombre": d.nombre, "politica_version": POLITICA_VERSION}}}
-        )
+        res = db.nuevo_cliente_anon().auth.sign_up({"email": d.email, "password": d.password, "options": opciones})
     except (AuthApiError, AuthWeakPasswordError) as error:
-        estado, mensaje = ERRORES_REGISTRO.get(
-            str(error.code or ""), (400, "No se pudo crear la cuenta. Revisa los datos e intenta de nuevo.")
-        )
-        raise HTTPException(status_code=estado, detail=mensaje)
+        raise _error_registro(error)
 
     if res is None or res.user is None:
         raise HTTPException(status_code=400, detail="No se pudo crear la cuenta. Intenta de nuevo.")
@@ -308,19 +421,65 @@ def _url_restablecer(request: Request) -> str | None:
     return f"{base}/restablecer" if base else None
 
 
-@app.post("/auth/recuperar", response_model=MensajeOut, tags=["Autenticación"])
+# Si Supabase no tiene la dirección de la app en Authentication > URL Configuration, ignora
+# redirect_to y manda los enlaces del correo a su Site URL (hoy http://localhost:3000): la persona
+# abre el correo y cae en una página que no carga. Se comprueba con un token inválido (no toca
+# ninguna cuenta) y el resultado se guarda unos minutos.
+_redirecciones: dict[str, tuple[float, bool]] = {}
+
+
+def redireccion_permitida(destino: str) -> bool:
+    guardada = _redirecciones.get(destino)
+    if guardada and time.monotonic() - guardada[0] < 600:
+        return guardada[1]
+    base = os.environ.get("SUPABASE_URL", "").rstrip("/")
+    try:
+        r = httpx.get(
+            f"{base}/auth/v1/verify",
+            params={"token": "comprobacion-sin-valor", "type": "recovery", "redirect_to": destino},
+            headers={"apikey": os.environ.get("SUPABASE_ANON_KEY", "")},
+            follow_redirects=False,
+            timeout=5,
+        )
+    except httpx.HTTPError:
+        return True  # sin poder comprobarlo se manda el correo, como antes
+    ubicacion = r.headers.get("location", "")
+    if not ubicacion:
+        return True
+    permitida = ubicacion.startswith(destino)
+    _redirecciones[destino] = (time.monotonic(), permitida)
+    return permitida
+
+
+PIDE_TEMPORAL = ("Pídele a tu docente o al administrador una contraseña temporal: la crean en Usuarios "
+                 "y después la cambias en Mi perfil.")
+
+
+class RecuperarOut(MensajeOut):
+    enviado: bool = Field(description="False si no se mandó el correo porque su enlace no llevaría a la app")
+
+
+@app.post("/auth/recuperar", response_model=RecuperarOut, tags=["Autenticación"])
 def recuperar_contrasena(d: RecuperarIn, request: Request):
     """Envía al correo un enlace para crear una contraseña nueva. Responde lo mismo exista o no la
-    cuenta, para no revelar qué correos están registrados."""
+    cuenta, para no revelar qué correos están registrados. Si el enlace no llevaría a la app (falta
+    configurar Supabase), no lo manda y explica cómo pedir una contraseña temporal."""
     destino = _url_restablecer(request)
+    if destino and not redireccion_permitida(destino):
+        return RecuperarOut(
+            enviado=False,
+            mensaje=f"Por ahora la recuperación por correo no funciona en esta instalación. {PIDE_TEMPORAL}",
+        )
     try:
         db.nuevo_cliente_anon().auth.reset_password_for_email(d.email, {"redirect_to": destino} if destino else {})
     except AuthApiError as error:
         if str(error.code or "") in ("over_email_send_rate_limit", "over_request_rate_limit"):
             raise HTTPException(status_code=429, detail="Ya pediste varios enlaces seguidos. Espera unos minutos e intenta de nuevo.")
         # Cualquier otro error (correo inexistente, inválido…) se responde igual que un envío correcto.
-    return MensajeOut(
-        mensaje=f"Si {d.email} tiene una cuenta, te llegará un enlace para crear una contraseña nueva. Revisa también la carpeta de spam."
+    return RecuperarOut(
+        enviado=True,
+        mensaje=f"Si {d.email} tiene una cuenta, te llegará un enlace para crear una contraseña nueva. Revisa también la "
+                f"carpeta de spam. Si no llega, {PIDE_TEMPORAL[0].lower()}{PIDE_TEMPORAL[1:]}",
     )
 
 

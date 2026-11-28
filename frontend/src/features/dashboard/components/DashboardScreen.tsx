@@ -9,6 +9,7 @@ import { Distribucion, EstadoArbolado, Impacto, MetasEnCurso, Recientes } from '
 import { ParaHoy, usePendientesDeHoy } from '@/features/dashboard/components/ParaHoy';
 import { MARGEN_TABLERO, TableroInicio } from '@/features/dashboard/components/Tablero';
 import { useDashboard } from '@/features/dashboard/hooks/useDashboard';
+import { DescargarInforme } from '@/features/exportar/components/DescargarInforme';
 import { claveDeCache } from '@/features/perfil/components/Avatar';
 import { useImagenPropia } from '@/features/perfil/hooks/useImagenPropia';
 import { AvisoPrivacidad, useTextoAvisoPrivacidad } from '@/features/privacidad/components/AvisoPrivacidad';
@@ -260,8 +261,9 @@ export function DashboardScreen() {
         )}
 
         {p && puedeVer ? <FadeIn index={4}><MetasEnCurso perfil={p} /></FadeIn> : null}
-        <FadeIn index={5}><Distribucion stats={estadisticas} isWide={isWide} /></FadeIn>
-        <FadeIn index={6}><Recientes arboles={arboles} cargando={recentTrees.isLoading} isWide={isWide} /></FadeIn>
+        {p ? <FadeIn index={5}><DescargarInforme institucionId={institucionId} compacto /></FadeIn> : null}
+        <FadeIn index={6}><Distribucion stats={estadisticas} isWide={isWide} /></FadeIn>
+        <FadeIn index={7}><Recientes arboles={arboles} cargando={recentTrees.isLoading} isWide={isWide} /></FadeIn>
         {puedeVer && recentTrees.error ? <InlineMessage>{getApiErrorMessage(recentTrees.error)}</InlineMessage> : null}
 
         <Pie actualizado={puedeVer ? stats.dataUpdatedAt : 0} />

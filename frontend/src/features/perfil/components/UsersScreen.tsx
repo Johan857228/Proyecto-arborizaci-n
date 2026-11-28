@@ -4,11 +4,11 @@ import { Text, View } from 'react-native';
 import { useCatalogs } from '@/features/catalogs/hooks/useCatalogs';
 import { useCursos } from '@/features/courses/api';
 import { InstitucionSelector, useInstitucionElegida } from '@/features/perfil/components/InstitucionSelector';
-import { useEditarUsuario, useIncorporarEstudiante, useMiPerfil, useUsuarios } from '@/features/perfil/hooks/usePerfil';
+import { useContrasenaTemporal, useEditarUsuario, useIncorporarEstudiante, useMiPerfil, useUsuarios } from '@/features/perfil/hooks/usePerfil';
 import { ETIQUETA_ROL, esAdmin, esRevisor, rolSchema, type Rol, type Usuario } from '@/features/perfil/schemas';
 import { getApiErrorMessage } from '@/services/api/client';
 import { Field, InlineMessage, PrimaryButton, SelectField } from '@/shared/components/FormControls';
-import { AppHeader, Badge, Card, EmptyState, ErrorState, LoadingState, Notice, Page, Tabs } from '@/shared/components/UI';
+import { AppHeader, Badge, Card, ConfirmButton, EmptyState, ErrorState, LoadingState, Notice, Page, Tabs } from '@/shared/components/UI';
 import { crearEstilos } from '@/theme';
 
 const SIN = '__sin__';
@@ -174,7 +174,35 @@ function UsuarioCard({ usuario, admin, propio }: { usuario: Usuario; admin: bool
       {mensaje ? <InlineMessage tone="info">{mensaje}</InlineMessage> : null}
       {error ? <InlineMessage>{error}</InlineMessage> : null}
       <PrimaryButton title="Guardar cambios" disabled={!hayCambios} loading={editar.isPending} onPress={() => void guardar()} />
+      {(admin && !propio && usuario.rol !== 'administrador') || (!admin && usuario.rol === 'estudiante') ? (
+        <ContrasenaTemporal usuario={usuario} />
+      ) : null}
     </Card>
+  );
+}
+
+/** Para quien olvidó su contraseña: mientras el enlace del correo no funcione, el administrador (o
+ *  el docente, con sus estudiantes) crea una temporal y se la da en persona. Se muestra una sola vez. */
+function ContrasenaTemporal({ usuario }: { usuario: Usuario }) {
+  const styles = useStyles();
+  const crear = useContrasenaTemporal();
+  return (
+    <View style={styles.temporal}>
+      <Text style={styles.texto}>¿Olvidó su contraseña o no puede entrar? Crea una temporal y dásela en persona; luego la cambia en Mi perfil.</Text>
+      {crear.data ? (
+        <View style={styles.claveCaja}>
+          <Text style={styles.texto}>{crear.data.mensaje}</Text>
+          <Text selectable style={styles.clave}>{crear.data.contrasena}</Text>
+        </View>
+      ) : null}
+      {crear.error ? <InlineMessage>{getApiErrorMessage(crear.error)}</InlineMessage> : null}
+      <ConfirmButton
+        title={crear.data ? 'Crear otra contraseña temporal' : 'Crear contraseña temporal'}
+        confirmTitle={`¿Crear una contraseña temporal para ${usuario.nombre}? La que tiene ahora deja de servir.`}
+        loading={crear.isPending}
+        onConfirm={() => crear.mutate(usuario.usuario_id)}
+      />
+    </View>
   );
 }
 
@@ -184,4 +212,7 @@ const useStyles = crearEstilos(({ palette }) => ({
   flex: { flex: 1 },
   nombre: { color: palette.ink, fontSize: 15, fontWeight: '900' },
   texto: { color: palette.muted, fontSize: 12 },
+  temporal: { gap: 8, paddingTop: 10, borderTopWidth: 1, borderTopColor: palette.line },
+  claveCaja: { gap: 4, padding: 12, borderRadius: 12, backgroundColor: palette.forestSoft },
+  clave: { color: palette.forest, fontSize: 20, fontWeight: '900', letterSpacing: 0.5 },
 }));

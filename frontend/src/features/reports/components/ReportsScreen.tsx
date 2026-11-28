@@ -2,6 +2,7 @@ import { router, useLocalSearchParams, type Href } from 'expo-router';
 import { useState } from 'react';
 import { Text, View } from 'react-native';
 
+import { DescargarInforme } from '@/features/exportar/components/DescargarInforme';
 import { useTiposIntervencion } from '@/features/interventions/hooks/useIntervenciones';
 import { InstitucionSelector, useInstitucionElegida } from '@/features/perfil/components/InstitucionSelector';
 import { useReporte, type Reporte } from '@/features/reports/api';
@@ -65,6 +66,7 @@ export function ReportsScreen() {
         subtitle="Inventario y riesgo se calculan como estaban al cierre del periodo, usando el historial de inspecciones."
       />
       <InstitucionSelector value={institucion.institucionId} onChange={institucion.setInstitucionId} />
+      <DescargarInforme institucionId={institucion.institucionId} />
       <Row>
         <Cell basis={140}><Field label="Desde" value={desde} onChangeText={setDesde} placeholder="AAAA-MM-DD (1 ene)" autoCapitalize="none" /></Cell>
         <Cell basis={140}><Field label="Hasta" value={hasta} onChangeText={setHasta} placeholder="AAAA-MM-DD (hoy)" autoCapitalize="none" /></Cell>

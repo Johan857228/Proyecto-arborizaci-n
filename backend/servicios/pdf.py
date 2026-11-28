@@ -5,6 +5,7 @@ servicio social, el informe anual del PRAE y las fichas de las guías de clase.
 `Pagina` dibuja en coordenadas fijas; `Documento` además va bajando por la página y abre una nueva
 cuando se acaba el espacio, con pie de página numerado.
 """
+import math
 from datetime import date
 
 import segno
@@ -80,6 +81,22 @@ def partir_url(url: str, tamano: float, ancho: float) -> list[str]:
     return trozos + [actual] if actual else trozos
 
 
+def recortar(texto: str, tamano: float, ancho: float, negrita: bool = False) -> str:
+    """El texto en una sola línea; si no cabe, cortado con puntos suspensivos."""
+    texto = str(texto)
+    if _ancho_aprox(texto, tamano, negrita) <= ancho:
+        return texto
+    while texto and _ancho_aprox(texto + "…", tamano, negrita) > ancho:
+        texto = texto[:-1]
+    return texto.rstrip() + "…"
+
+
+def rgb(hexadecimal: str) -> tuple[float, float, float]:
+    """'#1BAF7A' → (0.106, 0.686, 0.478)."""
+    h = hexadecimal.lstrip("#")
+    return tuple(int(h[i:i + 2], 16) / 255 for i in (0, 2, 4))
+
+
 def _escapar(texto: str) -> bytes:
     crudo = texto.encode("cp1252", errors="replace")
     return crudo.replace(b"\\", b"\\\\").replace(b"(", b"\\(").replace(b")", b"\\)")
@@ -107,9 +124,66 @@ class Pagina:
             y -= salto
         return y
 
+    def texto_derecha(self, x: float, y: float, tamano: float, contenido: str, negrita: bool = False, color=TINTA):
+        """Texto que termina en `x` (cifras alineadas a la derecha)."""
+        self.texto(x - _ancho_aprox(contenido, tamano, negrita), y, tamano, contenido, negrita, color)
+
+    def texto_centrado(self, x: float, y: float, tamano: float, contenido: str, negrita: bool = False, color=TINTA):
+        self.texto(x - _ancho_aprox(contenido, tamano, negrita) / 2, y, tamano, contenido, negrita, color)
+
     def rectangulo(self, x: float, y: float, ancho: float, alto: float, color):
         self.ops.append(_color(color, "rg"))
         self.ops.append(f"{x:.2f} {y:.2f} {ancho:.2f} {alto:.2f} re f\n".encode())
+
+    def redondeado(self, x: float, y: float, ancho: float, alto: float, radio: float, color):
+        """Rectángulo relleno con las esquinas redondeadas (curvas de Bézier)."""
+        r = max(0.0, min(radio, ancho / 2, alto / 2))
+        k = 0.5523 * r
+        x2, y2 = x + ancho, y + alto
+        self.ops.append(_color(color, "rg"))
+        self.ops.append((
+            f"{x + r:.2f} {y:.2f} m {x2 - r:.2f} {y:.2f} l "
+            f"{x2 - r + k:.2f} {y:.2f} {x2:.2f} {y + r - k:.2f} {x2:.2f} {y + r:.2f} c "
+            f"{x2:.2f} {y2 - r:.2f} l "
+            f"{x2:.2f} {y2 - r + k:.2f} {x2 - r + k:.2f} {y2:.2f} {x2 - r:.2f} {y2:.2f} c "
+            f"{x + r:.2f} {y2:.2f} l "
+            f"{x + r - k:.2f} {y2:.2f} {x:.2f} {y2 - r + k:.2f} {x:.2f} {y2 - r:.2f} c "
+            f"{x:.2f} {y + r:.2f} l "
+            f"{x:.2f} {y + r - k:.2f} {x + r - k:.2f} {y:.2f} {x + r:.2f} {y:.2f} c f\n"
+        ).encode())
+
+    def porcion_dona(self, cx: float, cy: float, radio: float, grosor: float, desde: float, hasta: float, color):
+        """Porción de una dona entre dos ángulos en grados, medidos desde arriba en el sentido del
+        reloj. Cada arco se arma con curvas de Bézier de máximo 90 grados."""
+        if hasta - desde <= 0:
+            return
+        interior = radio - grosor
+
+        def punto(r: float, angulo: float) -> tuple[float, float]:
+            t = math.radians(90 - angulo)
+            return cx + r * math.cos(t), cy + r * math.sin(t)
+
+        def arco(r: float, a0: float, a1: float) -> str:
+            tramos = max(1, math.ceil(abs(a1 - a0) / 90))
+            paso = (a1 - a0) / tramos
+            partes = []
+            for i in range(tramos):
+                b0, b1 = a0 + i * paso, a0 + (i + 1) * paso
+                t0, t1 = math.radians(90 - b0), math.radians(90 - b1)
+                k = 4 / 3 * math.tan((t1 - t0) / 4)
+                p0, p3 = punto(r, b0), punto(r, b1)
+                c1 = (p0[0] - k * r * math.sin(t0), p0[1] + k * r * math.cos(t0))
+                c2 = (p3[0] + k * r * math.sin(t1), p3[1] - k * r * math.cos(t1))
+                partes.append(f"{c1[0]:.2f} {c1[1]:.2f} {c2[0]:.2f} {c2[1]:.2f} {p3[0]:.2f} {p3[1]:.2f} c")
+            return " ".join(partes)
+
+        inicio = punto(radio, desde)
+        fin_interior = punto(interior, hasta)
+        self.ops.append(_color(color, "rg"))
+        self.ops.append((
+            f"{inicio[0]:.2f} {inicio[1]:.2f} m {arco(radio, desde, hasta)} "
+            f"{fin_interior[0]:.2f} {fin_interior[1]:.2f} l {arco(interior, hasta, desde)} h f\n"
+        ).encode())
 
     def linea(self, x1: float, y1: float, x2: float, y2: float, color=LINEA, grosor: float = 0.8):
         self.ops.append(_color(color, "RG"))
@@ -247,10 +321,12 @@ class Documento:
         self.y -= 4
 
     def tabla(self, encabezados: list[str], filas: list[list[str]], anchos: list[float], tamano: float = 9,
-              alto_minimo: float = 0):
+              alto_minimo: float = 0, color_celda=None, derecha: set[int] | None = None):
         """`anchos` en fracciones del ancho útil. Cada celda se parte en líneas; si una fila no cabe,
         pasa a la página siguiente y repite el encabezado. `alto_minimo` deja espacio para escribir
-        a mano (firmas)."""
+        a mano (firmas). `color_celda(columna, valor)` puede devolver un color para ese texto y
+        `derecha` dice qué columnas (cifras) van alineadas a la derecha."""
+        derecha = derecha or set()
         columnas = [a * self.ancho for a in anchos]
         salto = tamano * 1.35
 
@@ -259,8 +335,11 @@ class Documento:
             alto = salto + 6
             self.p.rectangulo(MARGEN, self.y - alto + salto - 2, self.ancho, alto, FONDO)
             x = MARGEN
-            for titulo, ancho in zip(encabezados, columnas):
-                self.p.texto(x + 4, self.y, tamano, titulo, negrita=True, color=GRIS)
+            for n, (titulo, ancho) in enumerate(zip(encabezados, columnas)):
+                if n in derecha:
+                    self.p.texto_derecha(x + ancho - 4, self.y, tamano, titulo, negrita=True, color=GRIS)
+                else:
+                    self.p.texto(x + 4, self.y, tamano, titulo, negrita=True, color=GRIS)
                 x += ancho
             self.y -= alto + 2
 
@@ -272,10 +351,14 @@ class Documento:
                 self._nueva()
                 encabezado()
             x = MARGEN
-            for lineas, ancho in zip(celdas, columnas):
+            for n, (lineas, ancho, valor) in enumerate(zip(celdas, columnas, fila)):
                 y = self.y
+                color = (color_celda(n, valor) if color_celda else None) or TINTA
                 for linea in lineas:
-                    self.p.texto(x + 4, y, tamano, linea)
+                    if n in derecha:
+                        self.p.texto_derecha(x + ancho - 4, y, tamano, linea, color=color)
+                    else:
+                        self.p.texto(x + 4, y, tamano, linea, color=color)
                     y -= salto
                 x += ancho
             self.y -= alto

@@ -1,8 +1,9 @@
 """Exportación abierta de los datos de una institución y códigos DANE de las sedes.
 
-- POST /exportar: genera el archivo (CSV, GeoJSON, Shapefile o el paquete completo en ZIP), lo
-  deja en Storage y devuelve un enlace de descarga que vence en 10 minutos. Así funciona igual
-  en web y en el teléfono (se abre en el navegador), sin poner el token en ninguna URL.
+- POST /exportar: genera el archivo (CSV, GeoJSON, Shapefile, el paquete completo en ZIP, el
+  informe en PDF o Excel, o la plantilla de Power BI), lo deja en Storage y devuelve un enlace de descarga que vence en 10
+  minutos. Así funciona igual en web y en el teléfono (se abre en el navegador), sin poner el
+  token en ninguna URL.
 - GET /exportar/diccionario: qué significa cada columna.
 - GET /instituciones y PATCH /instituciones/{id}: código DANE, DIVIPOLA y municipio de cada sede.
 """
@@ -18,14 +19,22 @@ import datos
 import db
 from auth import Perfil, admin_actual, perfil_actual, revisor_actual
 from comun import BUCKET_FOTOS, ahora
-from servicios import exportacion
+from routers.mapa import origenes_guardados
+from routers.reportes import cargar_datos
+from servicios import exportacion, informe_arbolado, informe_powerbi
+from servicios.powerbi import PlantillaInvalida
 
 router = APIRouter(tags=["Datos abiertos"])
 
 Conjunto = Literal["arboles", "inspecciones", "intervenciones", "todo"]
-Formato = Literal["csv", "geojson", "shp", "zip"]
-TIPOS_MIME = {"csv": "text/csv", "geojson": "application/geo+json", "shp": "application/zip", "zip": "application/zip"}
-EXTENSION = {"csv": "csv", "geojson": "geojson", "shp": "zip", "zip": "zip"}
+Formato = Literal["csv", "geojson", "shp", "zip", "pbit", "pdf", "xlsx"]
+# La plantilla de Power BI también es un ZIP por dentro; el nombre de la descarga lleva .pbit.
+TIPOS_MIME = {"csv": "text/csv", "geojson": "application/geo+json", "shp": "application/zip", "zip": "application/zip",
+              "pbit": "application/zip", "pdf": "application/pdf",
+              "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}
+EXTENSION = {"csv": "csv", "geojson": "geojson", "shp": "zip", "zip": "zip", "pbit": "pbit", "pdf": "pdf", "xlsx": "xlsx"}
+# Formatos que llevan todo junto (inventario, inspecciones e intervenciones).
+COMPLETOS = ("zip", "pbit", "pdf", "xlsx")
 VIGENCIA_ENLACE_S = 600
 COLUMNAS_INSTITUCION = "id, nombre, nombre_corto, prefijo, codigo_dane, divipola, municipio"
 
@@ -122,9 +131,9 @@ class ExportarIn(BaseModel):
 
     @model_validator(mode="after")
     def _combinacion(self):
-        if self.conjunto == "todo" and self.formato != "zip":
-            raise ValueError("El paquete completo se descarga en ZIP")
-        if self.formato == "zip" and self.conjunto != "todo":
+        if self.conjunto == "todo" and self.formato not in COMPLETOS:
+            raise ValueError("El paquete completo se descarga en ZIP, como informe en PDF o Excel, o como plantilla de Power BI")
+        if self.formato in COMPLETOS and self.conjunto != "todo":
             raise ValueError("Elige CSV, GeoJSON o Shapefile para un solo conjunto")
         if self.formato in ("geojson", "shp") and self.conjunto != "arboles":
             raise ValueError("GeoJSON y Shapefile están disponibles para el inventario de árboles")
@@ -176,11 +185,27 @@ def exportar(d: ExportarIn, perfil: Perfil = Depends(revisor_actual)):
         raise HTTPException(status_code=404, detail="Institución no encontrada")
 
     cliente = db.cliente_de_usuario(perfil.sesion.token)
-    arboles, por_id, inspecciones, observaciones, intervenciones = _datos(cliente, institucion_id, d.conjunto)
     generado = ahora()
     prefijo = instituciones[institucion_id]["prefijo"] if institucion_id else "todas"
     base = f"arbolado-{prefijo}-{d.conjunto}-{generado.date().isoformat()}"
 
+    if d.formato in ("pbit", "pdf", "xlsx"):
+        nombre = "power-bi" if d.formato == "pbit" else "informe"
+        base = f"arbolado-{prefijo}-{nombre}-{generado.date().isoformat()}"
+        fuente = fuente_informe(cliente, institucion_id, instituciones, generado)
+        filas = len(fuente.datos.arboles) + len(fuente.datos.inspecciones) + len(fuente.datos.intervenciones)
+        if d.formato == "pbit":
+            try:
+                contenido = informe_powerbi.generar(fuente)
+            except PlantillaInvalida as error:
+                raise HTTPException(status_code=500, detail=f"No se pudo armar la plantilla de Power BI: {error}") from error
+        elif d.formato == "pdf":
+            contenido = informe_arbolado.generar_pdf(fuente)
+        else:
+            contenido = informe_arbolado.generar_excel(fuente)
+        return _entregar(perfil, d, base, contenido, filas, generado, fuente.datos.arboles, institucion_id, instituciones)
+
+    arboles, por_id, inspecciones, observaciones, intervenciones = _datos(cliente, institucion_id, d.conjunto)
     filas_a = exportacion.filas_arboles(arboles, instituciones)
     if d.conjunto == "arboles":
         campos = exportacion.CAMPOS_ARBOLES
@@ -213,7 +238,27 @@ def exportar(d: ExportarIn, perfil: Perfil = Depends(revisor_actual)):
             z.writestr("intervenciones.csv", exportacion.a_csv(filas_v, exportacion.CAMPOS_INTERVENCIONES))
             z.writestr("diccionario.csv", exportacion.a_csv_diccionario())
         filas, contenido = len(filas_a) + len(filas_i) + len(filas_v), paquete.getvalue()
+    return _entregar(perfil, d, base, contenido, filas, generado, arboles, institucion_id, instituciones)
 
+
+def fuente_informe(cliente, institucion_id: str | None, instituciones: dict[str, dict], generado) -> informe_powerbi.Fuente:
+    """Lo que necesitan la plantilla de Power BI, el informe en PDF o Excel y el módulo de Análisis:
+    los mismos datos y cálculos de Reportes."""
+    base, _dias = cargar_datos(cliente, institucion_id)
+    dias = {i: p.dias_revisita for i, p in datos.parametros(cliente, base.metodos).items()}
+    return informe_powerbi.Fuente(
+        datos=base,
+        instituciones=instituciones,
+        origenes=origenes_guardados()[0],
+        tipos_intervencion=datos.tipos_intervencion(cliente),
+        dias_revisita=dias,
+        alcance=instituciones[institucion_id]["nombre"] if institucion_id else "Todas las instituciones",
+        generado=generado,
+        institucion_id=institucion_id,
+    )
+
+
+def _entregar(perfil, d: ExportarIn, base: str, contenido: bytes, filas: int, generado, arboles, institucion_id, instituciones):
     nombre = f"{base}.{EXTENSION[d.formato]}"
     # Un archivo por persona y tipo de exportación: el siguiente reemplaza al anterior.
     ruta = f"exportaciones/{perfil.usuario_id}/{d.conjunto}-{d.formato}.{EXTENSION[d.formato]}"
